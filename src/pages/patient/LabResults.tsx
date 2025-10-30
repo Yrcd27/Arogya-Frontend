@@ -1,51 +1,41 @@
-import React, { useState } from 'react';
-import { Sidebar } from '../components/Sidebar';
-import { Header } from '../components/Header';
-import { FileTextIcon, DownloadIcon, EyeIcon } from 'lucide-react';
-export function MyRecords() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const records = [{
+import React from 'react';
+import { Sidebar } from '../../components/patient/Sidebar';
+import { Header } from '../../components/patient/Header';
+import { FlaskConicalIcon, DownloadIcon, EyeIcon } from 'lucide-react';
+export function LabResults() {
+  const results = [{
     id: 1,
     date: '2024-01-15',
-    type: 'General Checkup',
-    doctor: 'Dr. Perera',
-    clinic: 'Galle Mobile Clinic',
-    status: 'Completed'
+    testName: 'Complete Blood Count',
+    status: 'Ready',
+    clinic: 'Galle Mobile Clinic'
   }, {
     id: 2,
-    date: '2023-12-10',
-    type: 'Follow-up',
-    doctor: 'Dr. Silva',
-    clinic: 'Matara Mobile Clinic',
-    status: 'Completed'
+    date: '2024-01-10',
+    testName: 'Blood Sugar Test',
+    status: 'Ready',
+    clinic: 'Matara Mobile Clinic'
   }, {
     id: 3,
-    date: '2023-11-05',
-    type: 'Vaccination',
-    doctor: 'Dr. Fernando',
-    clinic: 'Hambantota Mobile Clinic',
-    status: 'Completed'
+    date: '2023-12-20',
+    testName: 'Lipid Profile',
+    status: 'Ready',
+    clinic: 'Hambantota Mobile Clinic'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / My Records</p>
+            <p className="text-gray-600 text-sm mb-2">
+              Dashboard / Lab Results
+            </p>
             <h1 className="text-3xl font-bold text-gray-900">
-              Medical Records
+              Laboratory Results
             </h1>
           </div>
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <input type="text" placeholder="Search records..." className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" />
-                <button className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors">
-                  Search
-                </button>
-              </div>
-            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -54,10 +44,7 @@ export function MyRecords() {
                       Date
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
-                      Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
-                      Doctor
+                      Test Name
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
                       Clinic
@@ -71,22 +58,26 @@ export function MyRecords() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {records.map(record => <tr key={record.id} className="hover:bg-gray-50">
+                  {results.map(result => <tr key={result.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.date}
+                        {result.date}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.type}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.doctor}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#38A3A5] bg-opacity-10 rounded-lg flex items-center justify-center">
+                            <FlaskConicalIcon className="w-5 h-5 text-[#38A3A5]" />
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">
+                            {result.testName}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        {record.clinic}
+                        {result.clinic}
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-3 py-1 bg-[#57CC99] bg-opacity-20 text-[#57CC99] rounded-full text-xs font-medium">
-                          {record.status}
+                          {result.status}
                         </span>
                       </td>
                       <td className="px-6 py-4">

@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { AdminSidebar } from '../components/AdminSidebar';
-import { AdminHeader } from '../components/AdminHeader';
+import React from 'react';
+import { Sidebar } from '../../components/admin/Sidebar';
+import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MailIcon, PhoneIcon, EditIcon, TrashIcon } from 'lucide-react';
-export function AdminStaff() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+export function Staff() {
   const staff = [{
     id: 1,
     name: 'Dr. Rajapaksa',
@@ -50,10 +49,10 @@ export function AdminStaff() {
     clinics: 0,
     status: 'Active'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>

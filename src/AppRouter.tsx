@@ -3,33 +3,33 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
-import { Dashboard } from './pages/Dashboard';
-import { MyRecords } from './pages/MyRecords';
-import { Prescriptions } from './pages/Prescriptions';
-import { LabResults } from './pages/LabResults';
-import { Appointments } from './pages/Appointments';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { AdminAnalytics } from './pages/AdminAnalytics';
-import { AdminClinics } from './pages/AdminClinics';
-import { AdminStaff } from './pages/AdminStaff';
-import { AdminReports } from './pages/AdminReports';
-import { AdminSettings } from './pages/AdminSettings';
-import { DoctorDashboard } from './pages/DoctorDashboard';
-import { DoctorQueue } from './pages/DoctorQueue';
-import { DoctorRecords } from './pages/DoctorRecords';
-import { DoctorPrescriptions } from './pages/DoctorPrescriptions';
-import { DoctorLabResults } from './pages/DoctorLabResults';
+import { Dashboard as PatientDashboard } from './pages/patient/Dashboard';
+import { Records as PatientRecords } from './pages/patient/Records';
+import { Prescriptions as PatientPrescriptions } from './pages/patient/Prescriptions';
+import { LabResults as PatientLabResults } from './pages/patient/LabResults';
+import { Appointments as PatientAppointments } from './pages/patient/Appointments';
+import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
+import { Analytics as AdminAnalytics } from './pages/admin/Analytics';
+import { Clinics as AdminClinics } from './pages/admin/Clinics';
+import { Staff as AdminStaff } from './pages/admin/Staff';
+import { Reports as AdminReports } from './pages/admin/Reports';
+import { Settings as AdminSettings } from './pages/admin/Settings';
+import { Dashboard as DoctorDashboard } from './pages/doctor/Dashboard';
+import { Queue as DoctorQueue } from './pages/doctor/Queue';
+import { Records as DoctorRecords } from './pages/doctor/Records';
+import { Prescriptions as DoctorPrescriptions } from './pages/doctor/Prescriptions';
+import { LabResults as DoctorLabResults } from './pages/doctor/LabResults';
 export function AppRouter() {
   return <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/patient/dashboard" element={<Dashboard />} />
-        <Route path="/patient/records" element={<MyRecords />} />
-        <Route path="/patient/prescriptions" element={<Prescriptions />} />
-        <Route path="/patient/lab-results" element={<LabResults />} />
-        <Route path="/patient/appointments" element={<Appointments />} />
+        <Route path="/patient/dashboard" element={<PatientDashboard />} />
+        <Route path="/patient/records" element={<PatientRecords />} />
+        <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
+        <Route path="/patient/lab-results" element={<PatientLabResults />} />
+        <Route path="/patient/appointments" element={<PatientAppointments />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/analytics" element={<AdminAnalytics />} />
         <Route path="/admin/clinics" element={<AdminClinics />} />

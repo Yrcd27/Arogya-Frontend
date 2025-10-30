@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { AdminSidebar } from '../components/AdminSidebar';
-import { AdminHeader } from '../components/AdminHeader';
+import React from 'react';
+import { Sidebar } from '../../components/admin/Sidebar';
+import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon } from 'lucide-react';
-export function AdminClinics() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+export function Clinics() {
   const clinics = [{
     id: 1,
     name: 'Galle Mobile Clinic',
@@ -45,10 +44,10 @@ export function AdminClinics() {
     registered: 58,
     status: 'Completed'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>

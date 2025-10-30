@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { Sidebar } from '../components/Sidebar';
-import { Header } from '../components/Header';
+import React from 'react';
+import { Sidebar } from '../../components/patient/Sidebar';
+import { Header } from '../../components/patient/Header';
 import { CalendarIcon, ClockIcon, MapPinIcon, PlusIcon } from 'lucide-react';
 export function Appointments() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const appointments = [{
     id: 1,
     date: '2024-06-20',
@@ -21,10 +20,10 @@ export function Appointments() {
     location: 'Matara Community Center',
     status: 'Completed'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>

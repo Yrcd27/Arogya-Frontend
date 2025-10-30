@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { AdminSidebar } from '../components/AdminSidebar';
-import { AdminHeader } from '../components/AdminHeader';
-import { TrendingUpIcon, TrendingDownIcon, UsersIcon, CalendarIcon } from 'lucide-react';
-export function AdminAnalytics() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+import React from 'react';
+import { Sidebar } from '../../components/admin/Sidebar';
+import { Header } from '../../components/admin/Header';
+import { TrendingUpIcon, TrendingDownIcon } from 'lucide-react';
+export function Analytics() {
   const metrics = [{
     label: 'Total Visits',
     value: '45,678',
@@ -44,10 +43,10 @@ export function AdminAnalytics() {
     month: 'Jun',
     patients: 4500
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <AdminHeader onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6">
             <p className="text-gray-600 text-sm mb-2">Dashboard / Analytics</p>

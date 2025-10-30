@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { Sidebar } from '../components/Sidebar';
-import { Header } from '../components/Header';
+import React from 'react';
+import { Sidebar } from '../../components/patient/Sidebar';
+import { Header } from '../../components/patient/Header';
 import { PillIcon, DownloadIcon } from 'lucide-react';
 export function Prescriptions() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const prescriptions = [{
     id: 1,
     date: '2024-01-15',
@@ -19,10 +18,10 @@ export function Prescriptions() {
     duration: '30 days',
     status: 'Completed'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6">
             <p className="text-gray-600 text-sm mb-2">

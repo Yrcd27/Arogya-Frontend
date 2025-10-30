@@ -1,17 +1,10 @@
 import React from 'react';
-import { GlobeIcon, BellIcon, ChevronDownIcon, MenuIcon } from 'lucide-react';
-interface HeaderProps {
-  onMenuClick: () => void;
-}
-export function Header({
-  onMenuClick
-}: HeaderProps) {
+import { GlobeIcon, BellIcon, ChevronDownIcon } from 'lucide-react';
+
+export function Header() {
   return <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={onMenuClick} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
-            <MenuIcon className="w-6 h-6" />
-          </button>
           <h2 className="text-xl font-bold text-gray-900">Dashboard</h2>
         </div>
         <div className="flex items-center gap-4">

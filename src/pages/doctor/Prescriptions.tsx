@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { DoctorSidebar } from '../components/DoctorSidebar';
-import { DoctorHeader } from '../components/DoctorHeader';
+import React from 'react';
+import { Sidebar } from '../../components/doctor/Sidebar';
+import { Header } from '../../components/doctor/Header';
 import { SearchIcon, PlusIcon, EyeIcon, EditIcon } from 'lucide-react';
-export function DoctorPrescriptions() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+export function Prescriptions() {
   const prescriptions = [{
     id: 1,
     patientName: 'Kumari Jayawardena',
@@ -41,10 +40,10 @@ export function DoctorPrescriptions() {
     status: 'Completed',
     diagnosis: 'Arthritis Pain'
   }];
-  return <div className="flex min-h-screen bg-gray-50">
-      <DoctorSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <DoctorHeader onMenuClick={() => setIsSidebarOpen(true)} showAddPatient={false} />
+  return <div className="min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="ml-64 flex flex-col">
+        <Header showAddPatient={false} />
         <main className="flex-1 p-6 lg:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
