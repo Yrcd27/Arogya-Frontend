@@ -1,6 +1,5 @@
-import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, ClipboardListIcon, UserIcon, FileTextIcon, FlaskConicalIcon, LogOutIcon, FolderOpenIcon, XIcon } from 'lucide-react';
+import { HomeIcon, FlaskConicalIcon, SettingsIcon, ClipboardListIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -10,37 +9,34 @@ interface SidebarProps {
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  
   const navItems = [{
     icon: HomeIcon,
     label: 'Dashboard',
-    path: '/doctor/dashboard'
+    path: '/technician/dashboard'
   }, {
     icon: UserIcon,
     label: 'My Profile',
-    path: '/doctor/profile'
-  }, {
-    icon: ClipboardListIcon,
-    label: 'Patient Queue',
-    path: '/doctor/queue'
-  }, {
-    icon: FolderOpenIcon,
-    label: 'Patient Records',
-    path: '/doctor/records'
-  }, {
-    icon: FileTextIcon,
-    label: 'Prescriptions',
-    path: '/doctor/prescriptions'
+    path: '/technician/profile'
   }, {
     icon: FlaskConicalIcon,
-    label: 'Lab Results',
-    path: '/doctor/lab-results'
+    label: 'Lab Tests',
+    path: '/technician/lab-tests'
+  }, {
+    icon: ClipboardListIcon,
+    label: 'Test Queue',
+    path: '/technician/queue'
+  }, {
+    icon: SettingsIcon,
+    label: 'Equipment',
+    path: '/technician/equipment'
   }];
   
   const handleNavigation = (path: string) => {
     navigate(path);
     onClose?.(); // Close sidebar on mobile after navigation
   };
-
+  
   return (
     <>
       {/* Mobile overlay */}
@@ -68,14 +64,17 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           </button>
         </div>
         <nav className="flex-1 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto">
-          {navItems.map(item => (
-            <button 
-              key={item.label} 
-              onClick={() => handleNavigation(item.path)} 
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => handleNavigation(item.path)}
               className={`
                 w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg
                 transition-colors duration-200 text-sm sm:text-base
-                ${location.pathname === item.path ? 'bg-[#38a3a5] text-white' : 'text-gray-700 hover:bg-gray-100'}
+                ${location.pathname === item.path 
+                  ? 'bg-[#38a3a5] text-white' 
+                  : 'text-gray-700 hover:bg-gray-100'
+                }
               `}
             >
               <item.icon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
@@ -85,7 +84,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </nav>
         <div className="p-3 sm:p-4 border-t border-gray-200">
           <button 
-            onClick={() => { navigate('/'); onClose?.(); }} 
+            onClick={() => { navigate('/'); onClose?.(); }}
             className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
           >
             <LogOutIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />

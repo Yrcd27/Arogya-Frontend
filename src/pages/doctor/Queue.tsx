@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { SearchIcon } from 'lucide-react';
 export function Queue() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const queuePatients = [{
     id: 1,
     queueNumber: 1,
@@ -50,15 +51,18 @@ export function Queue() {
     priority: 'Normal'
   }];
   return <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="ml-64 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6 lg:p-8">
-          <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+      <div className="lg:ml-64 flex flex-col">
+        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+        <main className="flex-1 p-4 lg:p-6">
+          <div className="mb-4">
+            <p className="text-gray-600 text-sm mb-1">
               Dashboard / Patient Queue
             </p>
-            <h1 className="text-3xl font-bold text-gray-900">Patient Queue</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Patient Queue</h1>
           </div>
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="flex gap-4">
@@ -105,36 +109,52 @@ export function Queue() {
                 <tbody className="divide-y divide-gray-200">
                   {queuePatients.map(patient => <tr key={patient.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div className="w-8 h-8 bg-[#38A3A5] text-white rounded-full flex items-center justify-center font-semibold">
-                          {patient.queueNumber}
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 bg-[#38A3A5] text-white rounded-full flex items-center justify-center font-semibold">
+                            {patient.queueNumber}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        {patient.name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {patient.nic}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {patient.age}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {patient.time}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center text-sm font-medium text-gray-900">
+                          {patient.name}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${patient.priority === 'Urgent' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
-                          {patient.priority}
-                        </span>
+                        <div className="flex items-center text-sm text-gray-600">
+                          {patient.nic}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-3 py-1 bg-[#38A3A5] bg-opacity-20 text-[#38A3A5] rounded-full text-xs font-medium">
-                          {patient.status}
-                        </span>
+                        <div className="flex items-center text-sm text-gray-600">
+                          {patient.age}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <button className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors">
-                          Consult
-                        </button>
+                        <div className="flex items-center text-sm text-gray-600">
+                          {patient.time}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${patient.priority === 'Urgent' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                            {patient.priority}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <span className="px-3 py-1 bg-[#38A3A5] bg-opacity-20 text-[#38A3A5] rounded-full text-xs font-medium">
+                            {patient.status}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <button className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors">
+                            Consult
+                          </button>
+                        </div>
                       </td>
                     </tr>)}
                 </tbody>

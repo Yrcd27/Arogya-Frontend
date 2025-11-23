@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 export function LandingHeader() {
   const navigate = useNavigate();
@@ -28,9 +27,20 @@ export function LandingHeader() {
           <a href="#contact" className="text-gray-700 hover:text-[#38A3A5] font-medium">
             Contact
           </a>
-          <button onClick={() => navigate('/login')} className="bg-[#38A3A5] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#2d8284] transition-colors">
-            Login
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate('/role-selection')} 
+              className="border border-[#38A3A5] text-[#38A3A5] px-6 py-2 rounded-lg font-medium hover:bg-[#38A3A5] hover:text-white transition-colors"
+            >
+              Register
+            </button>
+            <button 
+              onClick={() => navigate('/login')} 
+              className="bg-[#38A3A5] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#2d8284] transition-colors"
+            >
+              Login
+            </button>
+          </div>
         </nav>
       </div>
     </header>;

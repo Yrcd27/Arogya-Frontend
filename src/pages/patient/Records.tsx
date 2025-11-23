@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { DownloadIcon, EyeIcon } from 'lucide-react';
 export function Records() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const records = [{
     id: 1,
     date: '2024-01-15',
@@ -26,10 +27,13 @@ export function Records() {
     status: 'Completed'
   }];
   return <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="ml-64 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6 lg:p-8">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+      <div className="lg:ml-64 flex flex-col">
+        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-6">
             <p className="text-gray-600 text-sm mb-2">Dashboard / My Records</p>
             <h1 className="text-3xl font-bold text-gray-900">

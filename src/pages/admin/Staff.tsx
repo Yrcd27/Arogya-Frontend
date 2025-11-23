@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MailIcon, PhoneIcon, EditIcon, TrashIcon } from 'lucide-react';
 export function Staff() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const staff = [{
     id: 1,
     name: 'Dr. Rajapaksa',
@@ -50,19 +51,22 @@ export function Staff() {
     status: 'Active'
   }];
   return <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="ml-64 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6 lg:p-8">
-          <div className="mb-6 flex items-center justify-between">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+      <div className="lg:ml-64 flex flex-col">
+        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+        <main className="flex-1 p-4 lg:p-6">
+          <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-              <p className="text-gray-600 text-sm mb-2">Dashboard / Staff</p>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <p className="text-gray-600 text-sm mb-1">Dashboard / Staff</p>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
                 Staff Management
               </h1>
             </div>
-            <button className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors">
-              <PlusIcon className="w-5 h-5" />
+            <button className="flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors text-sm lg:text-base">
+              <PlusIcon className="w-4 h-4 lg:w-5 lg:h-5" />
               Add Staff Member
             </button>
           </div>
@@ -120,8 +124,10 @@ export function Staff() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {member.role}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center text-sm text-gray-600">
+                          {member.role}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="space-y-1">
@@ -135,16 +141,22 @@ export function Staff() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {member.specialization}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        {member.clinics}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center text-sm text-gray-600">
+                          {member.specialization}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-3 py-1 bg-[#57CC99] bg-opacity-20 text-[#57CC99] rounded-full text-xs font-medium">
-                          {member.status}
-                        </span>
+                        <div className="flex items-center text-sm font-medium text-gray-900">
+                          {member.clinics}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <span className="px-3 py-1 bg-[#57CC99] bg-opacity-20 text-[#57CC99] rounded-full text-xs font-medium">
+                            {member.status}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">

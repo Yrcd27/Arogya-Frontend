@@ -1,18 +1,42 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { loginAPI, getDashboardRoute } from '../utils/auth';
+
 export function Login() {
   const navigate = useNavigate();
-  const [role, setRole] = useState('patient');
+  const location = useLocation();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const handleLogin = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Check for success message from registration
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+    }
+  }, [location.state]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (role === 'admin') {
-      navigate('/admin/dashboard');
-    } else if (role === 'doctor') {
-      navigate('/doctor/dashboard');
-    } else {
-      navigate('/patient/dashboard');
+    setLoading(true);
+    setError('');
+
+    try {
+      const user = await loginAPI({ email, password });
+      login(user);
+      
+      // Redirect to intended page or dashboard based on user role
+      const from = location.state?.from?.pathname || getDashboardRoute(user.userRole.roleName);
+      navigate(from, { replace: true });
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
   return <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
@@ -30,30 +54,50 @@ export function Login() {
         </div>
         <div className="bg-white rounded-xl shadow-sm p-8">
           <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Role
-              </label>
-              <select value={role} onChange={e => setRole(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent">
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            {successMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg">
+                {successMessage}
+              </div>
+            )}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Email
               </label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter your email" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" required />
+              <input 
+                type="email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                placeholder="Enter your email" 
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                required 
+                disabled={loading}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
                 Password
               </label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" required />
+              <input 
+                type="password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                placeholder="Enter your password" 
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                required 
+                disabled={loading}
+              />
             </div>
-            <button type="submit" className="w-full bg-[#38A3A5] text-white py-3 rounded-lg font-semibold hover:bg-[#2d8284] transition-colors">
-              Sign In
+            <button 
+              type="submit" 
+              className="w-full bg-[#38A3A5] text-white py-3 rounded-lg font-semibold hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading}
+            >
+              {loading ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
           <div className="mt-6 text-center">

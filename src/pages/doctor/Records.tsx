@@ -1,8 +1,9 @@
-import React from 'react';
+import { useState } from 'react';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { SearchIcon, EyeIcon, FileTextIcon } from 'lucide-react';
 export function Records() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const patients = [{
     id: 1,
     name: 'Kumari Jayawardena',
@@ -41,10 +42,13 @@ export function Records() {
     recordsCount: 12
   }];
   return <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="ml-64 flex flex-col">
-        <Header showAddPatient={false} />
-        <main className="flex-1 p-6 lg:p-8">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
+      <div className="lg:ml-64 flex flex-col">
+        <Header onToggleSidebar={() => setIsSidebarOpen(true)} showAddPatient={false} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-6">
             <p className="text-gray-600 text-sm mb-2">
               Dashboard / Patient Records

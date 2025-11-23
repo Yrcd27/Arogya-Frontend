@@ -36,10 +36,21 @@ export function LandingPage() {
               A comprehensive patient management system for mobile clinics under
               the Ministry of Health Sri Lanka
             </p>
-            <button onClick={() => navigate('/login')} className="bg-[#38A3A5] text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#2d8284] transition-colors flex items-center gap-2">
-              Access System
-              <ArrowRightIcon className="w-5 h-5" />
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button 
+                onClick={() => navigate('/role-selection')} 
+                className="bg-[#38A3A5] text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#2d8284] transition-colors flex items-center justify-center gap-2"
+              >
+                Get Started
+                <ArrowRightIcon className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => navigate('/login')} 
+                className="border-2 border-[#38A3A5] text-[#38A3A5] px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#38A3A5] hover:text-white transition-colors flex items-center justify-center gap-2"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         </div>
       </section>
