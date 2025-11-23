@@ -1,0 +1,83 @@
+/* Custom Toast Notification Styles for Arogya Platform */
+/* White background with colored left stripe design */
+
+/* Success Toast - White with Teal Stripe */
+.Toastify__toast--success {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-left: 4px solid #38A3A5 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.Toastify__toast--success .Toastify__toast-icon svg {
+  fill: #38A3A5 !important;
+}
+
+.Toastify__progress-bar--success {
+  background: #38A3A5 !important;
+}
+
+/* Error Toast - White with Red Stripe */
+.Toastify__toast--error {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-left: 4px solid #dc2626 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.Toastify__toast--error .Toastify__toast-icon svg {
+  fill: #dc2626 !important;
+}
+
+.Toastify__progress-bar--error {
+  background: #dc2626 !important;
+}
+
+/* Warning Toast - White with Orange Stripe */
+.Toastify__toast--warning {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-left: 4px solid #f59e0b !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.Toastify__toast--warning .Toastify__toast-icon svg {
+  fill: #f59e0b !important;
+}
+
+.Toastify__progress-bar--warning {
+  background: #f59e0b !important;
+}
+
+/* Info Toast - White with Blue Stripe */
+.Toastify__toast--info {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+  border-left: 4px solid #3b82f6 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.Toastify__toast--info .Toastify__toast-icon svg {
+  fill: #3b82f6 !important;
+}
+
+.Toastify__progress-bar--info {
+  background: #3b82f6 !important;
+}
+
+/* General Toast Styling */
+.Toastify__toast {
+  border-radius: 0.5rem;
+  font-family: inherit;
+  min-height: 64px;
+}
+
+.Toastify__close-button {
+  color: #6b7280;
+  opacity: 0.7;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1;
+  color: #1f2937;
+}
