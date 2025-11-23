@@ -9,7 +9,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const navItems = [{
     icon: HomeIcon,
     label: 'Dashboard',
@@ -31,28 +31,28 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     label: 'Equipment',
     path: '/technician/equipment'
   }];
-  
+
   const handleNavigation = (path: string) => {
     navigate(path);
     onClose?.(); // Close sidebar on mobile after navigation
   };
-  
+
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
           onClick={onClose}
         />
       )}
-      
+
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0 md:static md:z-auto
+        md:translate-x-0
       `}>
         <div className="flex items-center justify-between p-4 sm:p-6">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Arogya</h1>
@@ -71,8 +71,8 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               className={`
                 w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg
                 transition-colors duration-200 text-sm sm:text-base
-                ${location.pathname === item.path 
-                  ? 'bg-[#38a3a5] text-white' 
+                ${location.pathname === item.path
+                  ? 'bg-[#38a3a5] text-white'
                   : 'text-gray-700 hover:bg-gray-100'
                 }
               `}
@@ -83,7 +83,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           ))}
         </nav>
         <div className="p-3 sm:p-4 border-t border-gray-200">
-          <button 
+          <button
             onClick={() => { navigate('/'); onClose?.(); }}
             className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
           >

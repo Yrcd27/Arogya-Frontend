@@ -39,20 +39,20 @@ const Profile: React.FC = () => {
         const userData = JSON.parse(localStorage.getItem('user') || '{}');
         if (userData.id) {
           setProfile(prev => ({ ...prev, user: { id: userData.id } }));
-          
+
           try {
             const response = await profileAPI.getAdmin(userData.id);
             setProfile(response);
           } catch (error: unknown) {
             if (error instanceof Error && (
-              error.message.includes('404') || 
-              error.message.includes('not found') || 
+              error.message.includes('404') ||
+              error.message.includes('not found') ||
               error.message.includes('Admin Profile not found')
             )) {
               // Profile doesn't exist yet
               setIsNewProfile(true);
-              setProfile(prev => ({ 
-                ...prev, 
+              setProfile(prev => ({
+                ...prev,
                 user: { id: userData.id }
               }));
             } else {
@@ -105,11 +105,11 @@ const Profile: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Sidebar 
-          isOpen={isSidebarOpen} 
-          onClose={() => setIsSidebarOpen(false)} 
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
         />
-        <div className="lg:ml-64 flex flex-col">
+        <div className="md:ml-64 flex flex-col">
           <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-center h-full">
@@ -123,13 +123,13 @@ const Profile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="lg:ml-64 flex flex-col">
+      <div className="md:ml-64 flex flex-col min-h-screen">
         <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center mb-6">

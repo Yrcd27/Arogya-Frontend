@@ -7,7 +7,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 export function Profile() {
   const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -99,15 +99,15 @@ export function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
+    <div className="min-h-screen bg-gray-50">
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
-      
-      <div className="lg:ml-64 flex flex-col">
+
+      <div className="md:ml-64 flex flex-col min-h-screen">
         <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
-        
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-4xl mx-auto">
             <div className="mb-8">
@@ -158,13 +158,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         First Name *
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         name="firstName"
                         value={formData.firstName}
                         onChange={handleInputChange}
-                        placeholder="Your first name" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Your first name"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         required
                         disabled={loading}
                       />
@@ -173,13 +173,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Last Name *
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         name="lastName"
                         value={formData.lastName}
                         onChange={handleInputChange}
-                        placeholder="Your last name" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Your last name"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         required
                         disabled={loading}
                       />
@@ -191,12 +191,12 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Date of Birth
                       </label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -204,13 +204,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Phone Number
                       </label>
-                      <input 
-                        type="tel" 
+                      <input
+                        type="tel"
                         name="phoneNumber"
                         value={formData.phoneNumber}
                         onChange={handleInputChange}
-                        placeholder="Your phone number" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Your phone number"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -220,13 +220,13 @@ export function Profile() {
                     <label className="block text-sm font-medium text-gray-900 mb-2">
                       NIC Number
                     </label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="nicNumber"
                       value={formData.nicNumber}
                       onChange={handleInputChange}
-                      placeholder="National Identity Card number" 
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                      placeholder="National Identity Card number"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       disabled={loading}
                     />
                   </div>
@@ -240,11 +240,11 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Gender
                       </label>
-                      <select 
+                      <select
                         name="gender"
                         value={formData.gender}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
                         <option value="Male">Male</option>
@@ -255,11 +255,11 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Blood Group
                       </label>
-                      <select 
+                      <select
                         name="bloodGroup"
                         value={formData.bloodGroup}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
                         <option value="O+">O+</option>
@@ -279,13 +279,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Allergies
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         name="allergies"
                         value={formData.allergies}
                         onChange={handleInputChange}
-                        placeholder="Any known allergies" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Any known allergies"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -293,13 +293,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Chronic Diseases
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         name="chronicDiseases"
                         value={formData.chronicDiseases}
                         onChange={handleInputChange}
-                        placeholder="Any chronic diseases" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Any chronic diseases"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -314,13 +314,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Address
                       </label>
-                      <textarea 
+                      <textarea
                         name="address"
                         value={formData.address}
                         onChange={handleInputChange}
-                        placeholder="Enter your address" 
+                        placeholder="Enter your address"
                         rows={3}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -328,13 +328,13 @@ export function Profile() {
                       <label className="block text-sm font-medium text-gray-900 mb-2">
                         Emergency Contact
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         name="emergencyContact"
                         value={formData.emergencyContact}
                         onChange={handleInputChange}
-                        placeholder="Emergency contact number" 
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                        placeholder="Emergency contact number"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
