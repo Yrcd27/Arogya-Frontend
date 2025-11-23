@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { userAPI } from '../services/api';
 
 export function RegisterForm() {
@@ -118,10 +119,20 @@ export function RegisterForm() {
       console.log('User created successfully:', newUser);
 
       // Success - redirect to login (no profile creation during registration)
-      alert(`Registration successful! Welcome, ${formData.username}!`);
+      toast.success(`Registration successful! Welcome, ${formData.username}!`, {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      
+      setTimeout(() => {
+        toast.info('Please login with your credentials.', {
+          position: "top-right",
+          autoClose: 5000,
+        });
+      }, 500);
+       
       navigate('/login', { 
         state: { 
-          message: 'Registration successful! Please login with your credentials. You can complete your profile after logging in.',
           email: formData.email 
         } 
       });
