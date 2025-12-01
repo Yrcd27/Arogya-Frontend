@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
@@ -12,7 +12,7 @@ import {
 } from '../../utils/clinic';
 
 export function Clinics() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingClinic, setEditingClinic] = useState<Clinic | null>(null);
@@ -210,7 +210,7 @@ export function Clinics() {
     try {
       const assignedDoctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
       if (assignedDoctors) {
-        const selectedDoctorsForEdit = assignedDoctors.map((cd: any) => ({
+        const selectedDoctorsForEdit = assignedDoctors.map((cd: { doctorRefId: number; doctorName: string; specialization: string }) => ({
           doctorId: cd.doctorRefId,
           name: cd.doctorName,
           specialization: cd.specialization
@@ -268,8 +268,8 @@ export function Clinics() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="md:ml-64 flex flex-col min-h-screen">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -631,18 +631,18 @@ function ClinicCard({
 }) {
   const [doctorCount, setDoctorCount] = useState<number>(0);
 
-  useEffect(() => {
-    loadDoctorCount();
-  }, [clinic.id]);
-
-  const loadDoctorCount = async () => {
+  const loadDoctorCount = useCallback(async () => {
     try {
       const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
       setDoctorCount(doctors?.length || 0);
     } catch (error) {
       console.error('Failed to load doctor count:', error);
     }
-  };
+  }, [clinic.id]);
+
+  useEffect(() => {
+    loadDoctorCount();
+  }, [loadDoctorCount]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

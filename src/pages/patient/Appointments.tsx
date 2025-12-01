@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { CalendarIcon, ClockIcon, MapPinIcon, PlusIcon } from 'lucide-react';
 export function Appointments() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const appointments = [{
     id: 1,
     date: '2024-06-20',
@@ -26,8 +26,8 @@ export function Appointments() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="lg:ml-64 flex flex-col">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 lg:p-6">
           <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>

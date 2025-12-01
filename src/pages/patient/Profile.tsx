@@ -6,7 +6,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 
 export function Profile() {
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -105,8 +105,8 @@ export function Profile() {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      <div className="md:ml-64 flex flex-col min-h-screen">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-4 sm:mb-6">

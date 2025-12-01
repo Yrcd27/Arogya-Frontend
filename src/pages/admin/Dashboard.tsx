@@ -1,36 +1,43 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, DownloadIcon } from 'lucide-react';
+import { UsersIcon, CalendarIcon, DownloadIcon, UserCheckIcon } from 'lucide-react';
+import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { stats, loading } = useDashboardData();
 
-  const stats = [{
-    label: 'Total Patients',
-    value: '24,521',
-    change: '+12%',
-    icon: UsersIcon,
-    color: '#38A3A5'
-  }, {
-    label: 'Clinics This Month',
-    value: '32',
-    change: '+8%',
-    icon: CalendarIcon,
-    color: '#38A3A5'
-  }, {
-    label: 'Doctors Active',
-    value: '45',
-    change: '',
-    icon: UsersIcon,
-    color: '#38A3A5'
-  }, {
-    label: 'Upcoming Clinics',
-    value: '12',
-    change: '',
-    icon: CalendarIcon,
-    color: '#38A3A5'
-  }];
+  const dashboardStats = [
+    {
+      label: 'Total Patients',
+      value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
+      change: loading ? '' : (stats?.totalPatients ? `+${Math.round((stats.totalPatients / 100) * 12)}` : ''),
+      icon: UsersIcon,
+      color: '#38A3A5'
+    },
+    {
+      label: 'Total Clinics',
+      value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
+      change: loading ? '' : (stats?.totalClinics ? `+${Math.round((stats.totalClinics / 10) * 8)}` : ''),
+      icon: CalendarIcon,
+      color: '#38A3A5'
+    },
+    {
+      label: 'Active Doctors',
+      value: loading ? '...' : (stats?.activeDoctors?.toString() || '0'),
+      change: '',
+      icon: UserCheckIcon,
+      color: '#38A3A5'
+    },
+    {
+      label: 'Scheduled Clinics',
+      value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
+      change: '',
+      icon: CalendarIcon,
+      color: '#38A3A5'
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,8 +45,8 @@ export function Dashboard() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="md:ml-64 flex flex-col min-h-screen">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -55,14 +62,18 @@ export function Dashboard() {
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-            {stats.map(stat => (
+            {dashboardStats.map(stat => (
               <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
                 <p className="text-gray-600 text-sm mb-2">{stat.label}</p>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl lg:text-4xl font-bold text-gray-900 mb-1">
-                      {stat.value}
-                    </p>
+                  <div className="flex-1">
+                    {loading ? (
+                      <div className="w-20 h-10 bg-gray-200 rounded animate-pulse mb-1"></div>
+                    ) : (
+                      <p className="text-2xl lg:text-4xl font-bold text-gray-900 mb-1">
+                        {stat.value}
+                      </p>
+                    )}
                     {stat.change && (
                       <span className="text-[#57CC99] text-sm font-medium">
                         {stat.change}

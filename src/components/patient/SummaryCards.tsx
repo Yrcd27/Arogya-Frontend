@@ -1,20 +1,23 @@
 import { CalendarIcon, ClipboardListIcon, FileTextIcon } from 'lucide-react';
+import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function SummaryCards() {
+  const { stats, loading } = useDashboardData();
+
   const cards = [{
     icon: CalendarIcon,
-    label: 'Next Appointment',
-    value: 'Jun 20',
+    label: 'Scheduled Clinics',
+    value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
     color: '#38a3a5'
   }, {
     icon: ClipboardListIcon,
-    label: 'Prescriptions',
-    value: '8',
+    label: 'Available Doctors',
+    value: loading ? '...' : (stats?.totalDoctors?.toString() || '0'),
     color: '#38a3a5'
   }, {
     icon: FileTextIcon,
-    label: 'Lab Results',
-    value: '5',
+    label: 'Total Clinics',
+    value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
     color: '#38a3a5'
   }];
 
@@ -25,7 +28,11 @@ export function SummaryCards() {
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <p className="text-gray-600 text-sm mb-1">{card.label}</p>
-              <p className="text-2xl sm:text-4xl font-bold text-gray-900">{card.value}</p>
+              {loading ? (
+                <div className="w-16 h-8 bg-gray-200 rounded animate-pulse"></div>
+              ) : (
+                <p className="text-2xl sm:text-4xl font-bold text-gray-900">{card.value}</p>
+              )}
             </div>
             <div className="p-2 sm:p-3 rounded-lg flex-shrink-0" style={{
               backgroundColor: `${card.color}20`

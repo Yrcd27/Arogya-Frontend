@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserIcon, SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
+import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { profileAPI } from '../../services/api';
@@ -20,7 +20,7 @@ interface TechnicianProfile {
 }
 
 const Profile: React.FC = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profile, setProfile] = useState<TechnicianProfile>({
     firstName: '',
     lastName: '',
@@ -117,8 +117,8 @@ const Profile: React.FC = () => {
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
         />
-        <div className="lg:ml-64 flex flex-col">
-          <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+        <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+          <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-center h-full">
               <div className="text-gray-500">Loading profile...</div>

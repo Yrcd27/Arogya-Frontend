@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { SearchIcon, PlusIcon, EyeIcon, EditIcon } from 'lucide-react';
 export function Prescriptions() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const prescriptions = [{
     id: 1,
     patientName: 'Kumari Jayawardena',
@@ -46,8 +46,8 @@ export function Prescriptions() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="lg:ml-64 flex flex-col">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} showAddPatient={false} />
+      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>

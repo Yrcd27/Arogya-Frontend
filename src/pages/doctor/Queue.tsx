@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { SearchIcon } from 'lucide-react';
 export function Queue() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const queuePatients = [{
     id: 1,
     queueNumber: 1,
@@ -55,8 +55,8 @@ export function Queue() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="lg:ml-64 flex flex-col">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 lg:p-6">
           <div className="mb-4">
             <p className="text-gray-600 text-sm mb-1">

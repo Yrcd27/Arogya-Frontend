@@ -59,7 +59,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0
       `}>
         <div className="flex items-center justify-between p-4 sm:p-6">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Arogya</h1>

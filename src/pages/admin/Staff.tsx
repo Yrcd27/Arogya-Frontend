@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MailIcon, PhoneIcon, EditIcon, TrashIcon } from 'lucide-react';
 export function Staff() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const staff = [{
     id: 1,
     name: 'Dr. Rajapaksa',
@@ -55,8 +55,8 @@ export function Staff() {
       isOpen={isSidebarOpen}
       onClose={() => setIsSidebarOpen(false)}
     />
-    <div className="md:ml-64 flex flex-col min-h-screen">
-      <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+    <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="mb-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>

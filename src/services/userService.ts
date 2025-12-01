@@ -181,6 +181,23 @@ export const profileAPI = {
       body: JSON.stringify(profileData),
     });
   },
+
+  // Get all profiles by type for dashboard stats
+  getAllPatients: async () => {
+    return apiCall('/patient_profile/getAllPatientProfiles');
+  },
+
+  getAllDoctors: async () => {
+    return apiCall('/doctor_profile/getAllDoctorProfiles');
+  },
+
+  getAllAdmins: async () => {
+    return apiCall('/admin_profile/getAllAdminProfiles');
+  },
+
+  getAllTechnicians: async () => {
+    return apiCall('/technician_profile/getAllTechnicianProfiles');
+  },
 };
 
 // Doctor search API
