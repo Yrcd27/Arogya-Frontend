@@ -130,123 +130,121 @@ const Profile: React.FC = () => {
       <div className="md:ml-64 flex flex-col min-h-screen">
         <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center mb-6">
-                <UserIcon className="h-6 w-6 text-blue-600 mr-3" />
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {isNewProfile ? 'Complete Your Admin Profile' : 'Admin Profile'}
-                </h1>
+          <div className="mb-4 sm:mb-6">
+            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {isNewProfile ? 'Complete Your Admin Profile' : 'Admin Profile'}
+            </h1>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            {error && (
+              <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
+                <span className="text-red-700">{error}</span>
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-6 flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
+                <span className="text-green-700">{success}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* First Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={profile.firstName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="Enter first name"
+                  />
+                </div>
+
+                {/* Last Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={profile.lastName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="Enter last name"
+                  />
+                </div>
+
+                {/* Date of Birth */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    value={profile.dateOfBirth}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    value={profile.phoneNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="+94771234567"
+                  />
+                </div>
+
+                {/* NIC Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    NIC Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="nicNumber"
+                    value={profile.nicNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="123456789V or 123456789012"
+                  />
+                </div>
               </div>
 
-              {error && (
-                <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
-                  <span className="text-red-700">{error}</span>
-                </div>
-              )}
-
-              {success && (
-                <div className="mb-6 flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
-                  <span className="text-green-700">{success}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* First Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      First Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={profile.firstName}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter first name"
-                    />
-                  </div>
-
-                  {/* Last Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Last Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={profile.lastName}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter last name"
-                    />
-                  </div>
-
-                  {/* Date of Birth */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date of Birth *
-                    </label>
-                    <input
-                      type="date"
-                      name="dateOfBirth"
-                      value={profile.dateOfBirth}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Phone Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      name="phoneNumber"
-                      value={profile.phoneNumber}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="+94771234567"
-                    />
-                  </div>
-
-                  {/* NIC Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      NIC Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="nicNumber"
-                      value={profile.nicNumber}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="123456789V or 123456789012"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-6 border-t border-gray-200">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    <SaveIcon className="h-4 w-4 mr-2" />
-                    {saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Update Profile'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end pt-6 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+                >
+                  <SaveIcon className="h-4 w-4" />
+                  {saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Update Profile'}
+                </button>
+              </div>
+            </form>
           </div>
         </main>
       </div>

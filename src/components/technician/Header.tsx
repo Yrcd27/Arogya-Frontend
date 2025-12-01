@@ -1,4 +1,4 @@
-import { BellIcon, UserCircleIcon, MenuIcon } from 'lucide-react';
+import { BellIcon, MenuIcon } from 'lucide-react';
 
 interface TechnicianHeaderProps {
   onToggleSidebar?: () => void;
@@ -8,7 +8,7 @@ export function Header({ onToggleSidebar }: TechnicianHeaderProps) {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   
   return (
-    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -17,24 +17,22 @@ export function Header({ onToggleSidebar }: TechnicianHeaderProps) {
           >
             <MenuIcon className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
-          <div>
-            <h2 className="text-lg sm:text-2xl font-semibold text-gray-900">Technician Dashboard</h2>
-            <p className="text-gray-600 text-sm sm:text-base hidden sm:block">Manage lab tests and equipment</p>
-          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Dashboard</h2>
         </div>
         
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          <button className="p-2 text-gray-400 hover:text-gray-500">
-            <BellIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
+            <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
           </button>
           
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <UserCircleIcon className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
-            <div className="text-sm hidden sm:block">
-              <p className="font-medium text-gray-900">{user.name || 'Technician'}</p>
-              <p className="text-gray-500">Technician</p>
+          <button className="flex items-center gap-2 sm:gap-3 hover:bg-gray-100 px-2 sm:px-3 py-2 rounded-lg transition-colors">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#38a3a5] rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-base">
+              TC
             </div>
-          </div>
+            <span className="text-gray-700 font-medium hidden sm:block text-sm sm:text-base">
+              {user.name || 'Technician'}
+            </span>
+          </button>
         </div>
       </div>
     </header>

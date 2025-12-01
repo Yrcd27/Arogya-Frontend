@@ -21,6 +21,7 @@ export function Clinics() {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -151,17 +152,18 @@ export function Clinics() {
       };
 
       if (isEditMode && editingClinic) {
+        // Update clinic with doctor assignments - backend handles doctor assignment via doctorIds
         await clinicAPI.updateClinic({ ...clinicData, id: editingClinic.id });
       } else {
+        // Create clinic with doctors assigned via doctorIds field
         await clinicAPI.createClinic(clinicData);
       }
-
-      // No need for separate doctor assignment - backend handles it via doctorIds field
 
       // Success
       setIsModalOpen(false);
       resetForm();
       loadClinics();
+      setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
       alert(isEditMode ? 'Clinic updated successfully!' : 'Clinic scheduled successfully!');
     } catch (error) {
       console.error('Failed to create/update clinic:', error);
@@ -188,7 +190,7 @@ export function Clinics() {
     setEditingClinic(null);
   };
 
-  const handleEdit = (clinic: Clinic) => {
+  const handleEdit = async (clinic: Clinic) => {
     setEditingClinic(clinic);
     setFormData({
       clinicName: clinic.clinicName,
@@ -199,9 +201,31 @@ export function Clinics() {
       scheduledTime: clinic.scheduledTime.substring(0, 5), // Remove seconds
       status: clinic.status
     });
-    setSelectedDoctors([]); // Reset for simplicity - user can reassign doctors
+    
     setIsEditMode(true);
     setIsModalOpen(true);
+    
+    // Load currently assigned doctors
+    setIsLoading(true);
+    try {
+      const assignedDoctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
+      if (assignedDoctors) {
+        const selectedDoctorsForEdit = assignedDoctors.map((cd: any) => ({
+          doctorId: cd.doctorRefId,
+          name: cd.doctorName,
+          specialization: cd.specialization
+        }));
+        setSelectedDoctors(selectedDoctorsForEdit);
+      } else {
+        setSelectedDoctors([]);
+      }
+    } catch (error) {
+      console.error('Failed to load assigned doctors:', error);
+      setSelectedDoctors([]);
+      setError('Warning: Could not load currently assigned doctors. You can still update the clinic and reassign doctors.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDelete = async (clinic: Clinic) => {
@@ -209,6 +233,7 @@ export function Clinics() {
       try {
         await clinicAPI.deleteClinic(clinic.id);
         loadClinics();
+        setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
         alert('Clinic deleted successfully!');
       } catch (error) {
         console.error('Failed to delete clinic:', error);
@@ -311,7 +336,7 @@ export function Clinics() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredClinics.map(clinic => (
               <ClinicCard 
-                key={clinic.id} 
+                key={`${clinic.id}-${refreshTrigger}`}
                 clinic={clinic} 
                 onEdit={handleEdit}
                 onDelete={handleDelete}
@@ -469,13 +494,43 @@ export function Clinics() {
                   </div>
                 </div>
 
-                {/* Doctor Assignment (only for new clinics) */}
-                {!isEditMode && (
+                {/* Status (only in edit mode) */}
+                {isEditMode && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Assign Doctors *
+                      Status
                     </label>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    >
+                      <option value="SCHEDULED">SCHEDULED</option>
+                      <option value="IN_PROGRESS">IN_PROGRESS</option>
+                      <option value="COMPLETED">COMPLETED</option>
+                      <option value="CANCELLED">CANCELLED</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Doctor Assignment */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {isEditMode ? 'Update Assigned Doctors' : 'Assign Doctors'} *
+                  </label>
+
+                  {/* Loading state for edit mode */}
+                  {isEditMode && isLoading && (
+                    <div className="text-center py-4">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#38A3A5]"></div>
+                      <p className="mt-2 text-sm text-gray-600">Loading assigned doctors...</p>
+                    </div>
+                  )}
                     
+                  {/* Only show doctor selection when not loading */}
+                  {!(isEditMode && isLoading) && (
+                    <>
                     {/* Doctor Search */}
                     <div className="relative mb-3">
                       <input
@@ -534,8 +589,9 @@ export function Clinics() {
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
 
                 {/* Submit Buttons */}
                 <div className="flex gap-3 pt-4">

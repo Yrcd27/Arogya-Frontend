@@ -1,16 +1,12 @@
-import { GlobeIcon, BellIcon, ChevronDownIcon, PlusIcon, MenuIcon } from 'lucide-react';
+import { GlobeIcon, BellIcon, ChevronDownIcon, MenuIcon } from 'lucide-react';
 
 interface DoctorHeaderProps {
-  showAddPatient?: boolean;
   onToggleSidebar?: () => void;
 }
 
-export function Header({
-  showAddPatient = true,
-  onToggleSidebar
-}: DoctorHeaderProps) {
+export function Header({ onToggleSidebar }: DoctorHeaderProps) {
   return (
-    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
+    <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -22,12 +18,6 @@ export function Header({
           <h2 className="text-lg sm:text-xl font-bold text-gray-900">Dashboard</h2>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          {showAddPatient && (
-            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors text-sm sm:text-base">
-              <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Add Patient</span>
-            </button>
-          )}
           <button className="hidden md:flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded-lg transition-colors">
             <GlobeIcon className="w-5 h-5 text-gray-600" />
             <span className="text-gray-700 font-medium">English</span>

@@ -138,198 +138,196 @@ const Profile: React.FC = () => {
       <div className="lg:ml-64 flex flex-col">
         <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center mb-6">
-                <UserIcon className="h-6 w-6 text-blue-600 mr-3" />
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {isNewProfile ? 'Complete Your Technician Profile' : 'Technician Profile'}
-                </h1>
+          <div className="mb-4 sm:mb-6">
+            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              {isNewProfile ? 'Complete Your Technician Profile' : 'Technician Profile'}
+            </h1>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            {error && (
+              <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
+                <span className="text-red-700">{error}</span>
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-6 flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
+                <span className="text-green-700">{success}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* First Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={profile.firstName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="Enter first name"
+                  />
+                </div>
+
+                {/* Last Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={profile.lastName}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="Enter last name"
+                  />
+                </div>
+
+                {/* Date of Birth */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date of Birth *
+                  </label>
+                  <input
+                    type="date"
+                    name="dateOfBirth"
+                    value={profile.dateOfBirth}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    value={profile.phoneNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="+94771234567"
+                  />
+                </div>
+
+                {/* NIC Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    NIC Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="nicNumber"
+                    value={profile.nicNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="123456789V or 123456789012"
+                  />
+                </div>
+
+                {/* Technician Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Technician Field *
+                  </label>
+                  <select
+                    name="technicianField"
+                    value={profile.technicianField}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  >
+                    <option value="">Select technician field</option>
+                    <option value="Radiology">Radiology</option>
+                    <option value="Laboratory">Laboratory</option>
+                    <option value="Pharmacy">Pharmacy</option>
+                    <option value="Cardiovascular">Cardiovascular</option>
+                    <option value="Respiratory">Respiratory</option>
+                    <option value="Emergency Medical">Emergency Medical</option>
+                    <option value="Surgical">Surgical</option>
+                    <option value="Dental">Dental</option>
+                    <option value="Ophthalmic">Ophthalmic</option>
+                    <option value="Dialysis">Dialysis</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                {/* License Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    License Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="licenseNumber"
+                    value={profile.licenseNumber}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    placeholder="Enter license number"
+                  />
+                </div>
               </div>
 
-              {error && (
-                <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
-                  <span className="text-red-700">{error}</span>
-                </div>
-              )}
+              {/* Certification */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Certification *
+                </label>
+                <textarea
+                  name="certification"
+                  value={profile.certification}
+                  onChange={handleInputChange}
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  placeholder="Enter your certifications and qualifications"
+                />
+              </div>
 
-              {success && (
-                <div className="mb-6 flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
-                  <span className="text-green-700">{success}</span>
-                </div>
-              )}
+              {/* Assigned Equipment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Assigned Equipment *
+                </label>
+                <textarea
+                  name="assignedEquipment"
+                  value={profile.assignedEquipment}
+                  onChange={handleInputChange}
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  placeholder="List equipment and instruments assigned to you"
+                />
+              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* First Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      First Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={profile.firstName}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter first name"
-                    />
-                  </div>
-
-                  {/* Last Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Last Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={profile.lastName}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter last name"
-                    />
-                  </div>
-
-                  {/* Date of Birth */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date of Birth *
-                    </label>
-                    <input
-                      type="date"
-                      name="dateOfBirth"
-                      value={profile.dateOfBirth}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Phone Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      name="phoneNumber"
-                      value={profile.phoneNumber}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="+94771234567"
-                    />
-                  </div>
-
-                  {/* NIC Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      NIC Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="nicNumber"
-                      value={profile.nicNumber}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="123456789V or 123456789012"
-                    />
-                  </div>
-
-                  {/* Technician Field */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Technician Field *
-                    </label>
-                    <select
-                      name="technicianField"
-                      value={profile.technicianField}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select technician field</option>
-                      <option value="Radiology">Radiology</option>
-                      <option value="Laboratory">Laboratory</option>
-                      <option value="Pharmacy">Pharmacy</option>
-                      <option value="Cardiovascular">Cardiovascular</option>
-                      <option value="Respiratory">Respiratory</option>
-                      <option value="Emergency Medical">Emergency Medical</option>
-                      <option value="Surgical">Surgical</option>
-                      <option value="Dental">Dental</option>
-                      <option value="Ophthalmic">Ophthalmic</option>
-                      <option value="Dialysis">Dialysis</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* License Number */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      License Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="licenseNumber"
-                      value={profile.licenseNumber}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter license number"
-                    />
-                  </div>
-                </div>
-
-                {/* Certification */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Certification *
-                  </label>
-                  <textarea
-                    name="certification"
-                    value={profile.certification}
-                    onChange={handleInputChange}
-                    required
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter your certifications and qualifications"
-                  />
-                </div>
-
-                {/* Assigned Equipment */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assigned Equipment *
-                  </label>
-                  <textarea
-                    name="assignedEquipment"
-                    value={profile.assignedEquipment}
-                    onChange={handleInputChange}
-                    required
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="List equipment and instruments assigned to you"
-                  />
-                </div>
-
-                <div className="flex justify-end pt-6 border-t border-gray-200">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex items-center px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    <SaveIcon className="h-4 w-4 mr-2" />
-                    {saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Update Profile'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end pt-6 border-t border-gray-200">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+                >
+                  <SaveIcon className="h-4 w-4" />
+                  {saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Update Profile'}
+                </button>
+              </div>
+            </form>
           </div>
         </main>
       </div>

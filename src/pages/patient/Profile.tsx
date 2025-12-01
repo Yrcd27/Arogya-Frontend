@@ -109,16 +109,18 @@ export function Profile() {
         <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">Patient Profile</h1>
-              <p className="text-gray-600 mt-2">
-                {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
-              </p>
-            </div>
+          <div className="mb-4 sm:mb-6">
+            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Patient Profile
+            </h1>
+            <p className="text-gray-600 mt-2">
+              {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
+            </p>
+          </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Success/Error Messages */}
                 {success && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -155,7 +157,7 @@ export function Profile() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         First Name *
                       </label>
                       <input
@@ -164,13 +166,13 @@ export function Profile() {
                         value={formData.firstName}
                         onChange={handleInputChange}
                         placeholder="Your first name"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         required
                         disabled={loading}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Last Name *
                       </label>
                       <input
@@ -179,7 +181,7 @@ export function Profile() {
                         value={formData.lastName}
                         onChange={handleInputChange}
                         placeholder="Your last name"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         required
                         disabled={loading}
                       />
@@ -188,7 +190,7 @@ export function Profile() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
                       <input
@@ -196,12 +198,12 @@ export function Profile() {
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number
                       </label>
                       <input
@@ -210,14 +212,14 @@ export function Profile() {
                         value={formData.phoneNumber}
                         onChange={handleInputChange}
                         placeholder="Your phone number"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
                   </div>
 
                   <div className="mt-6">
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       NIC Number
                     </label>
                     <input
@@ -226,7 +228,7 @@ export function Profile() {
                       value={formData.nicNumber}
                       onChange={handleInputChange}
                       placeholder="National Identity Card number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       disabled={loading}
                     />
                   </div>
@@ -311,7 +313,7 @@ export function Profile() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Address
                       </label>
                       <textarea
@@ -320,12 +322,12 @@ export function Profile() {
                         onChange={handleInputChange}
                         placeholder="Enter your address"
                         rows={3}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Emergency Contact
                       </label>
                       <input
@@ -334,7 +336,7 @@ export function Profile() {
                         value={formData.emergencyContact}
                         onChange={handleInputChange}
                         placeholder="Emergency contact number"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
                     </div>
@@ -342,18 +344,17 @@ export function Profile() {
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-6 border-t border-gray-200">
                   <button
                     type="submit"
                     disabled={loading}
-                    className="bg-[#38A3A5] text-white py-3 px-8 rounded-lg font-medium hover:bg-[#2e8285] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
                   >
                     {loading ? 'Saving...' : (hasProfile ? 'Update Profile' : 'Create Profile')}
                   </button>
                 </div>
               </form>
             </div>
-          </div>
         </main>
       </div>
     </div>
