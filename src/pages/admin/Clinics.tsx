@@ -138,7 +138,7 @@ export function Clinics() {
     try {
       setIsLoading(true);
 
-      // Step 1: Create clinic
+      // Step 1: Create clinic with doctor IDs included
       const clinicData = {
         clinicName: formData.clinicName.trim(),
         province: formData.province,
@@ -146,7 +146,8 @@ export function Clinics() {
         location: formData.location.trim() || undefined,
         scheduledDate: formData.scheduledDate,
         scheduledTime: formatTimeForAPI(formData.scheduledTime), // Ensure proper format
-        status: formData.status
+        status: formData.status,
+        doctorIds: selectedDoctors.map(doctor => doctor.doctorId) // Include doctor IDs for backend
       };
 
       let clinicResponse;
@@ -156,21 +157,7 @@ export function Clinics() {
         clinicResponse = await clinicAPI.createClinic(clinicData);
       }
 
-      const clinicId = clinicResponse.id;
-
-      if (!isEditMode) {
-        // Step 2: Assign doctors to clinic (only for new clinics)
-        const doctorAssignmentPromises = selectedDoctors.map(doctor =>
-          clinicDoctorAPI.createClinicDoctor({
-            clinicId: clinicId,
-            doctorRefId: doctor.doctorId,
-            doctorName: doctor.name,
-            specialization: doctor.specialization
-          })
-        );
-
-        await Promise.all(doctorAssignmentPromises);
-      }
+      // No need for separate doctor assignment - backend handles it via doctorIds field
 
       // Success
       setIsModalOpen(false);

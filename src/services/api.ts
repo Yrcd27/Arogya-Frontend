@@ -273,13 +273,15 @@ export const profileAPI = {
 };
 
 // Get auth token from localStorage
+// Note: Backend uses session-based auth, not JWT tokens
 const getAuthToken = () => {
   const user = localStorage.getItem('user');
   if (user) {
     try {
       const userData = JSON.parse(user);
-      // Try different token field names that might be returned by the backend
-      return userData.token || userData.jwt || userData.accessToken || userData.authToken;
+      // Backend doesn't return JWT tokens, it returns user object directly
+      // For now, we'll work without token-based auth
+      return null;
     } catch (error) {
       console.error('Error parsing user data:', error);
       return null;
@@ -300,11 +302,14 @@ const clinicApiCall = async (endpoint: string, options: RequestInit = {}, requir
     const token = getAuthToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('No auth token found for authenticated request');
     }
   }
 
   console.log('Making Clinic API request to:', url);
-  console.log('Request options:', { ...options, headers });
+  console.log('Request headers:', headers);
+  console.log('Request body:', options.body);
   
   try {
     const response = await fetch(url, {
@@ -313,14 +318,17 @@ const clinicApiCall = async (endpoint: string, options: RequestInit = {}, requir
     });
 
     console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       let errorMessage = `HTTP error! status: ${response.status}`;
       try {
         const errorData = await response.json();
-        errorMessage = errorData.message || errorMessage;
+        errorMessage = errorData.message || errorData.error || errorMessage;
+        console.log('Error response data:', errorData);
       } catch (e) {
         const errorText = await response.text();
+        console.log('Error response text:', errorText);
         if (errorText) {
           errorMessage = errorText;
         }
@@ -333,16 +341,6 @@ const clinicApiCall = async (endpoint: string, options: RequestInit = {}, requir
     return data;
   } catch (error) {
     console.error('Clinic API call failed:', error);
-    
-    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      // This is typically a CORS or network connectivity issue
-      if (isDevelopment) {
-        throw new Error('CORS_ERROR: Unable to connect to clinic service. Please ensure the backend is running on http://localhost:8082 and check the proxy configuration.');
-      } else {
-        throw new Error('CORS_ERROR: The clinic service is not accessible due to CORS policy. Please configure CORS headers on the backend service at http://localhost:8082');
-      }
-    }
-    
     throw error;
   }
 };
@@ -351,71 +349,12 @@ const clinicApiCall = async (endpoint: string, options: RequestInit = {}, requir
 export const clinicAPI = {
   // Get all clinics (public endpoint)
   getAllClinics: async () => {
-    try {
-      return clinicApiCall('/clinics/getAllClinics', {}, false);
-    } catch (error: any) {
-      console.log('Error caught in getAllClinics:', error.message);
-      if (error.message && (error.message.includes('CORS_ERROR') || error.message.includes('CORS policy') || error.message.includes('Failed to fetch'))) {
-        console.warn('CORS blocking clinic service, using mock data for development');
-        // Return mock clinic data when CORS blocks the service
-        return [
-          {
-            id: 1,
-            clinicName: 'Galle Mobile Clinic',
-            province: 'Southern',
-            district: 'Galle District',
-            location: 'Galle Town Center',
-            scheduledDate: '2025-12-15',
-            scheduledTime: '09:00:00',
-            status: 'SCHEDULED'
-          },
-          {
-            id: 2,
-            clinicName: 'Colombo Mobile Clinic',
-            province: 'Western',
-            district: 'Colombo District',
-            location: 'Pettah',
-            scheduledDate: '2025-12-20',
-            scheduledTime: '10:00:00',
-            status: 'SCHEDULED'
-          },
-          {
-            id: 3,
-            clinicName: 'Kandy Mobile Clinic',
-            province: 'Central',
-            district: 'Kandy District',
-            location: 'Kandy Town',
-            scheduledDate: '2025-12-25',
-            scheduledTime: '08:30:00',
-            status: 'SCHEDULED'
-          }
-        ];
-      }
-      throw error;
-    }
+    return clinicApiCall('/clinics/getAllClinics', {}, false);
   },
 
   // Get clinic by ID (public endpoint)
   getClinic: async (id: number) => {
-    try {
-      return clinicApiCall(`/clinics/getClinic/${id}`, {}, false);
-    } catch (error: any) {
-      console.log('Error caught in getClinic:', error.message);
-      if (error.message && (error.message.includes('CORS_ERROR') || error.message.includes('CORS policy') || error.message.includes('Failed to fetch'))) {
-        console.warn('CORS blocking clinic service, returning mock clinic data');
-        return {
-          id,
-          clinicName: `Mock Clinic ${id}`,
-          province: 'Western',
-          district: 'Colombo District',
-          location: 'Mock Location',
-          scheduledDate: '2025-12-15',
-          scheduledTime: '09:00:00',
-          status: 'SCHEDULED'
-        };
-      }
-      throw error;
-    }
+    return clinicApiCall(`/clinics/getClinic/${id}`, {}, false);
   },
 
   // Create new clinic (admin only)
@@ -427,25 +366,28 @@ export const clinicAPI = {
     scheduledDate: string;
     scheduledTime: string;
     status: string;
+    doctorIds?: number[];
   }) => {
-    try {
-      return clinicApiCall('/clinics/createClinic', {
-        method: 'POST',
-        body: JSON.stringify(clinicData),
-      });
-    } catch (error: any) {
-      console.log('Error caught in createClinic:', error.message);
-      if (error.message && (error.message.includes('CORS_ERROR') || error.message.includes('CORS policy') || error.message.includes('Failed to fetch'))) {
-        console.warn('CORS blocking clinic service, simulating clinic creation');
-        // Return mock success response when CORS blocks the service
-        return {
-          id: Math.floor(Math.random() * 1000) + 100,
-          ...clinicData,
-          message: 'Clinic created successfully (simulated due to CORS)'
-        };
-      }
-      throw error;
-    }
+    // Backend expects LocalDate and LocalTime, not strings
+    // Convert date string to proper format and add doctorIds
+    const requestData = {
+      clinicName: clinicData.clinicName,
+      province: clinicData.province,
+      district: clinicData.district,
+      location: clinicData.location || '',
+      scheduledDate: clinicData.scheduledDate, // Keep as string, Spring Boot will parse it
+      scheduledTime: clinicData.scheduledTime, // Keep as string, Spring Boot will parse it
+      status: clinicData.status,
+      doctorIds: clinicData.doctorIds || [] // Include empty array if no doctors selected
+    };
+    
+    console.log('Sending clinic data as JSON (matching @RequestBody ClinicRequest):', requestData);
+    
+    // Backend doesn't use JWT authentication, it's session-based
+    return clinicApiCall('/clinics/createClinic', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    }, false);
   },
 
   // Update clinic (admin only)
@@ -458,18 +400,31 @@ export const clinicAPI = {
     scheduledDate: string;
     scheduledTime: string;
     status: string;
+    doctorIds?: number[];
   }) => {
+    const requestData = {
+      id: clinicData.id,
+      clinicName: clinicData.clinicName,
+      province: clinicData.province,
+      district: clinicData.district,
+      location: clinicData.location || '',
+      scheduledDate: clinicData.scheduledDate,
+      scheduledTime: clinicData.scheduledTime,
+      status: clinicData.status,
+      doctorIds: clinicData.doctorIds || []
+    };
+    
     return clinicApiCall('/clinics/updateClinic', {
       method: 'PUT',
-      body: JSON.stringify(clinicData),
-    });
+      body: JSON.stringify(requestData),
+    }, false); // No JWT auth
   },
 
   // Delete clinic (admin only)
   deleteClinic: async (id: number) => {
     return clinicApiCall(`/clinics/deleteClinic/${id}`, {
       method: 'DELETE',
-    });
+    }, false); // No JWT auth
   },
 };
 
@@ -481,6 +436,7 @@ export const clinicDoctorAPI = {
   },
 
   // Create clinic-doctor mapping (admin only)
+  // Note: This endpoint may not exist in the current backend controller
   createClinicDoctor: async (mappingData: {
     clinicId: number;
     doctorRefId: number;
@@ -490,14 +446,15 @@ export const clinicDoctorAPI = {
     return clinicApiCall('/clinic_doctors/createClinicDoctor', {
       method: 'POST',
       body: JSON.stringify(mappingData),
-    });
+    }, false); // No JWT auth
   },
 
   // Delete clinic-doctor mapping (admin only)
+  // Note: This endpoint may not exist in the current backend controller
   deleteClinicDoctor: async (id: number) => {
     return clinicApiCall(`/clinic_doctors/deleteClinicDoctor/${id}`, {
       method: 'DELETE',
-    });
+    }, false); // No JWT auth
   },
 };
 
