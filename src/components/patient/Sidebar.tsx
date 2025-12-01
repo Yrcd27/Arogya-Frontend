@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, FileTextIcon, ClipboardListIcon, FlaskConicalIcon, CalendarIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
+import { HomeIcon, FileTextIcon, ClipboardListIcon, FlaskConicalIcon, CalendarIcon, UserIcon, LogOutIcon, XIcon, HospitalIcon } from 'lucide-react';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -33,6 +33,10 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     icon: CalendarIcon,
     label: 'Appointments',
     path: '/patient/appointments'
+  }, {
+    icon: HospitalIcon,
+    label: 'Mobile Clinics',
+    path: '/patient/clinics'
   }];
 
   const handleNavigation = (path: string) => {

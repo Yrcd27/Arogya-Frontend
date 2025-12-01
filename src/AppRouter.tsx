@@ -10,6 +10,7 @@ import { Records as PatientRecords } from './pages/patient/Records';
 import { Prescriptions as PatientPrescriptions } from './pages/patient/Prescriptions';
 import { LabResults as PatientLabResults } from './pages/patient/LabResults';
 import { Appointments as PatientAppointments } from './pages/patient/Appointments';
+import { Clinics as PatientClinics } from './pages/patient/Clinics';
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
 import AdminProfile from './pages/admin/Profile';
 import { Analytics as AdminAnalytics } from './pages/admin/Analytics';
@@ -44,6 +45,7 @@ export function AppRouter() {
         <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
         <Route path="/patient/lab-results" element={<PatientLabResults />} />
         <Route path="/patient/appointments" element={<PatientAppointments />} />
+        <Route path="/patient/clinics" element={<PatientClinics />} />
         
         {/* Doctor Routes */}
         <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
