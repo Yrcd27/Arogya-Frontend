@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, ClipboardListIcon, FileTextIcon, UserIcon, BarChartIcon } from 'lucide-react';
 import { LandingHeader } from '../components/landing/LandingHeader';

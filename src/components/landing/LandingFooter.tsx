@@ -1,4 +1,3 @@
-import React from 'react';
 export function LandingFooter() {
   return <footer className="bg-gray-900 text-white py-12 px-6">
       <div className="max-w-7xl mx-auto">

@@ -42,14 +42,14 @@ export default defineConfig({
         target: 'http://localhost:8082',
         changeOrigin: true,
         secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
             console.log('Clinic service proxy error:', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             console.log('Proxying request to clinic service:', req.method, req.url);
           });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
+          proxy.on('proxyRes', (proxyRes, req) => {
             console.log('Clinic service proxy response:', proxyRes.statusCode, req.url);
           });
         },
@@ -58,8 +58,8 @@ export default defineConfig({
         target: 'http://localhost:8082',
         changeOrigin: true,
         secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
             console.log('Clinic-doctor service proxy error:', err);
           });
         },

@@ -1,4 +1,3 @@
-import React from 'react';
 import { UsersIcon, ActivityIcon, MapPinIcon, AwardIcon } from 'lucide-react';
 export function StatsCounter() {
   const stats = [{

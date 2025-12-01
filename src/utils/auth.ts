@@ -105,7 +105,7 @@ export const registerAPI = async (userData: RegisterData, roleId: number, roleNa
     // Add role-specific fields and create profile
     switch (roleName.toLowerCase()) {
       case 'patient':
-        await profileAPI.createPatientProfile({
+        await profileAPI.createPatient({
           ...profileData,
           address: userData.address || '',
           gender: userData.gender || '',
@@ -116,7 +116,7 @@ export const registerAPI = async (userData: RegisterData, roleId: number, roleNa
         });
         break;
       case 'doctor':
-        await profileAPI.createDoctorProfile({
+        await profileAPI.createDoctor({
           ...profileData,
           licenseNumber: userData.licenseNumber || '',
           specialization: userData.specialization || '',
@@ -125,10 +125,10 @@ export const registerAPI = async (userData: RegisterData, roleId: number, roleNa
         });
         break;
       case 'admin':
-        await profileAPI.createAdminProfile(profileData);
+        await profileAPI.createAdmin(profileData);
         break;
       case 'technician':
-        await profileAPI.createTechnicianProfile({
+        await profileAPI.createTechnician({
           ...profileData,
           technicianField: userData.technicianField || '',
           licenseNumber: userData.licenseNumber || '',

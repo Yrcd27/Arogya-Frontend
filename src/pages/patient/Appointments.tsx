@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { CalendarIcon, ClockIcon, MapPinIcon, PlusIcon } from 'lucide-react';

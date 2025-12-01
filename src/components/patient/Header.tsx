@@ -1,4 +1,3 @@
-import React from 'react';
 import { GlobeIcon, BellIcon, ChevronDownIcon, MenuIcon } from 'lucide-react';
 
 interface HeaderProps {

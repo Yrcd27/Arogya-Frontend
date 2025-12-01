@@ -1,4 +1,3 @@
-import React from 'react';
 import { BellIcon, UserCircleIcon, MenuIcon } from 'lucide-react';
 
 interface TechnicianHeaderProps {

@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
-import { Clinic, ClinicDoctor, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
+import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   validateClinicForm,
   formatTimeForAPI,
@@ -150,11 +150,10 @@ export function Clinics() {
         doctorIds: selectedDoctors.map(doctor => doctor.doctorId) // Include doctor IDs for backend
       };
 
-      let clinicResponse;
       if (isEditMode && editingClinic) {
-        clinicResponse = await clinicAPI.updateClinic({ ...clinicData, id: editingClinic.id });
+        await clinicAPI.updateClinic({ ...clinicData, id: editingClinic.id });
       } else {
-        clinicResponse = await clinicAPI.createClinic(clinicData);
+        await clinicAPI.createClinic(clinicData);
       }
 
       // No need for separate doctor assignment - backend handles it via doctorIds field
@@ -237,22 +236,6 @@ export function Clinics() {
                          (clinic.location && clinic.location.toLowerCase().includes(searchTerm.toLowerCase()));
     return searchTerm === '' || locationMatch;
   });
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (timeStr: string) => {
-    return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">

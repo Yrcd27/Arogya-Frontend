@@ -32,7 +32,7 @@ export function Profile() {
       if (!user?.id) return;
 
       try {
-        const profile = await profileAPI.getPatientProfileByUserId(user.id.toString());
+        const profile = await profileAPI.getPatient(user.id);
         setFormData({
           firstName: profile.firstName || '',
           lastName: profile.lastName || '',
@@ -82,11 +82,11 @@ export function Profile() {
 
       if (hasProfile) {
         // Update existing profile
-        await profileAPI.updatePatientProfile(profileData);
+        await profileAPI.updatePatient(user.id, profileData);
         setSuccess('Profile updated successfully!');
       } else {
         // Create new profile
-        await profileAPI.createPatientProfile(profileData);
+        await profileAPI.createPatient(profileData);
         setSuccess('Profile created successfully!');
         setHasProfile(true);
       }
