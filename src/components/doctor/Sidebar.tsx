@@ -9,31 +9,43 @@ interface SidebarProps {
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const navItems = [{
-    icon: HomeIcon,
-    label: 'Dashboard',
-    path: '/doctor/dashboard'
-  }, {
-    icon: UserIcon,
-    label: 'My Profile',
-    path: '/doctor/profile'
-  }, {
-    icon: ClipboardListIcon,
-    label: 'Patient Queue',
-    path: '/doctor/queue'
-  }, {
-    icon: FolderOpenIcon,
-    label: 'Patient Records',
-    path: '/doctor/records'
-  }, {
-    icon: FileTextIcon,
-    label: 'Prescriptions',
-    path: '/doctor/prescriptions'
-  }, {
-    icon: FlaskConicalIcon,
-    label: 'Lab Results',
-    path: '/doctor/lab-results'
-  }];
+  const navItems = [
+    {
+      icon: HomeIcon,
+      label: 'Dashboard',
+      path: '/doctor/dashboard'
+    },
+    {
+      icon: UserIcon,
+      label: 'My Profile',
+      path: '/doctor/profile'
+    },
+    {
+      icon: ClipboardListIcon,
+      label: 'Patient Queue',
+      path: '/doctor/queue'
+    },
+    {
+      icon: FileTextIcon,
+      label: 'Consultations',
+      path: '/doctor/consultations'
+    },
+    {
+      icon: FolderOpenIcon,
+      label: 'Patient Records',
+      path: '/doctor/records'
+    },
+    {
+      icon: FileTextIcon,
+      label: 'Prescriptions',
+      path: '/doctor/prescriptions'
+    },
+    {
+      icon: FlaskConicalIcon,
+      label: 'Lab Results',
+      path: '/doctor/lab-results'
+    }
+  ];
 
   const handleNavigation = (path: string) => {
     navigate(path);

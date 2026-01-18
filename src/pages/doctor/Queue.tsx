@@ -3,6 +3,8 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { SearchIcon } from 'lucide-react';
 import { clinicAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
+import { consultationAPI } from '../../services/consultationService';
+import { getCurrentUser } from '../../utils/auth';
 
 export function Queue() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -12,6 +14,8 @@ export function Queue() {
   const [nameById, setNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConsultModal, setShowConsultModal] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<import('../../services/queueService').QueueTokenResponse | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +69,75 @@ export function Queue() {
     results.forEach(r => { map[r.id] = r.name; });
     setNameById(prev => ({ ...prev, ...map }));
   };
+
+  function ConsultModal({ token, onClose }: { token: import('../../services/queueService').QueueTokenResponse; onClose: () => void }) {
+    const currentUser = getCurrentUser();
+    const [chief, setChief] = useState<string>('');
+    const [present, setPresent] = useState<string>('');
+    const [past, setPast] = useState<string>('');
+    const [recom, setRecom] = useState<string>('');
+    const [sessionNumber, setSessionNumber] = useState<number>(1);
+    const [saving, setSaving] = useState(false);
+
+    const save = async () => {
+      setSaving(true);
+      try {
+        await consultationAPI.create({
+          patientId: Number(token.patientId),
+          doctorId: Number(currentUser?.id || 0),
+          clinicId: Number(selectedClinicId || token.clinicId || 0),
+          queueTokenId: token.id,
+          chiefComplaint: chief,
+          presentIllness: present,
+          pastMedicalHistory: past,
+          recommendations: recom,
+          sessionNumber: sessionNumber || 1,
+          bookedAt: new Date().toISOString(),
+        });
+        // update local queue token to SERVING
+        setQueueTokens(prev => prev.map(p => p.id === token.id ? { ...p, status: 'SERVING' } : p));
+        onClose();
+      } catch (err) {
+        alert('Failed to create consultation: ' + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-xl p-6">
+          <h3 className="text-lg font-semibold mb-4">Create Consultation for {nameById[String(token.patientId)] || `User #${token.patientId}`}</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Chief Complaint</label>
+              <input value={chief} onChange={e => setChief(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Past Medical History</label>
+              <textarea value={past} onChange={e => setPast(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Present Illness</label>
+              <textarea value={present} onChange={e => setPresent(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Recommendations</label>
+              <textarea value={recom} onChange={e => setRecom(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Session Number</label>
+              <input type="number" min={1} value={sessionNumber} onChange={e => setSessionNumber(Number(e.target.value || 1))} className="w-32 mt-1 px-3 py-2 border rounded" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="px-4 py-2 bg-gray-200 rounded" onClick={onClose} disabled={saving}>Cancel</button>
+              <button className="px-4 py-2 bg-[#38A3A5] text-white rounded" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -151,7 +224,17 @@ export function Queue() {
                         <div className="text-sm text-gray-600">{new Date(t.issuedAt).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <button className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors">Consult</button>
+                        <button
+                          className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors"
+                          onClick={() => {
+                            setSelectedClinicId(selectedClinicId);
+                            setSelectedToken(t);
+                            (window as any).__selectedQueueToken = t; // keep backward compatibility
+                            setShowConsultModal(true);
+                          }}
+                        >
+                          Consult
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -186,6 +269,10 @@ export function Queue() {
           )}
         </main>
       </div>
+      {/* Consultation Modal (expanded) */}
+      {showConsultModal && selectedToken && (
+        <ConsultModal token={selectedToken} onClose={() => { setShowConsultModal(false); setSelectedToken(null); }} />
+      )}
     </div>
   );
 }

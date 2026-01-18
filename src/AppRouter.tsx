@@ -26,6 +26,7 @@ import { Queue as DoctorQueue } from './pages/doctor/Queue';
 import { Records as DoctorRecords } from './pages/doctor/Records';
 import { Prescriptions as DoctorPrescriptions } from './pages/doctor/Prescriptions';
 import { LabResults as DoctorLabResults } from './pages/doctor/LabResults';
+import Consultations from './pages/doctor/Consultations';
 
 export function AppRouter() {
   return (
@@ -51,6 +52,7 @@ export function AppRouter() {
         <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
         <Route path="/doctor/profile" element={<DoctorProfile />} />
         <Route path="/doctor/queue" element={<DoctorQueue />} />
+        <Route path="/doctor/consultations" element={<Consultations />} />
         <Route path="/doctor/records" element={<DoctorRecords />} />
         <Route path="/doctor/prescriptions" element={<DoctorPrescriptions />} />
         <Route path="/doctor/lab-results" element={<DoctorLabResults />} />
