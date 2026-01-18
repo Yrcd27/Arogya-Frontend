@@ -78,6 +78,23 @@ export default defineConfig({
           });
         },
       },
+      // Consultation service endpoints
+      '/consultations': {
+        target: 'http://localhost:8086',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('Consultation service proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('Proxying request to consultation service:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Consultation service proxy response:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     },
   },
 })
