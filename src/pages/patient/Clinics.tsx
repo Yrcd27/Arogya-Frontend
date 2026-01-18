@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
-import { clinicAPI, clinicDoctorAPI } from '../../services/api';
+import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
+import { getCurrentUser } from '../../utils/auth';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   formatDate, 
@@ -21,6 +22,16 @@ export function Clinics() {
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const [clinicDoctors, setClinicDoctors] = useState<ClinicDoctor[]>([]);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [queueTokens, setQueueTokens] = useState<import('../../services/queueService').QueueTokenResponse[]>([]);
+  const [nameById, setNameById] = useState<Record<string, string>>({});
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
+  const [patientId, setPatientId] = useState<string | null>(null);
+  const [patientName, setPatientName] = useState<string | null>(null);
+  const [patientFetchError, setPatientFetchError] = useState<string | null>(null);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,6 +43,32 @@ export function Clinics() {
   // Load clinics on component mount
   useEffect(() => {
     loadClinics();
+  }, []);
+
+  // Auto-detect logged-in patient profile
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = getCurrentUser();
+        if (!user) return;
+        const profile = await profileAPI.getPatient(user.id);
+        const pid = (profile?.id ?? profile?.patientId ?? profile?.user?.id);
+        if (pid) {
+          setPatientId(String(pid));
+          const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
+          if (name) setPatientName(name);
+        } else {
+          setPatientFetchError('Unable to determine patient ID from profile');
+          // Fallback: allow joining with user id if patient profile is missing
+          setPatientId(String(user.id));
+        }
+      } catch (e) {
+        const user = getCurrentUser();
+        setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
+        // Fallback: still enable queue actions using the user's id
+        if (user?.id) setPatientId(String(user.id));
+      }
+    })();
   }, []);
 
   const loadClinics = async () => {
@@ -65,6 +102,115 @@ export function Clinics() {
     setSelectedClinic(clinic);
     setIsDetailsModalOpen(true);
     await loadClinicDoctors(clinic.id);
+    // Clear previous queue state
+    setQueueTokens([]);
+    setQueueError(null);
+    setJoinError(null);
+    setJoinSuccess(null);
+  };
+
+  // Quick Join button: open modal focused on queue actions and preload current queue
+  const handleQuickJoinOpen = async (clinic: Clinic) => {
+    setSelectedClinic(clinic);
+    setIsDetailsModalOpen(true);
+    await loadClinicDoctors(clinic.id);
+    setQueueError(null);
+    setJoinError(null);
+    setJoinSuccess(null);
+    try {
+      setQueueLoading(true);
+      const tokens = await queueAPI.getClinicQueue(String(clinic.id));
+      setQueueTokens(tokens || []);
+      await hydratePatientNames(tokens || []);
+    } catch (error) {
+      console.error('Failed to load queue:', error);
+      setQueueTokens([]);
+      setQueueError(error instanceof Error ? error.message : 'Failed to load queue');
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  // Resolve and cache patient display names for a list of tokens
+  const hydratePatientNames = async (
+    tokens: import('../../services/queueService').QueueTokenResponse[]
+  ) => {
+    const ids = Array.from(new Set(tokens.map(t => String(t.patientId)).filter(Boolean)));
+    const missing = ids.filter(id => !nameById[id]);
+    if (missing.length === 0) return;
+    try {
+      const results = await Promise.all(
+        missing.map(async (id) => {
+          try {
+            const prof = await profileAPI.getPatient(Number(id));
+            const name = [prof?.firstName, prof?.lastName].filter(Boolean).join(' ');
+            if (name) return { id, name };
+          } catch {}
+          try {
+            const user = await userAPI.getUser(Number(id));
+            const name = user?.username || `User #${id}`;
+            return { id, name };
+          } catch {
+            return { id, name: `User #${id}` };
+          }
+        })
+      );
+      const map: Record<string, string> = {};
+      results.forEach(r => { map[r.id] = r.name; });
+      setNameById(prev => ({ ...prev, ...map }));
+    } catch (e) {
+      // Silent; names are optional
+    }
+  };
+
+  const joinQueueForClinic = async (clinic: Clinic) => {
+    setJoinSuccess(null);
+    setJoinError(null);
+    if (!patientId) {
+      setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
+      return;
+    }
+    try {
+      setJoinLoading(true);
+      const res = await queueAPI.createToken({
+        clinicId: String(clinic.id),
+        patientId: patientId,
+        // Placeholder: use clinic id as consultation id until consultation linkage is available
+        consultationId: String(clinic.id),
+      });
+      setJoinSuccess(`Token #${res.tokenNumber} created. Position: ${res.position}`);
+      // Refresh queue for selected clinic if modal open on same clinic
+      if (selectedClinic && selectedClinic.id === clinic.id) {
+        await handleViewQueue();
+      }
+    } catch (error) {
+      console.error('Failed to join queue:', error);
+      setJoinError(error instanceof Error ? error.message : 'Failed to join queue');
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
+  const handleViewQueue = async () => {
+    if (!selectedClinic) return;
+    try {
+      setQueueLoading(true);
+      setQueueError(null);
+      const tokens = await queueAPI.getClinicQueue(String(selectedClinic.id));
+      setQueueTokens(tokens || []);
+      await hydratePatientNames(tokens || []);
+    } catch (error) {
+      console.error('Failed to load queue:', error);
+      setQueueTokens([]);
+      setQueueError(error instanceof Error ? error.message : 'Failed to load queue');
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  const handleJoinQueue = async () => {
+    if (!selectedClinic) return;
+    await joinQueueForClinic(selectedClinic);
   };
 
   // Filter and sort clinics
@@ -232,6 +378,7 @@ export function Clinics() {
                   key={clinic.id} 
                   clinic={clinic} 
                   onViewDetails={handleViewDetails}
+                  onJoinQueue={handleQuickJoinOpen}
                 />
               ))}
             </div>
@@ -354,6 +501,105 @@ export function Clinics() {
                     Mobile clinics provide convenient healthcare services in your community.
                   </p>
                 </div>
+
+                {/* Queue Actions (auto-detected patient & clinic) */}
+                <div className="mt-6 space-y-4">
+                  <h4 className="font-semibold text-gray-900">Queue Actions</h4>
+                  <div className="text-sm text-gray-700">
+                    {patientFetchError ? (
+                      <span className="text-red-700">{patientFetchError}</span>
+                    ) : patientId ? (
+                      <span>
+                        Joining as <span className="font-medium">{patientName || `Patient #${patientId}`}</span>
+                      </span>
+                    ) : (
+                      <span>Detecting your patient profile...</span>
+                    )}
+                  </div>
+                  {joinError && (
+                    <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded">{joinError}</div>
+                  )}
+                  {joinSuccess && (
+                    <div className="bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded">{joinSuccess}</div>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleJoinQueue}
+                      disabled={joinLoading}
+                      className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-60"
+                    >
+                      {joinLoading ? 'Joining...' : 'Join Queue'}
+                    </button>
+                    <button
+                      onClick={handleViewQueue}
+                      disabled={queueLoading}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-60"
+                    >
+                      {queueLoading ? 'Loading Queue...' : 'View Queue'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Queue List */}
+                {queueError && (
+                  <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded">{queueError}</div>
+                )}
+                {queueTokens.length > 0 && (
+                  <div className="mt-4">
+                    <h5 className="font-semibold text-gray-900 mb-2">Current Queue</h5>
+                    <div className="space-y-2">
+                      {queueTokens.map(token => {
+                        const isMine = patientId && String(token.patientId) === String(patientId);
+                        const name = nameById[String(token.patientId)];
+                        return (
+                          <div
+                            key={token.id}
+                            className={`flex items-center justify-between p-3 rounded border ${
+                              isMine ? 'bg-[#e6f6f6] border-[#38A3A5]' : 'bg-gray-50 border-gray-200'
+                            }`}
+                          >
+                            <div className="text-sm text-gray-800">
+                              <span className="font-medium">Token #{token.tokenNumber}</span>
+                              <span className="ml-2">• Position: {token.position}</span>
+                              {name && <span className="ml-2 text-gray-600">• {name}</span>}
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              token.status === 'SERVING'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : token.status === 'COMPLETED'
+                                ? 'bg-green-100 text-green-700'
+                                : token.status === 'CANCELLED'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-200 text-gray-800'
+                            }`}>
+                              {token.status}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Done Persons (Completed) */}
+                {queueTokens.filter(t => t.status === 'COMPLETED').length > 0 && (
+                  <div className="mt-6">
+                    <h5 className="font-semibold text-gray-900 mb-2">Done Persons</h5>
+                    <div className="space-y-2">
+                      {queueTokens.filter(t => t.status === 'COMPLETED').map(t => (
+                        <div key={t.id} className="flex items-center justify-between p-3 rounded bg-green-50 border border-green-200">
+                          <div className="text-sm text-gray-800">
+                            <span className="font-medium">Token #{t.tokenNumber}</span>
+                            {nameById[String(t.patientId)] && (
+                              <span className="ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
+                            )}
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">COMPLETED</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Close Button */}
@@ -376,10 +622,12 @@ export function Clinics() {
 // Clinic Card Component
 function ClinicCard({ 
   clinic, 
-  onViewDetails
+  onViewDetails,
+  onJoinQueue,
 }: { 
   clinic: Clinic; 
   onViewDetails: (clinic: Clinic) => void;
+  onJoinQueue: (clinic: Clinic) => void;
 }) {
   const daysUntil = getDaysUntilClinic(clinic.scheduledDate);
 
@@ -419,13 +667,21 @@ function ClinicCard({
         </div>
       </div>
 
-      {/* View Details Button */}
-      <button
-        onClick={() => onViewDetails(clinic)}
-        className="w-full px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
-      >
-        View Details
-      </button>
+      {/* Actions */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => onViewDetails(clinic)}
+          className="w-full px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
+        >
+          View Details
+        </button>
+        <button
+          onClick={() => onJoinQueue(clinic)}
+          className="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+        >
+          Quick Join
+        </button>
+      </div>
     </div>
   );
 }

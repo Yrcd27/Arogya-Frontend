@@ -14,3 +14,8 @@ export {
   clinicAPI, 
   clinicDoctorAPI 
 } from './clinicService';
+
+// Queue Service APIs (Queue tokens, status, clinic queues)
+export {
+  queueAPI
+} from './queueService';
