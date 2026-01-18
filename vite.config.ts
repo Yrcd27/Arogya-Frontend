@@ -64,6 +64,20 @@ export default defineConfig({
           });
         },
       },
+      // Queue service endpoints
+      '/queue': {
+        target: 'http://localhost:8085',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('Queue service proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('Proxying request to queue service:', req.method, req.url);
+          });
+        },
+      },
     },
   },
 })
