@@ -52,16 +52,10 @@ export function Clinics() {
         const user = getCurrentUser();
         if (!user) return;
         const profile = await profileAPI.getPatient(user.id);
-        const pid = (profile?.id ?? profile?.patientId ?? profile?.user?.id);
-        if (pid) {
-          setPatientId(String(pid));
-          const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
-          if (name) setPatientName(name);
-        } else {
-          setPatientFetchError('Unable to determine patient ID from profile');
-          // Fallback: allow joining with user id if patient profile is missing
-          setPatientId(String(user.id));
-        }
+        // Always use user.id as patientId (backend validates against user ID)
+        setPatientId(String(user.id));
+        const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
+        if (name) setPatientName(name);
       } catch (e) {
         const user = getCurrentUser();
         setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
