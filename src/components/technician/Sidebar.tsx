@@ -55,7 +55,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col
-        transform transition-transform duration-300 ease-in-out md:translate-x-0
+        transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex items-center justify-between p-4 sm:p-6">
