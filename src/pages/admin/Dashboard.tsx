@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, DownloadIcon, UserCheckIcon } from 'lucide-react';
+import { UsersIcon, CalendarIcon, UserCheckIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
