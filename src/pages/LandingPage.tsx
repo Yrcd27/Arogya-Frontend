@@ -54,18 +54,45 @@ export function LandingPage() {
         </div>
       </section>
       {/* About Section */}
-      <section id="about" className="py-20 px-6 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-6">
+      <section id="about" className="py-20 px-6 bg-gradient-to-br from-[#38A3A5] to-[#2d8284] relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 left-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-10 right-10 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+        </div>
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
               About Arogya
             </h2>
-            <p className="text-lg text-gray-600 mb-6">
-              Arogya is a comprehensive healthcare management system designed specifically for mobile clinics serving rural communities across Sri Lanka. Developed under the Ministry of Health Sri Lanka initiative, our platform bridges the gap between healthcare providers and underserved populations.
-            </p>
-            <p className="text-lg text-gray-600">
-              Our mission is to modernize healthcare delivery in remote areas by providing efficient queue management, secure digital health records, and seamless communication between patients and healthcare professionals. We empower healthcare workers with cutting-edge technology while keeping patient care at the heart of everything we do.
-            </p>
+            <div className="w-24 h-1 bg-white mx-auto rounded-full"></div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-8 border border-white border-opacity-20">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-8 h-8 text-[#38A3A5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-white">Our Mission</h3>
+              </div>
+              <p className="text-white text-opacity-90 leading-relaxed text-lg">
+                Arogya is a comprehensive healthcare management system designed specifically for mobile clinics serving rural communities across Sri Lanka. Developed under the Ministry of Health Sri Lanka initiative, our platform bridges the gap between healthcare providers and underserved populations.
+              </p>
+            </div>
+            <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-8 border border-white border-opacity-20">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-8 h-8 text-[#38A3A5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-white">Our Vision</h3>
+              </div>
+              <p className="text-white text-opacity-90 leading-relaxed text-lg">
+                We empower healthcare workers with cutting-edge technology while keeping patient care at the heart of everything we do. Our vision is to modernize healthcare delivery in remote areas through efficient queue management, secure digital health records, and seamless communication.
+              </p>
+            </div>
           </div>
         </div>
       </section>
