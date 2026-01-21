@@ -1,4 +1,4 @@
-import { BellIcon, ChevronDownIcon } from 'lucide-react';
+import { ChevronDownIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfile } from '../../hooks/useUserProfile';
 
@@ -32,9 +32,6 @@ export function Header({ onToggleSidebar }: DoctorHeaderProps) {
           <h2 className="text-lg sm:text-xl font-bold text-gray-900">Dashboard</h2>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative">
-            <BellIcon className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
-          </button>
           <button 
             onClick={handleProfileClick}
             className="flex items-center gap-2 sm:gap-3 hover:bg-gray-100 px-2 sm:px-3 py-2 rounded-lg transition-colors"
