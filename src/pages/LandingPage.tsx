@@ -54,7 +54,7 @@ export function LandingPage() {
         </div>
       </section>
       {/* About Section */}
-      <section id="about" className="py-20 px-6 bg-white">
+      <section id="about" className="py-40 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-12 text-center">
@@ -92,7 +92,7 @@ export function LandingPage() {
         </div>
       </section>
       {/* Services Section */}
-      <section className="py-20 px-6 bg-white">
+      <section id="services" className="py-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-bold text-gray-900 mb-12 text-center">
             Our Services
