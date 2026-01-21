@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { HomeIcon, FlaskConicalIcon, SettingsIcon, ClipboardListIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -11,6 +13,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navItems = [{
     icon: HomeIcon,
@@ -85,7 +88,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </nav>
         <div className="p-3 sm:p-4 border-t border-gray-200">
           <button
-            onClick={() => { logout(); navigate('/', { replace: true }); onClose?.(); }}
+            onClick={() => setShowLogoutModal(true)}
             className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"
           >
             <LogOutIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
@@ -93,6 +96,16 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           </button>
         </div>
       </aside>
+
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onConfirm={() => {
+          logout();
+          navigate('/', { replace: true });
+          onClose?.();
+        }}
+        onCancel={() => setShowLogoutModal(false)}
+      />
     </>
   );
 }
