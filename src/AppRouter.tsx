@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -40,35 +41,35 @@ export function AppRouter() {
         <Route path="/register/:role" element={<RegisterForm />} />
         
         {/* Patient Routes */}
-        <Route path="/patient/dashboard" element={<PatientDashboard />} />
-        <Route path="/patient/profile" element={<PatientProfile />} />
-        <Route path="/patient/records" element={<PatientRecords />} />
-        <Route path="/patient/prescriptions" element={<PatientPrescriptions />} />
-        <Route path="/patient/lab-results" element={<PatientLabResults />} />
-        <Route path="/patient/appointments" element={<PatientAppointments />} />
-        <Route path="/patient/clinics" element={<PatientClinics />} />
+        <Route path="/patient/dashboard" element={<ProtectedRoute requiredRole="patient"><PatientDashboard /></ProtectedRoute>} />
+        <Route path="/patient/profile" element={<ProtectedRoute requiredRole="patient"><PatientProfile /></ProtectedRoute>} />
+        <Route path="/patient/records" element={<ProtectedRoute requiredRole="patient"><PatientRecords /></ProtectedRoute>} />
+        <Route path="/patient/prescriptions" element={<ProtectedRoute requiredRole="patient"><PatientPrescriptions /></ProtectedRoute>} />
+        <Route path="/patient/lab-results" element={<ProtectedRoute requiredRole="patient"><PatientLabResults /></ProtectedRoute>} />
+        <Route path="/patient/appointments" element={<ProtectedRoute requiredRole="patient"><PatientAppointments /></ProtectedRoute>} />
+        <Route path="/patient/clinics" element={<ProtectedRoute requiredRole="patient"><PatientClinics /></ProtectedRoute>} />
         
         {/* Doctor Routes */}
-        <Route path="/doctor/dashboard" element={<DoctorDashboard />} />
-        <Route path="/doctor/profile" element={<DoctorProfile />} />
-        <Route path="/doctor/queue" element={<DoctorQueue />} />
-        <Route path="/doctor/consultations" element={<Consultations />} />
-        <Route path="/doctor/records" element={<DoctorRecords />} />
-        <Route path="/doctor/prescriptions" element={<DoctorPrescriptions />} />
-        <Route path="/doctor/lab-results" element={<DoctorLabResults />} />
+        <Route path="/doctor/dashboard" element={<ProtectedRoute requiredRole="doctor"><DoctorDashboard /></ProtectedRoute>} />
+        <Route path="/doctor/profile" element={<ProtectedRoute requiredRole="doctor"><DoctorProfile /></ProtectedRoute>} />
+        <Route path="/doctor/queue" element={<ProtectedRoute requiredRole="doctor"><DoctorQueue /></ProtectedRoute>} />
+        <Route path="/doctor/consultations" element={<ProtectedRoute requiredRole="doctor"><Consultations /></ProtectedRoute>} />
+        <Route path="/doctor/records" element={<ProtectedRoute requiredRole="doctor"><DoctorRecords /></ProtectedRoute>} />
+        <Route path="/doctor/prescriptions" element={<ProtectedRoute requiredRole="doctor"><DoctorPrescriptions /></ProtectedRoute>} />
+        <Route path="/doctor/lab-results" element={<ProtectedRoute requiredRole="doctor"><DoctorLabResults /></ProtectedRoute>} />
         
         {/* Admin Routes */}
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/profile" element={<AdminProfile />} />
-        <Route path="/admin/analytics" element={<AdminAnalytics />} />
-        <Route path="/admin/clinics" element={<AdminClinics />} />
-        <Route path="/admin/staff" element={<AdminStaff />} />
-        <Route path="/admin/reports" element={<AdminReports />} />
-        <Route path="/admin/settings" element={<AdminSettings />} />
+        <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/profile" element={<ProtectedRoute requiredRole="admin"><AdminProfile /></ProtectedRoute>} />
+        <Route path="/admin/analytics" element={<ProtectedRoute requiredRole="admin"><AdminAnalytics /></ProtectedRoute>} />
+        <Route path="/admin/clinics" element={<ProtectedRoute requiredRole="admin"><AdminClinics /></ProtectedRoute>} />
+        <Route path="/admin/staff" element={<ProtectedRoute requiredRole="admin"><AdminStaff /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute requiredRole="admin"><AdminReports /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
         
         {/* Technician Routes */}
-        <Route path="/technician/dashboard" element={<TechnicianDashboard />} />
-        <Route path="/technician/profile" element={<TechnicianProfile />} />
+        <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />
+        <Route path="/technician/profile" element={<ProtectedRoute requiredRole="technician"><TechnicianProfile /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
