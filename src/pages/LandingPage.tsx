@@ -8,19 +8,19 @@ export function LandingPage() {
   const services = [{
     icon: ClipboardListIcon,
     title: 'Queue Management',
-    description: 'Efficient patient queue system for mobile clinics with real-time updates and notifications.'
+    description: 'Efficient patient queue system for mobile clinics with real-time updates and notifications. Reduce waiting times and improve patient flow with our smart scheduling system.'
   }, {
     icon: FileTextIcon,
     title: 'Patient Records',
-    description: 'Secure digital health records accessible across all mobile clinic locations.'
+    description: 'Secure digital health records accessible across all mobile clinic locations. Maintain comprehensive medical history, prescriptions, and lab results in one centralized system.'
   }, {
     icon: UserIcon,
     title: 'Doctor Portal',
-    description: 'Comprehensive tools for doctors to manage consultations and prescriptions.'
+    description: 'Comprehensive tools for doctors to manage consultations and prescriptions. Access patient information, create treatment plans, and generate prescriptions seamlessly.'
   }, {
     icon: BarChartIcon,
     title: 'Admin Analytics',
-    description: 'Regional analytics and reports for data-driven healthcare decisions.'
+    description: 'Regional analytics and reports for data-driven healthcare decisions. Monitor clinic performance, track patient demographics, and optimize resource allocation with powerful insights.'
   }];
   return <div className="min-h-screen bg-white">
       <LandingHeader />
