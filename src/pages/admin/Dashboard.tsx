@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, DownloadIcon, UserCheckIcon } from 'lucide-react';
+import { UsersIcon, CalendarIcon, UserCheckIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
@@ -55,11 +55,6 @@ export function Dashboard() {
                 Admin Dashboard
               </h1>
             </div>
-            <button className="flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors text-sm lg:text-base">
-              <DownloadIcon className="w-4 h-4 lg:w-5 lg:h-5" />
-              <span className="hidden sm:inline">Download Report</span>
-              <span className="sm:hidden">Download</span>
-            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             {dashboardStats.map(stat => (

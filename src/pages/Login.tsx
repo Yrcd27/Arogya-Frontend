@@ -66,11 +66,6 @@ export function Login() {
   return <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
     <div className="max-w-md w-full">
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-3 mb-4">
-          <div className="w-16 h-16 bg-[#38A3A5] rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-2xl">A</span>
-          </div>
-        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Welcome to Arogya
         </h1>
@@ -121,6 +116,14 @@ export function Login() {
               Register
             </button>
           </p>
+        </div>
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => navigate('/')}
+            className="text-gray-500 hover:text-gray-700 text-sm inline-flex items-center gap-1"
+          >
+            <span>←</span> Back to Home
+          </button>
         </div>
       </div>
     </div>
