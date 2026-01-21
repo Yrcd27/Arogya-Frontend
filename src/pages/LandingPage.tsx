@@ -53,6 +53,22 @@ export function LandingPage() {
           </div>
         </div>
       </section>
+      {/* About Section */}
+      <section id="about" className="py-20 px-6 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <h2 className="text-4xl font-bold text-gray-900 mb-6">
+              About Arogya
+            </h2>
+            <p className="text-lg text-gray-600 mb-6">
+              Arogya is a comprehensive healthcare management system designed specifically for mobile clinics serving rural communities across Sri Lanka. Developed under the Ministry of Health Sri Lanka initiative, our platform bridges the gap between healthcare providers and underserved populations.
+            </p>
+            <p className="text-lg text-gray-600">
+              Our mission is to modernize healthcare delivery in remote areas by providing efficient queue management, secure digital health records, and seamless communication between patients and healthcare professionals. We empower healthcare workers with cutting-edge technology while keeping patient care at the heart of everything we do.
+            </p>
+          </div>
+        </div>
+      </section>
       {/* Services Section */}
       <section className="py-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
