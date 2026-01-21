@@ -112,7 +112,7 @@ export function Login() {
         <div className="mt-6 text-center">
           <p className="text-gray-600">
             Don't have an account?{' '}
-            <button onClick={() => navigate('/register')} className="text-[#38A3A5] font-semibold hover:underline">
+            <button onClick={() => navigate('/role-selection')} className="text-[#38A3A5] font-semibold hover:underline">
               Register
             </button>
           </p>
