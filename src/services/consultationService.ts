@@ -17,6 +17,7 @@ export interface Consultation {
   bookedAt?: string;
   status: string;
   completedAt?: string;
+  updatedAt?: string;
 }
 
 export interface ConsultationUpdate {

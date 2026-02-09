@@ -23,6 +23,7 @@ import TechnicianProfile from './pages/technician/Profile';
 import { Dashboard as DoctorDashboard } from './pages/doctor/Dashboard';
 import DoctorProfile from './pages/doctor/Profile';
 import { Queue as DoctorQueue } from './pages/doctor/Queue';
+import { CreateConsultation as DoctorCreateConsultation } from './pages/doctor/CreateConsultation';
 import { Records as DoctorRecords } from './pages/doctor/Records';
 import { Prescriptions as DoctorPrescriptions } from './pages/doctor/Prescriptions';
 import { LabResults as DoctorLabResults } from './pages/doctor/LabResults';
@@ -51,6 +52,7 @@ export function AppRouter() {
         <Route path="/doctor/dashboard" element={<ProtectedRoute requiredRole="doctor"><DoctorDashboard /></ProtectedRoute>} />
         <Route path="/doctor/profile" element={<ProtectedRoute requiredRole="doctor"><DoctorProfile /></ProtectedRoute>} />
         <Route path="/doctor/queue" element={<ProtectedRoute requiredRole="doctor"><DoctorQueue /></ProtectedRoute>} />
+        <Route path="/doctor/queue/create-consultation" element={<ProtectedRoute requiredRole="doctor"><DoctorCreateConsultation /></ProtectedRoute>} />
         <Route path="/doctor/consultations" element={<ProtectedRoute requiredRole="doctor"><Consultations /></ProtectedRoute>} />
         <Route path="/doctor/records" element={<ProtectedRoute requiredRole="doctor"><DoctorRecords /></ProtectedRoute>} />
         <Route path="/doctor/prescriptions" element={<ProtectedRoute requiredRole="doctor"><DoctorPrescriptions /></ProtectedRoute>} />
