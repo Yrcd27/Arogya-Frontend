@@ -3,8 +3,11 @@ import { useLocation } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { consultationAPI, Consultation } from "../../services/consultationService";
+import { labTestAPI } from "../../services/labTestService";
+import { LabTest } from "../../types/labTest";
 import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
+import { FlaskConical } from 'lucide-react';
 
 type PatientInfo = {
   id: number;
@@ -25,6 +28,8 @@ export default function Consultations() {
   const [patients, setPatients] = useState<Record<number, PatientInfo>>({});
   const [clinics, setClinics] = useState<Record<number, ClinicInfo>>({});
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null);
+  const [selectedConsultationLabTests, setSelectedConsultationLabTests] = useState<LabTest[]>([]);
+  const [loadingLabTests, setLoadingLabTests] = useState(false);
 
   useEffect(() => {
     loadConsultations();
@@ -126,6 +131,39 @@ export default function Consultations() {
     }
   };
 
+  const loadLabTestsForConsultation = async (consultationId: number) => {
+    setLoadingLabTests(true);
+    try {
+      const tests = await labTestAPI.getByConsultation(consultationId);
+      setSelectedConsultationLabTests(tests);
+    } catch (err) {
+      console.error('Failed to load lab tests:', err);
+      setSelectedConsultationLabTests([]);
+    } finally {
+      setLoadingLabTests(false);
+    }
+  };
+
+  const handleConsultationClick = (consultation: Consultation) => {
+    setSelectedConsultation(consultation);
+    loadLabTestsForConsultation(consultation.id);
+  };
+
+  const getLabTestStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-700';
+      case 'IN_PROGRESS':
+        return 'bg-blue-100 text-blue-700';
+      case 'COMPLETED':
+        return 'bg-green-100 text-green-700';
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar 
@@ -186,7 +224,7 @@ export default function Consultations() {
                         <tr 
                           key={c.id} 
                           className="hover:bg-gray-50 cursor-pointer"
-                          onClick={() => setSelectedConsultation(c)}
+                          onClick={() => handleConsultationClick(c)}
                         >
                           <td className="px-6 py-4">
                             <span className="text-sm font-medium text-gray-900">{c.id}</span>
@@ -306,6 +344,57 @@ export default function Consultations() {
                 <label className="text-sm font-medium text-gray-500">Last Updated</label>
                 <p className="text-gray-900">{formatDateTime(selectedConsultation.updatedAt)}</p>
               </div>
+            </div>
+            
+            {/* Lab Tests Section */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-4">
+                <FlaskConical className="w-5 h-5 text-[#38A3A5]" />
+                <h4 className="text-lg font-semibold text-gray-900">Lab Tests</h4>
+              </div>
+              
+              {loadingLabTests ? (
+                <div className="text-center py-4 text-gray-600">Loading lab tests...</div>
+              ) : selectedConsultationLabTests.length === 0 ? (
+                <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
+                  No lab tests requested for this consultation
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedConsultationLabTests.map((test) => (
+                    <div key={test.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <FlaskConical className="w-4 h-4 text-[#38A3A5]" />
+                          <h5 className="font-semibold text-gray-900">{test.testName}</h5>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getLabTestStatusColor(test.status)}`}>
+                          {test.status}
+                        </span>
+                      </div>
+                      {test.testDescription && (
+                        <p className="text-sm text-gray-700 mb-2">{test.testDescription}</p>
+                      )}
+                      {test.testInstructions && (
+                        <div className="mb-2">
+                          <span className="text-xs font-medium text-gray-500">Instructions:</span>
+                          <p className="text-sm text-gray-700 mt-1">{test.testInstructions}</p>
+                        </div>
+                      )}
+                      {test.testResults && (
+                        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded">
+                          <span className="text-xs font-medium text-green-700">Results:</span>
+                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{test.testResults}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
+                        <span>Test ID: {test.id}</span>
+                        <span>Created: {formatDateTime(test.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             <div className="mt-6 flex justify-end">

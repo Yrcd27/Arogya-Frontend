@@ -3,8 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { consultationAPI } from '../../services/consultationService';
+import { labTestAPI } from '../../services/labTestService';
+import { LabTestFormData } from '../../types/labTest';
 import { getCurrentUser } from '../../utils/auth';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, FlaskConical } from 'lucide-react';
 
 export function CreateConsultation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -20,11 +22,29 @@ export function CreateConsultation() {
   const [sessionNumber, setSessionNumber] = useState<number>(1);
   const [saving, setSaving] = useState(false);
 
+  // Lab test states
+  const [requestLabTests, setRequestLabTests] = useState(false);
+  const [labTests, setLabTests] = useState<LabTestFormData[]>([]);
+
   useEffect(() => {
     if (!token) {
       navigate('/doctor/queue');
     }
   }, [token, navigate]);
+
+  const addLabTest = () => {
+    setLabTests([...labTests, { testName: '', testDescription: '', testInstructions: '' }]);
+  };
+
+  const removeLabTest = (index: number) => {
+    setLabTests(labTests.filter((_, i) => i !== index));
+  };
+
+  const updateLabTest = (index: number, field: keyof LabTestFormData, value: string) => {
+    const updated = [...labTests];
+    updated[index][field] = value;
+    setLabTests(updated);
+  };
 
   const save = async () => {
     if (!token) return;
@@ -46,6 +66,28 @@ export function CreateConsultation() {
         status: 'COMPLETED', // Directly set status to COMPLETED
         completedAt: new Date().toISOString(), // Set completion time
       });
+      
+      // If lab tests are requested, try to create them (but don't fail if API not ready)
+      if (requestLabTests && labTests.length > 0) {
+        try {
+          const labTestPromises = labTests
+            .filter(test => test.testName.trim()) // Only create tests with names
+            .map(test => 
+              labTestAPI.create({
+                consultationId: consultation.id,
+                testName: test.testName,
+                testDescription: test.testDescription || undefined,
+                testInstructions: test.testInstructions || undefined,
+              })
+            );
+          
+          await Promise.all(labTestPromises);
+        } catch (labError) {
+          // Lab test creation failed (likely backend not ready) - warn but continue
+          console.error('Failed to create lab tests:', labError);
+          alert('⚠️ Consultation created successfully, but lab tests could not be saved.\n\nThe backend lab test API is not available yet. Please implement the /lab-tests endpoint.');
+        }
+      }
       
       // Navigate back to queue with success status
       navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId: consultation.id } });
@@ -152,6 +194,97 @@ export function CreateConsultation() {
                   onChange={e => setSessionNumber(Number(e.target.value || 1))} 
                   className="w-40 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 />
+              </div>
+
+              {/* Lab Test Request Section */}
+              <div className="pt-4 border-t">
+                <div className="flex items-center gap-3 mb-4">
+                  <input
+                    type="checkbox"
+                    id="requestLabTests"
+                    checked={requestLabTests}
+                    onChange={(e) => {
+                      setRequestLabTests(e.target.checked);
+                      if (e.target.checked && labTests.length === 0) {
+                        addLabTest();
+                      } else if (!e.target.checked) {
+                        setLabTests([]);
+                      }
+                    }}
+                    className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                  />
+                  <label htmlFor="requestLabTests" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <FlaskConical className="w-5 h-5 text-[#38A3A5]" />
+                    Request Lab Tests
+                  </label>
+                </div>
+
+                {requestLabTests && (
+                  <div className="space-y-4 pl-7">
+                    {labTests.map((test, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative">
+                        <button
+                          type="button"
+                          onClick={() => removeLabTest(index)}
+                          className="absolute top-2 right-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                          title="Remove test"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Test Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={test.testName}
+                              onChange={(e) => updateLabTest(index, 'testName', e.target.value)}
+                              placeholder="e.g., Complete Blood Count, Blood Sugar Test"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Test Description
+                            </label>
+                            <textarea
+                              value={test.testDescription}
+                              onChange={(e) => updateLabTest(index, 'testDescription', e.target.value)}
+                              rows={2}
+                              placeholder="What does this test check for?"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none text-sm"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Instructions for Technician
+                            </label>
+                            <textarea
+                              value={test.testInstructions}
+                              onChange={(e) => updateLabTest(index, 'testInstructions', e.target.value)}
+                              rows={2}
+                              placeholder="Special instructions or requirements..."
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={addLabTest}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-[#38A3A5] border-2 border-dashed border-[#38A3A5] rounded-lg hover:bg-[#38A3A5] hover:text-white transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Another Test
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">

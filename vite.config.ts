@@ -95,6 +95,23 @@ export default defineConfig({
           });
         },
       },
+      // Lab tests endpoints (also part of consultation service)
+      '/lab-tests': {
+        target: 'http://localhost:8086',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('Lab tests service proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('Proxying request to lab tests:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Lab tests proxy response:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     },
   },
 })

@@ -20,6 +20,7 @@ import { Reports as AdminReports } from './pages/admin/Reports';
 import { Settings as AdminSettings } from './pages/admin/Settings';
 import { Dashboard as TechnicianDashboard } from './pages/technician/Dashboard';
 import TechnicianProfile from './pages/technician/Profile';
+import { LabTests as TechnicianLabTests } from './pages/technician/LabTests';
 import { Dashboard as DoctorDashboard } from './pages/doctor/Dashboard';
 import DoctorProfile from './pages/doctor/Profile';
 import { Queue as DoctorQueue } from './pages/doctor/Queue';
@@ -70,6 +71,7 @@ export function AppRouter() {
         {/* Technician Routes */}
         <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />
         <Route path="/technician/profile" element={<ProtectedRoute requiredRole="technician"><TechnicianProfile /></ProtectedRoute>} />
+        <Route path="/technician/lab-tests" element={<ProtectedRoute requiredRole="technician"><TechnicianLabTests /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
