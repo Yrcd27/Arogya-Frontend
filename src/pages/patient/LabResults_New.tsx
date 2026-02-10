@@ -19,7 +19,8 @@ export function LabResults() {
     setLoading(true);
     setError('');
     try {
-      const patientId = 5;
+      // TODO: Get patient ID from auth context
+      const patientId = 5; // Replace with actual patient ID
       const data = await medicalRecordsAPI.getByPatientId(patientId);
       setTestResults(data);
     } catch (err) {
@@ -106,11 +107,21 @@ export function LabResults() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Result</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">File</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
+                        Date
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
+                        Test ID
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
+                        Result
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
+                        File
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -134,11 +145,15 @@ export function LabResults() {
                               <div className="w-10 h-10 bg-[#38A3A5] bg-opacity-10 rounded-lg flex items-center justify-center">
                                 <FlaskConicalIcon className="w-5 h-5 text-[#38A3A5]" />
                               </div>
-                              <span className="text-sm font-medium text-gray-900">Test #{result.labTestId}</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                Test #{result.labTestId}
+                              </span>
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <p className="text-sm text-gray-900 line-clamp-2">{result.testResultDescription}</p>
+                            <p className="text-sm text-gray-900 line-clamp-2">
+                              {result.testResultDescription}
+                            </p>
                           </td>
                           <td className="px-6 py-4">
                             {result.fileName ? (
@@ -184,6 +199,7 @@ export function LabResults() {
         </main>
       </div>
 
+      {/* Detail Modal */}
       {selectedResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setSelectedResult(null)}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
