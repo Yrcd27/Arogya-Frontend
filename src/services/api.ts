@@ -19,3 +19,8 @@ export {
 export {
   queueAPI
 } from './queueService';
+
+// Medical Records Service APIs (Test results, file uploads)
+export {
+  medicalRecordsAPI
+} from './medicalRecordsService';

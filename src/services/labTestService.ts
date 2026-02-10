@@ -95,4 +95,17 @@ export const labTestAPI = {
   async getPending(): Promise<LabTest[]> {
     return this.list({ status: 'PENDING' });
   },
+
+  /**
+   * Update lab test status
+   */
+  async updateStatus(id: number, data: UpdateLabTestRequest): Promise<LabTest> {
+    const res = await fetch(`${API_BASE_URL}/lab-tests/${id}/technician-update`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`Failed to update lab test status ${id} (${res.status})`);
+    return (await res.json()) as LabTest;
+  },
 };
