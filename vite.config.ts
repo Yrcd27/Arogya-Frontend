@@ -95,6 +95,17 @@ export default defineConfig({
           });
         },
       },
+      // Chatbot service
+      '/chat': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/health': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        secure: false,
+      },
       // Lab tests endpoints (also part of consultation service)
       '/lab-tests': {
         target: 'http://localhost:8086',
