@@ -52,7 +52,13 @@ export const useUserProfile = () => {
           profileData = await profileAPI.getPatient(user.id);
           break;
         case 'admin':
-          profileData = await profileAPI.getAdmin(user.id);
+          try {
+            profileData = await profileAPI.getAdmin(user.id);
+          } catch (adminError) {
+            // Admin profile might not exist in the database yet
+            console.warn('Admin profile not found, using basic user data');
+            profileData = null;
+          }
           break;
         case 'technician':
           profileData = await profileAPI.getTechnician(user.id);
