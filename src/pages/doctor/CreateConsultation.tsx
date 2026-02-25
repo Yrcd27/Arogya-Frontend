@@ -52,7 +52,7 @@ export function CreateConsultation() {
     setSaving(true);
     try {
       // Create consultation with COMPLETED status
-      const consultation = await consultationAPI.create({
+      const payload = {
         patientId: Number(token.patientId),
         doctorId: Number(currentUser?.id || 0),
         clinicId: Number(clinicId || token.clinicId || 0),
@@ -63,8 +63,12 @@ export function CreateConsultation() {
         recommendations: recom,
         sessionNumber: sessionNumber || 1,
         bookedAt: new Date().toISOString(),
-        status: 'COMPLETED', // Directly set status to COMPLETED
-        completedAt: new Date().toISOString(), // Set completion time
+        status: 'COMPLETED',
+        completedAt: new Date().toISOString(),
+      };
+      console.debug('Creating consultation payload:', payload);
+      const consultation = await consultationAPI.create({
+        ...payload,
       });
       
       // If lab tests are requested, try to create them (but don't fail if API not ready)
