@@ -67,8 +67,15 @@ export const medicalRecordsAPI = {
     const contentDisposition = res.headers.get('Content-Disposition');
     let filename = 'test-result';
     if (contentDisposition) {
-      const match = contentDisposition.match(/filename="?(.+)"?/);
-      if (match) filename = match[1];
+      // Match quoted filename: filename="example.png"
+      const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
+      if (quotedMatch) {
+        filename = quotedMatch[1];
+      } else {
+        // Match unquoted filename: filename=example.png
+        const unquotedMatch = contentDisposition.match(/filename=([^;\s]+)/);
+        if (unquotedMatch) filename = unquotedMatch[1];
+      }
     }
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
