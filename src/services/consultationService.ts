@@ -71,7 +71,24 @@ export const consultationAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error(`Failed to create consultation (${res.status})`);
+    if (!res.ok) {
+      // try to read response body for a helpful message
+      let msg = `Failed to create consultation (${res.status})`;
+      try {
+        const text = await res.text();
+        if (text) {
+          try {
+            const json = JSON.parse(text);
+            msg = json.message || json.error || JSON.stringify(json);
+          } catch {
+            msg = text;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      throw new Error(msg);
+    }
     return (await res.json()) as Consultation;
   },
 };

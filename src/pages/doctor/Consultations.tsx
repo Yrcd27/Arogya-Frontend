@@ -19,6 +19,13 @@ type ClinicInfo = {
   clinicName: string;
 };
 
+// Simple in-memory caches (module-scoped so they survive component unmounts)
+const consultationsCache: { data?: Consultation[]; ts?: number } = {};
+const labTestsCache = new Map<number, { data: LabTest[]; ts: number }>();
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+const usersCache: { data?: any[]; ts?: number } = {};
+const clinicsCache: { data?: any[]; ts?: number } = {};
+
 export default function Consultations() {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -49,42 +56,70 @@ export default function Consultations() {
   const loadConsultations = async () => {
     setLoading(true);
     try {
-      const data = await consultationAPI.list({ page: 0, size: 100 });
+      const now = Date.now();
+
+      // Use cache if fresh
+      if (consultationsCache.data && consultationsCache.ts && now - consultationsCache.ts < CACHE_TTL) {
+        setConsultations(consultationsCache.data);
+
+        // Check if we already have patient/clinic info for these consultations; if so skip additional fetch
+        const missingPatientIds = Array.from(new Set(consultationsCache.data.map((c: Consultation) => c.patientId))).filter(id => !patients[id]);
+        const missingClinicIds = Array.from(new Set(consultationsCache.data.map((c: Consultation) => c.clinicId))).filter(id => !clinics[id]);
+
+        if (missingPatientIds.length === 0 && missingClinicIds.length === 0) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fetch consultations, users and clinics in parallel (bulk) to reduce many small requests
+      const nowFetch = Date.now();
+
+      const useCachedUsers = usersCache.data && usersCache.ts && (Date.now() - usersCache.ts) < CACHE_TTL;
+      const useCachedClinics = clinicsCache.data && clinicsCache.ts && (Date.now() - clinicsCache.ts) < CACHE_TTL;
+
+      const [data, usersAll, clinicsAll] = await Promise.all([
+        consultationAPI.list({ page: 0, size: 100 }),
+        useCachedUsers ? Promise.resolve(usersCache.data) : userAPI.getAllUsers(),
+        useCachedClinics ? Promise.resolve(clinicsCache.data) : clinicAPI.getAllClinics(),
+      ] as const);
+
       setConsultations(data);
-      
-      // Fetch patient and clinic info
-      const patientIds = Array.from(new Set(data.map((c: Consultation) => c.patientId)));
-      const clinicIds = Array.from(new Set(data.map((c: Consultation) => c.clinicId)));
-      
-      const [patientResults, clinicResults] = await Promise.all([
-        Promise.all(
-          patientIds.map(async (id) => {
-            try {
-              const user = await userAPI.getUser(id);
-              return { id, name: user.name || user.username || `Patient #${id}` };
-            } catch {
-              return { id, name: `Patient #${id}` };
-            }
-          })
-        ),
-        Promise.all(
-          clinicIds.map(async (id) => {
-            try {
-              const clinic = await clinicAPI.getClinic(id);
-              return { id, clinicName: clinic.clinicName || `Clinic #${id}` };
-            } catch {
-              return { id, clinicName: `Clinic #${id}` };
-            }
-          })
-        )
-      ]);
-      
+      // cache consultations
+      consultationsCache.data = data;
+      consultationsCache.ts = nowFetch;
+
+      // cache users/clinics when fetched from network
+      if (!useCachedUsers && usersAll) {
+        usersCache.data = usersAll as any[];
+        usersCache.ts = Date.now();
+      }
+      if (!useCachedClinics && clinicsAll) {
+        clinicsCache.data = clinicsAll as any[];
+        clinicsCache.ts = Date.now();
+      }
+
+      // Build maps from usersAll and clinicsAll
       const patientMap: Record<number, PatientInfo> = {};
-      patientResults.forEach(p => { patientMap[p.id] = p; });
+      try {
+        (usersAll || []).forEach((u: any) => {
+          const id = u.id ?? u.userId ?? u.personId;
+          if (typeof id === 'number') patientMap[id] = { id, name: u.name || u.username || `${u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : `User #${id}`}` };
+        });
+      } catch (e) {
+        // fallback handled below
+      }
       setPatients(patientMap);
-      
+
       const clinicMap: Record<number, ClinicInfo> = {};
-      clinicResults.forEach(c => { clinicMap[c.id] = c; });
+      try {
+        (clinicsAll || []).forEach((c: any) => {
+          const id = c.id ?? c.clinicId;
+          if (typeof id === 'number') clinicMap[id] = { id, clinicName: c.clinicName || c.name || `Clinic #${id}` };
+        });
+      } catch (e) {
+        // fallback handled below
+      }
       setClinics(clinicMap);
     } catch (err) {
       setError("Failed to load consultations");
@@ -134,8 +169,16 @@ export default function Consultations() {
   const loadLabTestsForConsultation = async (consultationId: number) => {
     setLoadingLabTests(true);
     try {
+      const cached = labTestsCache.get(consultationId);
+      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        setSelectedConsultationLabTests(cached.data);
+        setLoadingLabTests(false);
+        return;
+      }
+
       const tests = await labTestAPI.getByConsultation(consultationId);
       setSelectedConsultationLabTests(tests);
+      labTestsCache.set(consultationId, { data: tests, ts: Date.now() });
     } catch (err) {
       console.error('Failed to load lab tests:', err);
       setSelectedConsultationLabTests([]);
