@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
+import { SubmitTestResultModal } from '../../components/technician/SubmitTestResultModal';
+import { TestResultDetailsModal } from '../../components/technician/TestResultDetailsModal';
+import { EditTestResultModal } from '../../components/technician/EditTestResultModal';
 import { labTestAPI } from '../../services/labTestService';
+import { medicalRecordsAPI } from '../../services/medicalRecordsService';
 import { LabTest } from '../../types/labTest';
-import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle, Play } from 'lucide-react';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 export function LabTests() {
+  const { profile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [filteredTests, setFilteredTests] = useState<LabTest[]>([]);
@@ -14,6 +20,11 @@ export function LabTests() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [testToSubmit, setTestToSubmit] = useState<LabTest | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingResult, setEditingResult] = useState<any>(null);
 
   useEffect(() => {
     loadLabTests();
@@ -100,6 +111,54 @@ export function LabTests() {
     } catch {
       return dateStr;
     }
+  };
+
+  const handleTakeTest = async (test: LabTest) => {
+    try {
+      await labTestAPI.updateStatus(test.id, { status: 'IN_PROGRESS' });
+      setTestToSubmit(test);
+      setShowSubmitModal(true);
+      loadLabTests();
+    } catch (err) {
+      setError('Failed to start test');
+    }
+  };
+
+  const handleSubmitSuccess = () => {
+    loadLabTests();
+    setShowSubmitModal(false);
+    setTestToSubmit(null);
+  };
+
+  const handleViewDetails = (test: LabTest) => {
+    setSelectedTest(test);
+    setShowDetailsModal(true);
+  };
+
+  const handleEdit = (result: any) => {
+    setEditingResult(result);
+    setShowDetailsModal(false);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (resultId: number) => {
+    try {
+      await medicalRecordsAPI.delete(resultId);
+      setShowDetailsModal(false);
+      setSelectedTest(null);
+      // Wait a bit for backend to update lab test status
+      setTimeout(() => {
+        loadLabTests();
+      }, 500);
+    } catch (err) {
+      setError('Failed to delete test result');
+    }
+  };
+
+  const handleEditSuccess = () => {
+    loadLabTests();
+    setShowEditModal(false);
+    setEditingResult(null);
   };
 
   const statusCounts = {
@@ -212,12 +271,22 @@ export function LabTests() {
                             <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <button
-                              onClick={() => setSelectedTest(test)}
-                              className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
-                            >
-                              View Details
-                            </button>
+                            {test.status === 'PENDING' ? (
+                              <button
+                                onClick={() => handleTakeTest(test)}
+                                className="flex items-center gap-2 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
+                              >
+                                <Play className="w-4 h-4" />
+                                Take Test
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleViewDetails(test)}
+                                className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
+                              >
+                                View Result
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -230,109 +299,42 @@ export function LabTests() {
         </main>
       </div>
 
-      {/* Detail Modal */}
-      {selectedTest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setSelectedTest(null)}>
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Lab Test Details</h3>
-              <button onClick={() => setSelectedTest(null)} className="text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {/* Test Result Details Modal */}
+      {showDetailsModal && selectedTest && (
+        <TestResultDetailsModal
+          labTest={selectedTest}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedTest(null);
+          }}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Test ID</label>
-                  <p className="text-gray-900 flex items-center gap-2">
-                    {getStatusIcon(selectedTest.status)}
-                    {selectedTest.id}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Consultation ID</label>
-                  <p className="text-gray-900">{selectedTest.consultationId}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Status</label>
-                  <p>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedTest.status)}`}>
-                      {selectedTest.status}
-                    </span>
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Created At</label>
-                  <p className="text-gray-900">{formatDateTime(selectedTest.createdAt)}</p>
-                </div>
-              </div>
+      {/* Edit Test Result Modal */}
+      {showEditModal && editingResult && (
+        <EditTestResultModal
+          testResult={editingResult}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingResult(null);
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      )}
 
-              <div>
-                <label className="text-sm font-medium text-gray-500">Test Name</label>
-                <p className="text-gray-900 font-semibold">{selectedTest.testName}</p>
-              </div>
-
-              {selectedTest.testDescription && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Description</label>
-                  <p className="text-gray-900 whitespace-pre-wrap">{selectedTest.testDescription}</p>
-                </div>
-              )}
-
-              {selectedTest.testInstructions && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Instructions for Technician</label>
-                  <p className="text-gray-900 whitespace-pre-wrap bg-blue-50 p-3 rounded-lg border border-blue-200">
-                    {selectedTest.testInstructions}
-                  </p>
-                </div>
-              )}
-
-              {selectedTest.testResults && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Test Results</label>
-                  <p className="text-gray-900 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200">
-                    {selectedTest.testResults}
-                  </p>
-                </div>
-              )}
-
-              {selectedTest.technicianNotes && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Technician Notes</label>
-                  <p className="text-gray-900 whitespace-pre-wrap">{selectedTest.technicianNotes}</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                {selectedTest.assignedTechnicianId && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Assigned Technician ID</label>
-                    <p className="text-gray-900">{selectedTest.assignedTechnicianId}</p>
-                  </div>
-                )}
-                {selectedTest.completedAt && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Completed At</label>
-                    <p className="text-gray-900">{formatDateTime(selectedTest.completedAt)}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                onClick={() => setSelectedTest(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Submit Test Result Modal */}
+      {showSubmitModal && testToSubmit && profile?.id && (
+        <SubmitTestResultModal
+          labTest={testToSubmit}
+          technicianId={profile.id}
+          onClose={() => {
+            setShowSubmitModal(false);
+            setTestToSubmit(null);
+          }}
+          onSuccess={handleSubmitSuccess}
+        />
       )}
     </div>
   );

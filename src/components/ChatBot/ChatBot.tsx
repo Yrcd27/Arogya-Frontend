@@ -40,11 +40,6 @@ function formatMessage(text: string) {
 
 export function ChatBot() {
   const { user } = useAuth();
-  
-  // Don't render for technicians or unauthenticated users - MUST check BEFORE any other hooks
-  const role = user?.userRole?.roleName?.toLowerCase();
-  if (!user || !role || role === 'technician') return null;
-
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -53,12 +48,8 @@ export function ChatBot() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   useEffect(() => {
@@ -66,6 +57,10 @@ export function ChatBot() {
       inputRef.current.focus();
     }
   }, [isOpen]);
+  
+  // Don't render for technicians or unauthenticated users (check AFTER all hooks)
+  const role = user?.userRole?.roleName?.toLowerCase();
+  if (!user || !role || role === 'technician') return null;
 
   const sendMessage = async () => {
     const trimmed = input.trim();
