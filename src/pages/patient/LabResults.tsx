@@ -37,15 +37,7 @@ export function LabResults() {
     }
 
     try {
-      const blob = await medicalRecordsAPI.downloadFile(result.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = result.fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      await medicalRecordsAPI.downloadFile(result.id);
     } catch (err) {
       alert('Failed to download file');
       console.error(err);
