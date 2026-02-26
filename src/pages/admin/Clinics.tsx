@@ -4,6 +4,7 @@ import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   validateClinicForm,
@@ -23,6 +24,8 @@ export function Clinics() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -229,15 +232,21 @@ export function Clinics() {
     }
   };
 
-  const handleDelete = async (clinic: Clinic) => {
+  const handleDeleteConfirm = async () => {
+    if (!clinicToDelete) return;
+    
     try {
-      await clinicAPI.deleteClinic(clinic.id);
+      setDeleteLoading(true);
+      await clinicAPI.deleteClinic(clinicToDelete.id);
       loadClinics();
       setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
       toast.success('Clinic deleted successfully');
+      setClinicToDelete(null);
     } catch (error) {
       console.error('Failed to delete clinic:', error);
       toast.error('Failed to delete clinic. Please try again.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -338,7 +347,7 @@ export function Clinics() {
                 key={`${clinic.id}-${refreshTrigger}`}
                 clinic={clinic} 
                 onEdit={handleEdit}
-                onDelete={handleDelete}
+                onDelete={(clinic) => setClinicToDelete(clinic)}
               />
             ))}
           </div>
@@ -614,6 +623,18 @@ export function Clinics() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={clinicToDelete !== null}
+        title="Delete Clinic"
+        message={`Are you sure you want to delete "${clinicToDelete?.clinicName}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        confirmClassName="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setClinicToDelete(null)}
+        loading={deleteLoading}
+      />
     </div>
   );
 }
