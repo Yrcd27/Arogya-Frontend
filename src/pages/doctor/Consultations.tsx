@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
+import { toast } from 'react-toastify';
 import { consultationAPI, Consultation } from "../../services/consultationService";
 import { labTestAPI } from "../../services/labTestService";
 import { LabTest } from "../../types/labTest";
@@ -134,8 +135,9 @@ export default function Consultations() {
       setConsultations((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: "COMPLETED", completedAt: new Date().toISOString() } : c))
       );
+      toast.success('Consultation marked as complete');
     } catch (err) {
-      alert("Failed to complete consultation");
+      toast.error('Failed to complete consultation');
     }
   };
 
@@ -145,8 +147,9 @@ export default function Consultations() {
       setConsultations((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: "CANCELLED" } : c))
       );
+      toast.success('Consultation cancelled');
     } catch (err) {
-      alert("Failed to cancel consultation");
+      toast.error('Failed to cancel consultation');
     }
   };
 

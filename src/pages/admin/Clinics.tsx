@@ -3,6 +3,7 @@ import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
+import { toast } from 'react-toastify';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   validateClinicForm,
@@ -164,7 +165,7 @@ export function Clinics() {
       resetForm();
       loadClinics();
       setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
-      alert(isEditMode ? 'Clinic updated successfully!' : 'Clinic scheduled successfully!');
+      toast.success(isEditMode ? 'Clinic updated successfully' : 'Clinic created successfully');
     } catch (error) {
       console.error('Failed to create/update clinic:', error);
       setError(error instanceof Error ? error.message : 'Failed to save clinic');
@@ -229,16 +230,14 @@ export function Clinics() {
   };
 
   const handleDelete = async (clinic: Clinic) => {
-    if (confirm(`Are you sure you want to delete "${clinic.clinicName}"?`)) {
-      try {
-        await clinicAPI.deleteClinic(clinic.id);
-        loadClinics();
-        setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
-        alert('Clinic deleted successfully!');
-      } catch (error) {
-        console.error('Failed to delete clinic:', error);
-        alert('Failed to delete clinic. Please try again.');
-      }
+    try {
+      await clinicAPI.deleteClinic(clinic.id);
+      loadClinics();
+      setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
+      toast.success('Clinic deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete clinic:', error);
+      toast.error('Failed to delete clinic. Please try again.');
     }
   };
 
