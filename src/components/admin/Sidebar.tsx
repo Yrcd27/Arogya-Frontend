@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, BarChartIcon, CalendarIcon, UsersIcon, FileTextIcon, SettingsIcon, LogOutIcon, UserIcon, XIcon } from 'lucide-react';
+import { HomeIcon, CalendarIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
@@ -23,25 +23,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     label: 'My Profile',
     path: '/admin/profile'
   }, {
-    icon: BarChartIcon,
-    label: 'Analytics',
-    path: '/admin/analytics'
-  }, {
     icon: CalendarIcon,
     label: 'Clinics',
     path: '/admin/clinics'
-  }, {
-    icon: UsersIcon,
-    label: 'Staff',
-    path: '/admin/staff'
-  }, {
-    icon: FileTextIcon,
-    label: 'Reports',
-    path: '/admin/reports'
-  }, {
-    icon: SettingsIcon,
-    label: 'Settings',
-    path: '/admin/settings'
   }];
 
   const handleNavigation = (path: string) => {

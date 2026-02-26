@@ -11,11 +11,7 @@ import { LabResults as PatientLabResults } from './pages/patient/LabResults';
 import { Clinics as PatientClinics } from './pages/patient/Clinics';
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
 import AdminProfile from './pages/admin/Profile';
-import { Analytics as AdminAnalytics } from './pages/admin/Analytics';
 import { Clinics as AdminClinics } from './pages/admin/Clinics';
-import { Staff as AdminStaff } from './pages/admin/Staff';
-import { Reports as AdminReports } from './pages/admin/Reports';
-import { Settings as AdminSettings } from './pages/admin/Settings';
 import { Dashboard as TechnicianDashboard } from './pages/technician/Dashboard';
 import TechnicianProfile from './pages/technician/Profile';
 import { LabTests as TechnicianLabTests } from './pages/technician/LabTests';
@@ -52,11 +48,7 @@ export function AppRouter() {
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/profile" element={<ProtectedRoute requiredRole="admin"><AdminProfile /></ProtectedRoute>} />
-        <Route path="/admin/analytics" element={<ProtectedRoute requiredRole="admin"><AdminAnalytics /></ProtectedRoute>} />
         <Route path="/admin/clinics" element={<ProtectedRoute requiredRole="admin"><AdminClinics /></ProtectedRoute>} />
-        <Route path="/admin/staff" element={<ProtectedRoute requiredRole="admin"><AdminStaff /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute requiredRole="admin"><AdminReports /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
         
         {/* Technician Routes */}
         <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />
