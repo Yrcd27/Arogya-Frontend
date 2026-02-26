@@ -89,7 +89,6 @@ export function Clinics() {
       setDoctors(data || []);
     } catch (error) {
       console.error('Failed to load doctors:', error);
-      // The doctorAPI now handles fallback data internally
       setDoctors([]);
     }
   };

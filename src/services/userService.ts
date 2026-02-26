@@ -220,16 +220,8 @@ export const doctorAPI = {
         userId: profile.user.id
       }));
     } catch (error) {
-      console.warn('Failed to fetch doctor profiles, using mock data:', error);
-      // Return mock data as fallback
-      return [
-        { doctorId: 1, name: 'Dr. Gayan Perera', specialization: 'ENT Surgeon', email: 'gayan@example.com' },
-        { doctorId: 2, name: 'Dr. Ruwan Silva', specialization: 'Cardiologist', email: 'ruwan@example.com' },
-        { doctorId: 3, name: 'Dr. Priya Fernando', specialization: 'General Physician', email: 'priya@example.com' },
-        { doctorId: 4, name: 'Dr. Nimal Rajapaksa', specialization: 'Pediatrician', email: 'nimal@example.com' },
-        { doctorId: 5, name: 'Dr. Samanthi Wickrama', specialization: 'Dermatologist', email: 'samanthi@example.com' },
-        { doctorId: 6, name: 'Dr. Kamal Gunasekara', specialization: 'Orthopedic Surgeon', email: 'kamal@example.com' }
-      ];
+      console.error('Failed to fetch doctor profiles:', error);
+      return [];
     }
   },
 };
