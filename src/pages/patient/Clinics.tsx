@@ -32,6 +32,7 @@ export function Clinics() {
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientName, setPatientName] = useState<string | null>(null);
   const [patientFetchError, setPatientFetchError] = useState<string | null>(null);
+  const [nameHydrationFailed, setNameHydrationFailed] = useState(false);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -139,12 +140,15 @@ export function Clinics() {
             const prof = await profileAPI.getPatient(Number(id));
             const name = [prof?.firstName, prof?.lastName].filter(Boolean).join(' ');
             if (name) return { id, name };
-          } catch {}
+          } catch {
+            setNameHydrationFailed(true);
+          }
           try {
             const user = await userAPI.getUser(Number(id));
             const name = user?.username || `User #${id}`;
             return { id, name };
           } catch {
+            setNameHydrationFailed(true);
             return { id, name: `User #${id}` };
           }
         })
@@ -153,7 +157,7 @@ export function Clinics() {
       results.forEach(r => { map[r.id] = r.name; });
       setNameById(prev => ({ ...prev, ...map }));
     } catch (e) {
-      // Silent; names are optional
+      setNameHydrationFailed(true);
     }
   };
 
@@ -519,8 +523,8 @@ export function Clinics() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleJoinQueue}
-                      disabled={joinLoading}
-                      className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-60"
+                      disabled={joinLoading || !!patientFetchError}
+                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
                     >
                       {joinLoading ? 'Joining...' : 'Join Queue'}
                     </button>
@@ -532,6 +536,9 @@ export function Clinics() {
                       {queueLoading ? 'Loading Queue...' : 'View Queue'}
                     </button>
                   </div>
+                  {patientFetchError && (
+                    <p className="text-xs text-red-500 mt-1">Cannot join queue — your patient profile could not be verified.</p>
+                  )}
                 </div>
 
                 {/* Queue List */}
@@ -572,6 +579,9 @@ export function Clinics() {
                         );
                       })}
                     </div>
+                    {nameHydrationFailed && (
+                      <p className="text-xs text-gray-400 mt-2">Some patient names could not be loaded. IDs are shown instead.</p>
+                    )}
                   </div>
                 )}
 
