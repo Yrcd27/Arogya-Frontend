@@ -128,19 +128,25 @@ export function Queue() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Queue #</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient Name</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Issued</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+          {loading ? (
+            <div className="bg-white rounded-xl shadow-sm p-12 flex flex-col items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#38A3A5] mb-4"></div>
+              <p className="text-gray-600">Loading queue...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Queue #</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient Name</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Issued</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {queueTokens.map(t => (
                     <tr key={t.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
@@ -186,15 +192,16 @@ export function Queue() {
                       </td>
                     </tr>
                   ))}
-                  {selectedClinicId && !loading && queueTokens.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">No patients in queue</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    {selectedClinicId && queueTokens.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">No patients in queue</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Done Persons (Completed) */}
           {queueTokens.filter(t => t.status === 'COMPLETED').length > 0 && (
