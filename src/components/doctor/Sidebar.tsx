@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, ClipboardListIcon, UserIcon, FileTextIcon, FlaskConicalIcon, LogOutIcon, FolderOpenIcon, XIcon } from 'lucide-react';
+import { HomeIcon, ClipboardListIcon, UserIcon, FileTextIcon, LogOutIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
@@ -34,21 +34,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       icon: FileTextIcon,
       label: 'Consultations',
       path: '/doctor/consultations'
-    },
-    {
-      icon: FolderOpenIcon,
-      label: 'Patient Records',
-      path: '/doctor/records'
-    },
-    {
-      icon: FileTextIcon,
-      label: 'Prescriptions',
-      path: '/doctor/prescriptions'
-    },
-    {
-      icon: FlaskConicalIcon,
-      label: 'Lab Results',
-      path: '/doctor/lab-results'
     }
   ];
 
