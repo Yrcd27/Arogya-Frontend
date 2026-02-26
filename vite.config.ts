@@ -112,6 +112,23 @@ export default defineConfig({
           });
         },
       },
+      // Medical records / test-results endpoints (runs on :8087)
+      '/test-results': {
+        target: 'http://localhost:8087',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('Test-results service proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req) => {
+            console.log('Proxying request to test-results:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Test-results proxy response:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     },
   },
 })

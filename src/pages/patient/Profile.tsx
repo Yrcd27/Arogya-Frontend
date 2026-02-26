@@ -9,6 +9,7 @@ export function Profile() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [formData, setFormData] = useState({
+    id: 0,
     firstName: '',
     lastName: '',
     dateOfBirth: '',
@@ -34,6 +35,7 @@ export function Profile() {
       try {
         const profile = await profileAPI.getPatient(user.id);
         setFormData({
+          id: profile.id,
           firstName: profile.firstName || '',
           lastName: profile.lastName || '',
           dateOfBirth: profile.dateOfBirth || '',
@@ -77,13 +79,16 @@ export function Profile() {
 
       const profileData = {
         ...formData,
-        user: { id: user.id }
+        id: formData.id, // Include profile ID for updates
+        user: user
       };
+      console.log('Profile updated:', profileData);
 
       if (hasProfile) {
         // Update existing profile
-        await profileAPI.updatePatient(user.id, profileData);
+        await profileAPI.updatePatient(profileData);
         setSuccess('Profile updated successfully!');
+        
       } else {
         // Create new profile
         await profileAPI.createPatient(profileData);

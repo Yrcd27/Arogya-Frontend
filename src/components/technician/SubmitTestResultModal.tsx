@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
 import { medicalRecordsAPI } from '../../services/medicalRecordsService';
+import { consultationAPI } from '../../services/consultationService';
 import { LabTest } from '../../types/labTest';
 
 interface SubmitTestResultModalProps {
@@ -45,18 +46,52 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
     setError('');
 
     try {
+      // If a result already exists for this test, avoid duplicate create and trigger status refresh.
+      try {
+        const existing = await medicalRecordsAPI.getByLabTestId(labTest.id);
+        if (existing?.id) {
+          onSuccess();
+          return;
+        }
+      } catch (existingErr: any) {
+        // 404 means no existing result yet; continue with create.
+        const msg = existingErr?.message || '';
+        if (!msg.includes('(404)') && !msg.toLowerCase().includes('not found')) {
+          console.warn('Failed to pre-check existing test result; continuing with create', existingErr);
+        }
+      }
+
+      // Resolve the patient ID from consultation; do not submit with a guessed fallback.
+      let patientId: number | undefined;
+      try {
+        const consultation = await consultationAPI.get(labTest.consultationId);
+        patientId = consultation.patientId;
+      } catch (cErr) {
+        console.warn('Could not resolve consultation -> patientId', cErr);
+      }
+
+      if (!patientId) {
+        throw new Error('Unable to resolve patient for this lab test. Please refresh and try again.');
+      }
+
       await medicalRecordsAPI.create({
         labTestId: labTest.id,
-        patientId: labTest.consultationId, // Assuming consultation has patient info
+        patientId,
         technicianId,
-        testResultDescription,
-        technicianNotes,
+        testResultDescription: testResultDescription.trim(),
+        technicianNotes: technicianNotes.trim(),
         file: file || undefined
       });
       onSuccess();
-      onClose();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit test result');
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('already exists')) {
+        // Another request or previous attempt already created it; refresh parent state to mark completed.
+        onSuccess();
+        return;
+      }
+      console.error('Failed to submit test result:', err);
+      setError(msg || 'Failed to submit test result');
     } finally {
       setLoading(false);
     }
