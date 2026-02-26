@@ -6,6 +6,8 @@ import { TestResultDetailsModal } from '../../components/technician/TestResultDe
 import { EditTestResultModal } from '../../components/technician/EditTestResultModal';
 import { labTestAPI } from '../../services/labTestService';
 import { medicalRecordsAPI } from '../../services/medicalRecordsService';
+import { consultationAPI } from '../../services/consultationService';
+import { profileAPI, userAPI } from '../../services/userService';
 import { LabTest } from '../../types/labTest';
 import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle, Play } from 'lucide-react';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -25,6 +27,8 @@ export function LabTests() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingResult, setEditingResult] = useState<any>(null);
+  const [patientByConsultation, setPatientByConsultation] = useState<Record<number, { patientId: number; name: string }>>({});
+  const [resultExistsByLabTest, setResultExistsByLabTest] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     loadLabTests();
@@ -32,7 +36,7 @@ export function LabTests() {
 
   useEffect(() => {
     filterTests();
-  }, [searchTerm, statusFilter, labTests]);
+  }, [searchTerm, statusFilter, labTests, patientByConsultation, resultExistsByLabTest]);
 
   const loadLabTests = async () => {
     setLoading(true);
@@ -40,6 +44,10 @@ export function LabTests() {
     try {
       const data = await labTestAPI.list();
       setLabTests(data);
+      await Promise.all([
+        hydratePatientDetails(data),
+        hydrateResultPresence(data),
+      ]);
     } catch (err) {
       setError('Failed to load lab tests');
       console.error(err);
@@ -48,11 +56,85 @@ export function LabTests() {
     }
   };
 
+  const hydratePatientDetails = async (tests: LabTest[]) => {
+    const consultationIds = Array.from(new Set(tests.map(t => t.consultationId)));
+    const missing = consultationIds.filter(id => !patientByConsultation[id]);
+    if (missing.length === 0) return;
+
+    const results = await Promise.all(
+      missing.map(async (consultationId) => {
+        try {
+          const consultation = await consultationAPI.get(consultationId);
+          const patientId = consultation.patientId;
+
+          try {
+            const profile = await profileAPI.getPatient(patientId);
+            const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim();
+            if (name) return { consultationId, patientId, name };
+          } catch {
+            // Fallback to user service below.
+          }
+
+          try {
+            const user = await userAPI.getUser(patientId);
+            const name = user?.username || `Patient #${patientId}`;
+            return { consultationId, patientId, name };
+          } catch {
+            return { consultationId, patientId, name: `Patient #${patientId}` };
+          }
+        } catch {
+          return { consultationId, patientId: 0, name: '-' };
+        }
+      })
+    );
+
+    const next: Record<number, { patientId: number; name: string }> = {};
+    results.forEach((r) => {
+      next[r.consultationId] = { patientId: r.patientId, name: r.name };
+    });
+    setPatientByConsultation(prev => ({ ...prev, ...next }));
+  };
+
+  const hydrateResultPresence = async (tests: LabTest[]) => {
+    const candidateIds = tests
+      .filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS')
+      .map(t => t.id);
+    if (candidateIds.length === 0) return;
+
+    const checks = await Promise.all(
+      candidateIds.map(async (labTestId) => {
+        try {
+          const result = await medicalRecordsAPI.getByLabTestId(labTestId);
+          return { labTestId, exists: !!result?.id };
+        } catch (err: any) {
+          const msg = err?.message || '';
+          if (msg.includes('(404)') || msg.toLowerCase().includes('not found')) {
+            return { labTestId, exists: false };
+          }
+          return { labTestId, exists: false };
+        }
+      })
+    );
+
+    const next: Record<number, boolean> = {};
+    checks.forEach(({ labTestId, exists }) => {
+      next[labTestId] = exists;
+    });
+    setResultExistsByLabTest(prev => ({ ...prev, ...next }));
+  };
+
+  const getDisplayStatus = (test: LabTest) => {
+    if ((test.status === 'PENDING' || test.status === 'IN_PROGRESS') && resultExistsByLabTest[test.id]) {
+      return 'COMPLETED';
+    }
+    return test.status;
+  };
+
   const filterTests = () => {
     let filtered = labTests;
 
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(test => test.status === statusFilter);
+      filtered = filtered.filter(test => getDisplayStatus(test) === statusFilter);
     }
 
     if (searchTerm) {
@@ -60,7 +142,9 @@ export function LabTests() {
       filtered = filtered.filter(test =>
         test.testName.toLowerCase().includes(term) ||
         test.id.toString().includes(term) ||
-        test.consultationId.toString().includes(term)
+        test.consultationId.toString().includes(term) ||
+        (patientByConsultation[test.consultationId]?.name || '').toLowerCase().includes(term) ||
+        (patientByConsultation[test.consultationId]?.patientId?.toString() || '').includes(term)
       );
     }
 
@@ -127,6 +211,10 @@ export function LabTests() {
     // Close the modal first so UI updates immediately
     setShowSubmitModal(false);
     setTestToSubmit(null);
+    if (submittedTest) {
+      // Optimistic UI: result was created/exists, so treat as completed in this screen.
+      setResultExistsByLabTest(prev => ({ ...prev, [submittedTest.id]: true }));
+    }
 
     // After a test result is submitted, mark the lab test as COMPLETED
     try {
@@ -224,9 +312,9 @@ export function LabTests() {
 
   const statusCounts = {
     ALL: labTests.length,
-    PENDING: labTests.filter(t => t.status === 'PENDING').length,
-    IN_PROGRESS: labTests.filter(t => t.status === 'IN_PROGRESS').length,
-    COMPLETED: labTests.filter(t => t.status === 'COMPLETED').length,
+    PENDING: labTests.filter(t => getDisplayStatus(t) === 'PENDING').length,
+    IN_PROGRESS: labTests.filter(t => getDisplayStatus(t) === 'IN_PROGRESS').length,
+    COMPLETED: labTests.filter(t => getDisplayStatus(t) === 'COMPLETED').length,
   };
 
   return (
@@ -267,7 +355,7 @@ export function LabTests() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by test name, ID, or consultation ID..."
+                placeholder="Search by test name, patient, ID, or consultation ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
@@ -294,6 +382,7 @@ export function LabTests() {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">ID</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test Name</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Consultation</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Created At</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Action</th>
@@ -302,19 +391,21 @@ export function LabTests() {
                   <tbody className="divide-y divide-gray-200">
                     {filteredTests.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                           No lab tests found
                         </td>
                       </tr>
                     ) : (
-                      filteredTests.map((test) => (
+                      filteredTests.map((test) => {
+                        const displayStatus = getDisplayStatus(test);
+                        return (
                         <tr key={test.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4">
                             <span className="text-sm font-medium text-gray-900">{test.id}</span>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
-                              {getStatusIcon(test.status)}
+                              {getStatusIcon(displayStatus)}
                               <span className="text-sm font-medium text-gray-900">{test.testName}</span>
                             </div>
                           </td>
@@ -322,15 +413,20 @@ export function LabTests() {
                             <span className="text-sm text-gray-700"># {test.consultationId}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(test.status)}`}>
-                              {test.status}
+                            <span className="text-sm text-gray-700">
+                              {patientByConsultation[test.consultationId]?.name || 'Loading...'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
+                              {displayStatus}
                             </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
                           </td>
                           <td className="px-6 py-4">
-                            {test.status === 'IN_PROGRESS' || test.status === 'PENDING' ? (
+                            {displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
                               <button
                                 onClick={() => handleTakeTest(test)}
                                 disabled={!!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
@@ -349,7 +445,8 @@ export function LabTests() {
                             )}
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
