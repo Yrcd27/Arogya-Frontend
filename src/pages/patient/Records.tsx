@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
+import { EmptyState } from '../../components/EmptyState';
 import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
@@ -177,10 +178,10 @@ export function Records() {
                 <p className="mt-4">Loading medical records...</p>
               </div>
             ) : filteredRecords.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">
-                <p className="text-lg">No medical records found</p>
-                {searchTerm && <p className="text-sm mt-2">Try adjusting your search</p>}
-              </div>
+              <EmptyState 
+                title="No medical records"
+                description="Your consultation records will appear here"
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
