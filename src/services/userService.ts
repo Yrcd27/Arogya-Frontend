@@ -118,7 +118,7 @@ export const profileAPI = {
     return apiCall(`/patient_profile/getPatientProfileByUserId/${userId}`);
   },
 
-  updatePatient: async (_userId: number, profileData: Record<string, unknown>) => {
+  updatePatient: async (profileData: Record<string, unknown>) => {
     return apiCall('/patient_profile/updatePatientProfile', {
       method: 'PUT',
       body: JSON.stringify(profileData),

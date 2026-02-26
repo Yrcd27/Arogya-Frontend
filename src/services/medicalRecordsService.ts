@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = '';
 
 export interface TestResult {
   id: number;
@@ -38,7 +38,37 @@ export const medicalRecordsAPI = {
       method: 'POST',
       body: formData
     });
-    if (!res.ok) throw new Error(`Failed to create test result (${res.status})`);
+    // Debug: log formData entries so developers can inspect what's being sent
+    try {
+      // Note: iterating FormData after sending is allowed in browsers
+      for (const pair of (formData as any).entries()) {
+        console.debug('test-results formData:', pair[0], pair[1]);
+      }
+    } catch (e) {
+      console.warn('Could not enumerate formData entries for debug', e);
+    }
+    if (!res.ok) {
+      let serverMessage = '';
+      try {
+        const text = await res.text();
+        if (text) {
+          try {
+            const json = JSON.parse(text);
+            const detail =
+              json?.message ||
+              json?.error ||
+              (Array.isArray(json?.errors) ? json.errors.map((e: any) => e?.defaultMessage || e?.message).filter(Boolean).join(', ') : '') ||
+              '';
+            serverMessage = detail || text;
+          } catch {
+            serverMessage = text;
+          }
+        }
+      } catch {
+        // Fallback to generic message below.
+      }
+      throw new Error(serverMessage ? `${serverMessage} (${res.status})` : `Failed to create test result (${res.status})`);
+    }
     return await res.json();
   },
 

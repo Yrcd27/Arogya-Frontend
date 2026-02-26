@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, FlaskConicalIcon, SettingsIcon, ClipboardListIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
+import { HomeIcon, FlaskConicalIcon, UserIcon, LogOutIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
@@ -27,14 +27,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     icon: FlaskConicalIcon,
     label: 'Lab Tests',
     path: '/technician/lab-tests'
-  }, {
-    icon: ClipboardListIcon,
-    label: 'Test Queue',
-    path: '/technician/queue'
-  }, {
-    icon: SettingsIcon,
-    label: 'Equipment',
-    path: '/technician/equipment'
   }];
 
   const handleNavigation = (path: string) => {

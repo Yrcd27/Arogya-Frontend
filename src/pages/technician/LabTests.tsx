@@ -113,21 +113,82 @@ export function LabTests() {
     }
   };
 
-  const handleTakeTest = async (test: LabTest) => {
-    try {
-      await labTestAPI.updateStatus(test.id, { status: 'IN_PROGRESS' });
-      setTestToSubmit(test);
-      setShowSubmitModal(true);
-      loadLabTests();
-    } catch (err) {
-      setError('Failed to start test');
-    }
+  const handleTakeTest = (test: LabTest) => {
+    // Open the submit modal but do NOT update the backend status yet.
+    // The test should remain visible as PENDING until a result is submitted.
+    setTestToSubmit(test);
+    setShowSubmitModal(true);
   };
 
-  const handleSubmitSuccess = () => {
-    loadLabTests();
+  const handleSubmitSuccess = async () => {
+    // Save reference before clearing modal state
+    const submittedTest = testToSubmit;
+
+    // Close the modal first so UI updates immediately
     setShowSubmitModal(false);
     setTestToSubmit(null);
+
+    // After a test result is submitted, mark the lab test as COMPLETED
+    try {
+      if (submittedTest) {
+        try {
+          await labTestAPI.updateStatus(submittedTest.id, {
+            status: 'COMPLETED',
+            assignedTechnicianId: profile?.id,
+          });
+        } catch {
+          // Fallback for backends that don't expose /technician-update.
+          await labTestAPI.update(submittedTest.id, {
+            status: 'COMPLETED',
+            assignedTechnicianId: profile?.id,
+          });
+        }
+      }
+    } catch (err: any) {
+      // If backend returns 409 (conflict) the status may already be set server-side.
+      const msg = err?.message || '';
+      if (msg.includes('(409)') || msg.includes('409')) {
+        console.warn('Lab test status update returned 409 (conflict), retrying with step transition', msg);
+        try {
+          if (submittedTest) {
+            const latest = await labTestAPI.get(submittedTest.id);
+            if (latest.status === 'PENDING') {
+              try {
+                await labTestAPI.updateStatus(submittedTest.id, {
+                  status: 'IN_PROGRESS',
+                  assignedTechnicianId: profile?.id,
+                });
+              } catch {
+                await labTestAPI.update(submittedTest.id, {
+                  status: 'IN_PROGRESS',
+                  assignedTechnicianId: profile?.id,
+                });
+              }
+            }
+            try {
+              await labTestAPI.updateStatus(submittedTest.id, {
+                status: 'COMPLETED',
+                assignedTechnicianId: profile?.id,
+              });
+            } catch {
+              await labTestAPI.update(submittedTest.id, {
+                status: 'COMPLETED',
+                assignedTechnicianId: profile?.id,
+              });
+            }
+          }
+        } catch (retryErr) {
+          setError('Result submitted, but status transition failed due to backend conflict');
+          console.error(retryErr);
+        }
+      } else {
+        setError('Failed to update test status to COMPLETED');
+        console.error(err);
+      }
+    }
+
+    // Reload the list to reflect the new status
+    loadLabTests();
   };
 
   const handleViewDetails = (test: LabTest) => {
@@ -166,7 +227,6 @@ export function LabTests() {
     PENDING: labTests.filter(t => t.status === 'PENDING').length,
     IN_PROGRESS: labTests.filter(t => t.status === 'IN_PROGRESS').length,
     COMPLETED: labTests.filter(t => t.status === 'COMPLETED').length,
-    CANCELLED: labTests.filter(t => t.status === 'CANCELLED').length,
   };
 
   return (
@@ -190,11 +250,10 @@ export function LabTests() {
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    statusFilter === status
-                      ? 'bg-[#38A3A5] text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${statusFilter === status
+                    ? 'bg-[#38A3A5] text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   {status.replace('_', ' ')} ({count})
                 </button>
@@ -271,10 +330,11 @@ export function LabTests() {
                             <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
                           </td>
                           <td className="px-6 py-4">
-                            {test.status === 'PENDING' ? (
+                            {test.status === 'IN_PROGRESS' || test.status === 'PENDING' ? (
                               <button
                                 onClick={() => handleTakeTest(test)}
-                                className="flex items-center gap-2 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
+                                disabled={!!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
                               >
                                 <Play className="w-4 h-4" />
                                 Take Test

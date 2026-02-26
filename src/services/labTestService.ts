@@ -6,7 +6,9 @@ const envBase = (import.meta.env as any).VITE_API_BASE_URL;
 const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : (isDevelopment ? '' : 'http://localhost:8086');
 
 export const labTestAPI = {
-  
+  /**
+   * Get all lab tests (with optional filters)
+   */
   async list(params: Record<string, any> = {}): Promise<LabTest[]> {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
