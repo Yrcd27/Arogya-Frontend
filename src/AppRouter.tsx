@@ -7,9 +7,7 @@ import { RegisterForm } from './pages/RegisterFormNew';
 import { Dashboard as PatientDashboard } from './pages/patient/Dashboard';
 import { Profile as PatientProfile } from './pages/patient/Profile';
 import { Records as PatientRecords } from './pages/patient/Records';
-import { Prescriptions as PatientPrescriptions } from './pages/patient/Prescriptions';
 import { LabResults as PatientLabResults } from './pages/patient/LabResults';
-import { Appointments as PatientAppointments } from './pages/patient/Appointments';
 import { Clinics as PatientClinics } from './pages/patient/Clinics';
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
 import AdminProfile from './pages/admin/Profile';
@@ -44,9 +42,7 @@ export function AppRouter() {
         <Route path="/patient/dashboard" element={<ProtectedRoute requiredRole="patient"><PatientDashboard /></ProtectedRoute>} />
         <Route path="/patient/profile" element={<ProtectedRoute requiredRole="patient"><PatientProfile /></ProtectedRoute>} />
         <Route path="/patient/records" element={<ProtectedRoute requiredRole="patient"><PatientRecords /></ProtectedRoute>} />
-        <Route path="/patient/prescriptions" element={<ProtectedRoute requiredRole="patient"><PatientPrescriptions /></ProtectedRoute>} />
         <Route path="/patient/lab-results" element={<ProtectedRoute requiredRole="patient"><PatientLabResults /></ProtectedRoute>} />
-        <Route path="/patient/appointments" element={<ProtectedRoute requiredRole="patient"><PatientAppointments /></ProtectedRoute>} />
         <Route path="/patient/clinics" element={<ProtectedRoute requiredRole="patient"><PatientClinics /></ProtectedRoute>} />
         
         {/* Doctor Routes */}

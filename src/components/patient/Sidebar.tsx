@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, FileTextIcon, ClipboardListIcon, FlaskConicalIcon, CalendarIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
+import { HomeIcon, FileTextIcon, FlaskConicalIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
@@ -24,20 +24,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     path: '/patient/profile'
   }, {
     icon: FileTextIcon,
-    label: 'My Records',
-    path: '/patient/records'
-  }, {
-    icon: ClipboardListIcon,
     label: 'Prescriptions',
-    path: '/patient/prescriptions'
+    path: '/patient/records'
   }, {
     icon: FlaskConicalIcon,
     label: 'Lab Results',
     path: '/patient/lab-results'
-  }, {
-    icon: CalendarIcon,
-    label: 'Appointments',
-    path: '/patient/appointments'
   }, {
     icon: HospitalIcon,
     label: 'Mobile Clinics',
