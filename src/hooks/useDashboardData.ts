@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { profileAPI } from '../services/userService';
 import { clinicAPI } from '../services/clinicService';
+import { consultationAPI } from '../services/consultationService';
 
 interface DashboardStats {
   totalPatients: number;
@@ -11,6 +12,7 @@ interface DashboardStats {
   scheduledClinics: number;
   completedClinics: number;
   activeDoctors: number;
+  totalConsultations: number;
 }
 
 export const useDashboardData = () => {
@@ -23,6 +25,7 @@ export const useDashboardData = () => {
     scheduledClinics: 0,
     completedClinics: 0,
     activeDoctors: 0,
+    totalConsultations: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +57,10 @@ export const useDashboardData = () => {
         Promise.race([
           clinicAPI.getAllClinics(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
+        ]),
+        Promise.race([
+          consultationAPI.list(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
         ])
       ];
 
@@ -62,7 +69,8 @@ export const useDashboardData = () => {
         doctorsData,
         adminsData,
         techniciansData,
-        clinicsData
+        clinicsData,
+        consultationsData
       ] = await Promise.allSettled(requests);
 
       const newStats: DashboardStats = {
@@ -71,6 +79,7 @@ export const useDashboardData = () => {
         totalAdmins: adminsData.status === 'fulfilled' ? (Array.isArray(adminsData.value) ? adminsData.value.length : 0) : 0,
         totalTechnicians: techniciansData.status === 'fulfilled' ? (Array.isArray(techniciansData.value) ? techniciansData.value.length : 0) : 0,
         totalClinics: clinicsData.status === 'fulfilled' ? (Array.isArray(clinicsData.value) ? clinicsData.value.length : 0) : 0,
+        totalConsultations: consultationsData.status === 'fulfilled' ? (Array.isArray(consultationsData.value) ? consultationsData.value.length : 0) : 0,
         scheduledClinics: 0,
         completedClinics: 0,
         activeDoctors: 0,
@@ -104,6 +113,7 @@ export const useDashboardData = () => {
         scheduledClinics: 0,
         completedClinics: 0,
         activeDoctors: 0,
+        totalConsultations: 0,
       });
     } finally {
       setLoading(false);

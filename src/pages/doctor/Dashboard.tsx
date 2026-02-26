@@ -25,7 +25,7 @@ export function Dashboard() {
     color: '#38A3A5'
   }, {
     label: 'Prescriptions',
-    value: loading ? '...' : (stats?.totalPatients ? Math.round(stats.totalPatients * 0.3).toString() : '0'),
+    value: loading ? '...' : (stats?.totalConsultations?.toString() || '0'),
     icon: FileTextIcon,
     color: '#38A3A5'
   }];

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { HomeIcon, FileTextIcon, ClipboardListIcon, FlaskConicalIcon, CalendarIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
+import { HomeIcon, FileTextIcon, FlaskConicalIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 
@@ -24,20 +24,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     path: '/patient/profile'
   }, {
     icon: FileTextIcon,
-    label: 'My Records',
-    path: '/patient/records'
-  }, {
-    icon: ClipboardListIcon,
     label: 'Prescriptions',
-    path: '/patient/prescriptions'
+    path: '/patient/records'
   }, {
     icon: FlaskConicalIcon,
     label: 'Lab Results',
     path: '/patient/lab-results'
-  }, {
-    icon: CalendarIcon,
-    label: 'Appointments',
-    path: '/patient/appointments'
   }, {
     icon: HospitalIcon,
     label: 'Mobile Clinics',
@@ -66,7 +58,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex items-center justify-between p-4 sm:p-6">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Arogya</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-[#38A3A5] rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-2xl font-bold">A</span>
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold text-gray-900 leading-tight">Arogya</h1>
+              <p className="text-xs text-gray-600 leading-tight">Mobile Clinics</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
@@ -74,7 +74,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             <XIcon className="h-6 w-6" />
           </button>
         </div>
-        <nav className="flex-1 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto mt-6">
           {navItems.map(item => (
             <button
               key={item.label}

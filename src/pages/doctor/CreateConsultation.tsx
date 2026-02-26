@@ -21,6 +21,7 @@ export function CreateConsultation() {
   const [recom, setRecom] = useState<string>('');
   const [sessionNumber, setSessionNumber] = useState<number>(1);
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ diagnosis?: string; notes?: string }>({});
 
   // Lab test states
   const [requestLabTests, setRequestLabTests] = useState(false);
@@ -48,6 +49,20 @@ export function CreateConsultation() {
 
   const save = async () => {
     if (!token) return;
+    
+    // Validate form
+    const errors: { diagnosis?: string; notes?: string } = {};
+    if (!chief.trim()) {
+      errors.diagnosis = 'Diagnosis is required';
+    }
+    if (!recom.trim()) {
+      errors.notes = 'Notes are required';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
     
     setSaving(true);
     try {
@@ -138,14 +153,22 @@ export function CreateConsultation() {
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Chief Complaint
+                  Chief Complaint <span className="text-red-500">*</span>
                 </label>
                 <input 
                   value={chief} 
-                  onChange={e => setChief(e.target.value)} 
+                  onChange={e => {
+                    setChief(e.target.value);
+                    if (formErrors.diagnosis) {
+                      setFormErrors(prev => ({ ...prev, diagnosis: undefined }));
+                    }
+                  }} 
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                   placeholder="Enter chief complaint..."
                 />
+                {formErrors.diagnosis && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.diagnosis}</p>
+                )}
               </div>
 
               <div>
@@ -176,15 +199,23 @@ export function CreateConsultation() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Recommendations
+                  Recommendations <span className="text-red-500">*</span>
                 </label>
                 <textarea 
                   value={recom} 
-                  onChange={e => setRecom(e.target.value)} 
+                  onChange={e => {
+                    setRecom(e.target.value);
+                    if (formErrors.notes) {
+                      setFormErrors(prev => ({ ...prev, notes: undefined }));
+                    }
+                  }} 
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none"
                   placeholder="Enter recommendations..."
                 />
+                {formErrors.notes && (
+                  <p className="text-red-500 text-xs mt-1">{formErrors.notes}</p>
+                )}
               </div>
 
               <div>

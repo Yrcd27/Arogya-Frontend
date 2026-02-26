@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
+import { EmptyState } from '../../components/EmptyState';
 import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
@@ -112,8 +113,8 @@ export function Records() {
       setRecords(enrichedRecords);
       setFilteredRecords(enrichedRecords);
     } catch (error) {
-      console.error('Failed to load medical records:', error);
-      alert('Failed to load medical records. Please try again.');
+      console.error('Failed to load prescriptions:', error);
+      alert('Failed to load prescriptions. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -146,9 +147,9 @@ export function Records() {
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / My Records</p>
+            <p className="text-gray-600 text-sm mb-2">Dashboard / Prescriptions</p>
             <h1 className="text-3xl font-bold text-gray-900">
-              Medical Records
+              Prescriptions
             </h1>
           </div>
 
@@ -157,7 +158,7 @@ export function Records() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <input 
                   type="text" 
-                  placeholder="Search records..." 
+                  placeholder="Search prescriptions..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
@@ -174,13 +175,13 @@ export function Records() {
             {loading ? (
               <div className="p-12 text-center text-gray-500">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#38A3A5] mx-auto"></div>
-                <p className="mt-4">Loading medical records...</p>
+                <p className="mt-4">Loading prescriptions...</p>
               </div>
             ) : filteredRecords.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">
-                <p className="text-lg">No medical records found</p>
-                {searchTerm && <p className="text-sm mt-2">Try adjusting your search</p>}
-              </div>
+              <EmptyState 
+                title="No prescriptions"
+                description="Your prescriptions will appear here"
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -249,7 +250,7 @@ export function Records() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-2xl font-bold text-gray-900">Medical Record Details</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Prescription Details</h2>
               <button
                 onClick={() => setSelectedRecord(null)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -261,7 +262,7 @@ export function Records() {
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Record ID</p>
+                  <p className="text-sm text-gray-600 mb-1">Prescription ID</p>
                   <p className="font-medium">#{selectedRecord.id}</p>
                 </div>
                 <div>
