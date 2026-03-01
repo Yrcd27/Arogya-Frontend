@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
+import { PatientProfileModal } from '../../components/doctor/PatientProfileModal';
 import { SearchIcon } from 'lucide-react';
 import { clinicAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 
@@ -15,6 +16,8 @@ export function Queue() {
   const [nameById, setNameById] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -169,26 +172,37 @@ export function Queue() {
                         <div className="text-sm text-gray-600">{new Date(t.issuedAt).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4">
-                        {t.status === 'COMPLETED' ? (
-                          <span className="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed inline-block">
-                            Completed
-                          </span>
-                        ) : (
+                        <div className="flex gap-2">
                           <button
                             className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors"
                             onClick={() => {
-                              navigate('/doctor/queue/create-consultation', {
-                                state: {
-                                  token: t,
-                                  patientName: nameById[String(t.patientId)],
-                                  clinicId: selectedClinicId
-                                }
-                              });
+                              setSelectedPatientId(t.patientId);
+                              setIsProfileModalOpen(true);
                             }}
                           >
-                            Consult
+                            View Profile
                           </button>
-                        )}
+                          {t.status === 'COMPLETED' ? (
+                            <span className="px-4 py-2 bg-gray-300 text-gray-600 rounded-lg text-sm font-medium cursor-not-allowed inline-block">
+                              Completed
+                            </span>
+                          ) : (
+                            <button
+                              className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors"
+                              onClick={() => {
+                                navigate('/doctor/queue/create-consultation', {
+                                  state: {
+                                    token: t,
+                                    patientName: nameById[String(t.patientId)],
+                                    clinicId: selectedClinicId
+                                  }
+                                });
+                              }}
+                            >
+                              Consult
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -224,6 +238,17 @@ export function Queue() {
           )}
         </main>
       </div>
+      
+      {/* Patient Profile Modal */}
+      {isProfileModalOpen && selectedPatientId && (
+        <PatientProfileModal
+          patientId={Number(selectedPatientId)}
+          onClose={() => {
+            setIsProfileModalOpen(false);
+            setSelectedPatientId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
