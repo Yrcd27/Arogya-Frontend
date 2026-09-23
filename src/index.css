@@ -4,6 +4,10 @@
 @import 'tailwindcss/utilities';
 /* DO NOT DELETE THESE TAILWIND IMPORTS, OTHERWISE THE STYLING WILL NOT RENDER AT ALL */
 
+:root {
+  --teal-accent: #38a3a5;
+}
+
 /* Smooth scroll behavior */
 html {
   scroll-behavior: smooth;
@@ -40,4 +44,86 @@ html {
 
 .animate-delay-400 {
   animation-delay: 0.4s;
+}
+
+/* Hero carousel: left-to-right readability gradient tuned for white text on
+   the left while keeping healthcare activity on the right visible. */
+.hero-overlay {
+  background: linear-gradient(
+    to right,
+    rgba(20, 31, 48, 0.88) 0%,
+    rgba(20, 31, 48, 0.62) 30%,
+    rgba(20, 31, 48, 0.4) 50%,
+    rgba(20, 31, 48, 0.18) 72%,
+    rgba(20, 31, 48, 0.1) 100%
+  );
+}
+
+/* Per-slide focal point support so different carousel images can keep their
+   subjects in frame on both mobile and desktop crops. */
+.hero-slide-image {
+  background-position: var(--hero-focal-mobile, center);
+}
+@media (min-width: 768px) {
+  .hero-slide-image {
+    background-position: var(--hero-focal-desktop, center);
+  }
+}
+
+/* Header top scrim: an independent readability layer behind the fixed nav
+   bar only (roughly the top 130px), separate from the hero's own
+   left-to-right gradient. Fades out once the header goes solid on scroll. */
+.header-top-scrim {
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 28, 43, 0.6) 0%,
+    rgba(15, 28, 43, 0.3) 55%,
+    rgba(15, 28, 43, 0) 100%
+  );
+}
+
+/* Header nav links: subtle text-shadow for legibility over bright hero
+   photos, plus an animated teal underline for hover/focus/active. */
+.nav-link {
+  position: relative;
+  display: inline-block;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 220ms ease, color 220ms ease;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 100%;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--teal-accent);
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+  transition: transform 220ms ease;
+}
+
+.nav-link:hover,
+.nav-link:focus-visible {
+  transform: translateY(-1px);
+}
+
+.nav-link:hover::after,
+.nav-link:focus-visible::after,
+.nav-link.active::after {
+  transform: translateX(-50%) scaleX(1);
+}
+
+/* Respect reduced-motion preferences site-wide. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
