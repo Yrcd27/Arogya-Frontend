@@ -9,13 +9,17 @@ const NAV_LINKS = [
   { href: '#contact', label: 'Contact' }
 ];
 
+// Header goes white as soon as the user starts scrolling, not just once the
+// hero has fully scrolled past — so keep this threshold tiny.
+const SCROLL_THRESHOLD = 4;
+
 export function LandingHeader() {
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 40);
+    const onScroll = () => setIsScrolled(window.scrollY > SCROLL_THRESHOLD);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -28,37 +32,57 @@ export function LandingHeader() {
     };
   }, [isMobileOpen]);
 
-  // The header bar itself switches between transparent-over-hero (with the
-  // top scrim doing the readability work) and a solid translucent navy once
-  // scrolled or the mobile menu is open. Nav text stays white in both cases.
-  const barSolid = isScrolled || isMobileOpen;
   const closeMobileMenu = () => setIsMobileOpen(false);
+
+  // Two states: transparent at the very top of the hero, or the same light
+  // frosted bar used over every other section — triggered the moment the
+  // user scrolls, not only once the hero has fully scrolled past.
+  const isLight = isScrolled || isMobileOpen;
+
+  const navLinkColorClass = isLight
+    ? 'text-[#111827] hover:text-[#38A3A5] focus-visible:text-[#38A3A5] focus-visible:outline-[#38A3A5]'
+    : 'text-white/90 hover:text-white focus-visible:text-white focus-visible:outline-white';
 
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-50 transition-colors duration-300 ${
-        barSolid ? 'bg-[rgba(15,28,43,0.85)] backdrop-blur-md shadow-sm border-b border-white/10' : 'bg-transparent'
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-[220ms] ease ${
+        isLight
+          ? 'bg-[rgba(255,255,255,0.94)] backdrop-blur-[14px] border-b border-[rgba(15,28,43,0.08)] shadow-[0_4px_18px_rgba(15,28,43,0.05)]'
+          : 'bg-transparent backdrop-blur-none border-b border-transparent shadow-none'
       }`}
     >
       {/* Independent top scrim — readability layer for the nav row only,
           separate from the hero's own left-to-right gradient. */}
       <div
         aria-hidden="true"
-        className={`header-top-scrim absolute inset-x-0 top-0 h-[130px] pointer-events-none transition-opacity duration-300 ${
-          barSolid ? 'opacity-0' : 'opacity-100'
+        className={`header-top-scrim absolute inset-x-0 top-0 h-[130px] pointer-events-none transition-opacity duration-[220ms] ease ${
+          isLight ? 'opacity-0' : 'opacity-100'
         }`}
       />
 
-      <div className="relative max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-10 py-4">
+      <div
+        className={`relative max-w-7xl mx-auto flex items-center justify-between px-6 lg:px-10 transition-all duration-[220ms] ease ${
+          isLight ? 'py-[15px]' : 'py-[23px]'
+        }`}
+      >
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 bg-[#38A3A5] rounded-lg flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-xl">A</span>
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight leading-none text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}>
+            <h1
+              className={`text-xl font-bold tracking-tight leading-none transition-colors duration-[220ms] ease ${
+                isLight ? 'text-[#111827]' : 'text-white'
+              }`}
+              style={isLight ? undefined : { textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}
+            >
               Arogya
             </h1>
-            <p className="text-[11px] tracking-wide uppercase mt-1 text-white/80">
+            <p
+              className={`text-[11px] tracking-wide uppercase mt-1 transition-colors duration-[220ms] ease ${
+                isLight ? 'text-[#5F6B7A]' : 'text-white/80'
+              }`}
+            >
               Ministry of Health Sri Lanka
             </p>
           </div>
@@ -69,12 +93,18 @@ export function LandingHeader() {
             <a
               key={link.href}
               href={link.href}
-              className="nav-link font-semibold text-sm tracking-wide uppercase text-white/90 hover:text-white focus-visible:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white rounded-sm"
+              className={`nav-link font-semibold text-sm tracking-wide uppercase rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 ${navLinkColorClass} ${
+                isLight ? 'nav-link--light' : ''
+              }`}
             >
               {link.label}
             </a>
           ))}
-          <div className="flex items-center gap-3 pl-4 ml-1 border-l border-white/25">
+          <div
+            className={`flex items-center gap-3 pl-4 ml-1 border-l transition-colors duration-[220ms] ease ${
+              isLight ? 'border-[#111827]/10' : 'border-white/25'
+            }`}
+          >
             <button
               onClick={() => navigate('/login')}
               className="bg-[#38A3A5] text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-[#2d8284] hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2d8284]"
@@ -90,7 +120,9 @@ export function LandingHeader() {
           aria-expanded={isMobileOpen}
           aria-controls="mobile-nav-menu"
           aria-label={isMobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          className={`md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg transition-colors duration-[220ms] ease focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+            isLight ? 'text-[#111827] focus-visible:outline-[#38A3A5]' : 'text-white focus-visible:outline-white'
+          }`}
         >
           {isMobileOpen ? <XIcon className="w-6 h-6" /> : <MenuIcon className="w-6 h-6" />}
         </button>

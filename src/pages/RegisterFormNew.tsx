@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { HomeIcon } from 'lucide-react';
 import { userAPI } from '../services/api';
 
 export function RegisterForm() {
@@ -196,8 +197,30 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        aria-label="Go to home"
+        className="hidden md:flex group absolute top-7 left-8 z-10 items-center w-11 hover:w-28 focus-visible:w-28 h-11 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_2px_8px_rgba(15,28,43,0.06)] transition-[width,background-color] duration-[220ms] ease hover:bg-[#38A3A5]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#38A3A5]"
+      >
+        <span className="flex items-center justify-center w-11 h-11 shrink-0 text-[#38A3A5]">
+          <HomeIcon className="w-5 h-5" />
+        </span>
+        <span className="whitespace-nowrap pr-4 text-sm font-medium text-[#111827] opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150">
+          Home
+        </span>
+      </button>
       <div className="max-w-4xl mx-auto">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          aria-label="Go to home"
+          className="md:hidden inline-flex items-center gap-2 h-10 px-4 mb-6 rounded-xl border border-gray-200 bg-white shadow-[0_2px_8px_rgba(15,28,43,0.06)] text-sm font-medium text-[#111827] hover:bg-[#38A3A5]/10 transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#38A3A5]"
+        >
+          <HomeIcon className="w-4 h-4 text-[#38A3A5]" />
+          Home
+        </button>
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
             Register as {roleInfo.roleName}
