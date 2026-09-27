@@ -447,7 +447,7 @@ export function Clinics() {
                       disabled={!formData.province}
                     >
                       <option value="">Select District</option>
-                      {formData.province && PROVINCES_DISTRICTS[formData.province as keyof typeof PROVINCES_DISTRICTS].map(district => (
+                      {formData.province && (PROVINCES_DISTRICTS[formData.province as keyof typeof PROVINCES_DISTRICTS] || []).map(district => (
                         <option key={district} value={district}>{district}</option>
                       ))}
                     </select>
