@@ -20,10 +20,12 @@ import DoctorProfile from './pages/doctor/Profile';
 import { Queue as DoctorQueue } from './pages/doctor/Queue';
 import { CreateConsultation as DoctorCreateConsultation } from './pages/doctor/CreateConsultation';
 import Consultations from './pages/doctor/Consultations';
+import { GlobalLanguageSelector } from './components/LanguageSelectors';
 
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <GlobalLanguageSelector />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
