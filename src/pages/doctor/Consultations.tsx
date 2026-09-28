@@ -3,13 +3,14 @@ import { useLocation } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from 'react-toastify';
-import { consultationAPI, Consultation } from "../../services/consultationService";
+import { consultationAPI, Consultation, ConsultationUpdate } from "../../services/consultationService";
 import { labTestAPI } from "../../services/labTestService";
 import { LabTest } from "../../types/labTest";
 import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
-import { FlaskConical } from 'lucide-react';
+import { FlaskConical, Pencil, Trash2 } from 'lucide-react';
 
 type PatientInfo = {
   id: number;
@@ -39,6 +40,23 @@ export default function Consultations() {
   const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null);
   const [selectedConsultationLabTests, setSelectedConsultationLabTests] = useState<LabTest[]>([]);
   const [loadingLabTests, setLoadingLabTests] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [editingConsultation, setEditingConsultation] = useState<Consultation | null>(null);
+  const [editForm, setEditForm] = useState<ConsultationUpdate>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
+
+  const sortByNewestFirst = (list: Consultation[]) =>
+    [...list].sort((a, b) => {
+      const aTime = a.bookedAt ? new Date(a.bookedAt).getTime() : 0;
+      const bTime = b.bookedAt ? new Date(b.bookedAt).getTime() : 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return b.id - a.id;
+    });
 
   useEffect(() => {
     loadConsultations();
@@ -62,7 +80,7 @@ export default function Consultations() {
 
       // Use cache if fresh
       if (consultationsCache.data && consultationsCache.ts && now - consultationsCache.ts < CACHE_TTL) {
-        setConsultations(consultationsCache.data);
+        setConsultations(sortByNewestFirst(consultationsCache.data));
 
         // Check if we already have patient/clinic info for these consultations; if so skip additional fetch
         const missingPatientIds = Array.from(new Set(consultationsCache.data.map((c: Consultation) => c.patientId))).filter(id => !patients[id]);
@@ -86,7 +104,8 @@ export default function Consultations() {
         useCachedClinics ? Promise.resolve(clinicsCache.data) : clinicAPI.getAllClinics(),
       ] as const);
 
-      setConsultations(data);
+      setConsultations(sortByNewestFirst(data));
+      setCurrentPage(1);
       // cache consultations
       consultationsCache.data = data;
       consultationsCache.ts = nowFetch;
@@ -154,6 +173,97 @@ export default function Consultations() {
     }
   };
 
+  const openEdit = (c: Consultation) => {
+    setEditingConsultation(c);
+    setEditForm({
+      chiefComplaint: c.chiefComplaint || '',
+      presentIllness: c.presentIllness || '',
+      pastMedicalHistory: c.pastMedicalHistory || '',
+      recommendations: c.recommendations || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingConsultation) return;
+    setSavingEdit(true);
+    try {
+      const updated = await consultationAPI.update(editingConsultation.id, editForm);
+      setConsultations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+      consultationsCache.data = undefined;
+      toast.success('Consultation updated');
+      setEditingConsultation(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update consultation');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    setConfirmAction({ type: 'single', id });
+  };
+
+  const confirmSingleDelete = async (id: number) => {
+    setDeletingId(id);
+    try {
+      await consultationAPI.remove(id);
+      setConsultations((prev) => prev.filter((c) => c.id !== id));
+      consultationsCache.data = undefined;
+      toast.success('Consultation deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete consultation');
+    } finally {
+      setDeletingId(null);
+      setConfirmAction(null);
+    }
+  };
+
+  const toggleSelectRow = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOnPage = () => {
+    const pageIds = paginatedConsultations.map((c) => c.id);
+    const allSelected = pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    setConfirmAction({ type: 'bulk' });
+  };
+
+  const confirmBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      await consultationAPI.removeMany(ids);
+      setConsultations((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+      consultationsCache.data = undefined;
+      setSelectedIds(new Set());
+      toast.success(`${ids.length} consultation${ids.length > 1 ? 's' : ''} deleted`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete selected consultations');
+    } finally {
+      setConfirmAction(null);
+      setBulkDeleting(false);
+    }
+  };
+
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '-';
     try {
@@ -211,6 +321,28 @@ export default function Consultations() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(consultations.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginatedConsultations = consultations.slice(startIndex, startIndex + pageSize);
+
+  const getPageNumbers = () => {
+    const pages: (number | 'ellipsis')[] = [];
+    const windowSize = 1;
+    for (let p = 1; p <= totalPages; p++) {
+      if (
+        p === 1 ||
+        p === totalPages ||
+        (p >= safePage - windowSize && p <= safePage + windowSize)
+      ) {
+        pages.push(p);
+      } else if (pages[pages.length - 1] !== 'ellipsis') {
+        pages.push('ellipsis');
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar 
@@ -223,15 +355,44 @@ export default function Consultations() {
           <div className="mb-6 flex justify-between items-center">
             <div>
               <p className="text-gray-600 text-sm mb-1">Dashboard / Consultations</p>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Consultations</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Consultations</h1>
+                {!loading && consultations.length > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-[#38A3A5]/10 text-[#2d8284] text-xs font-semibold">
+                    {consultations.length}
+                  </span>
+                )}
+              </div>
             </div>
-            <button
-              onClick={loadConsultations}
-              disabled={loading}
-              className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50"
-            >
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
+            <div className="flex items-center gap-3">
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-red-700 font-medium">{selectedIds.size} selected</span>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    disabled={bulkDeleting}
+                    className="text-sm text-gray-500 hover:text-gray-700 px-1"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={loadConsultations}
+                disabled={loading}
+                className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50"
+              >
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -257,6 +418,14 @@ export default function Consultations() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-4 py-4 text-left w-10">
+                        <input
+                          type="checkbox"
+                          checked={paginatedConsultations.length > 0 && paginatedConsultations.every((c) => selectedIds.has(c.id))}
+                          onChange={toggleSelectAllOnPage}
+                          className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                        />
+                      </th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">ID</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Clinic</th>
@@ -264,15 +433,24 @@ export default function Consultations() {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Session #</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Booked At</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
+                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {consultations.map((c) => (
-                        <tr 
-                          key={c.id} 
-                          className="hover:bg-gray-50 cursor-pointer"
+                    {paginatedConsultations.map((c) => (
+                        <tr
+                          key={c.id}
+                          className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(c.id) ? 'bg-[#38A3A5]/5' : ''}`}
                           onClick={() => handleConsultationClick(c)}
                         >
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(c.id)}
+                              onChange={() => toggleSelectRow(c.id)}
+                              className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                            />
+                          </td>
                           <td className="px-6 py-4">
                             <span className="text-sm font-medium text-gray-900">{c.id}</span>
                           </td>
@@ -305,10 +483,93 @@ export default function Consultations() {
                               {c.status}
                             </span>
                           </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEdit(c);
+                                }}
+                                className="p-2 text-gray-500 hover:text-[#2d8284] hover:bg-[#38A3A5]/10 rounded-lg transition-colors"
+                                title="Edit consultation"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(c.id);
+                                }}
+                                disabled={deletingId === c.id}
+                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                                title="Delete consultation"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span>
+                    Showing <span className="font-medium text-gray-900">{startIndex + 1}</span>–
+                    <span className="font-medium text-gray-900">{Math.min(startIndex + pageSize, consultations.length)}</span> of{' '}
+                    <span className="font-medium text-gray-900">{consultations.length}</span>
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="ml-2 border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                  >
+                    <option value={10}>10 / page</option>
+                    <option value={25}>25 / page</option>
+                    <option value={50}>50 / page</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  {getPageNumbers().map((p, idx) =>
+                    p === 'ellipsis' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 select-none">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                          p === safePage
+                            ? 'bg-[#38A3A5] text-white'
+                            : 'text-gray-600 hover:bg-gray-100 border border-gray-300'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -454,6 +715,111 @@ export default function Consultations() {
           </div>
         </div>
       )}
+
+      {/* Edit Modal */}
+      {editingConsultation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={() => !savingEdit && setEditingConsultation(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Edit Consultation #{editingConsultation.id}</h3>
+                <p className="text-sm text-gray-500">
+                  {patients[editingConsultation.patientId]?.name || `Patient #${editingConsultation.patientId}`}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingConsultation(null)}
+                disabled={savingEdit}
+                className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <input
+                  value={editForm.chiefComplaint || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, chiefComplaint: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent transition-colors"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Present Illness</label>
+                  <textarea
+                    value={editForm.presentIllness || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, presentIllness: e.target.value }))}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Past Medical History</label>
+                  <textarea
+                    value={editForm.pastMedicalHistory || ''}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, pastMedicalHistory: e.target.value }))}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Recommendations</label>
+                <textarea
+                  value={editForm.recommendations || ''}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, recommendations: e.target.value }))}
+                  rows={3}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+              <button
+                className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                onClick={() => setEditingConsultation(null)}
+                disabled={savingEdit}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={confirmAction !== null}
+        title={confirmAction?.type === 'bulk' ? 'Delete selected consultations?' : 'Delete consultation?'}
+        message={
+          confirmAction?.type === 'bulk'
+            ? `Delete ${selectedIds.size} selected consultation${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
+            : 'Delete this consultation? This cannot be undone.'
+        }
+        confirmLabel="Delete"
+        loading={confirmAction?.type === 'bulk' ? bulkDeleting : deletingId !== null}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction?.type === 'single') confirmSingleDelete(confirmAction.id);
+          else if (confirmAction?.type === 'bulk') confirmBulkDelete();
+        }}
+      />
     </div>
   );
 }

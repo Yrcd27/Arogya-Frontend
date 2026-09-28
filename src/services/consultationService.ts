@@ -23,6 +23,7 @@ export interface Consultation {
 export interface ConsultationUpdate {
   chiefComplaint?: string;
   presentIllness?: string;
+  pastMedicalHistory?: string;
   recommendations?: string;
   status?: string;
 }
@@ -59,6 +60,18 @@ export const consultationAPI = {
     const res = await fetch(`${API_BASE_URL}/consultations/${id}/complete`, { method: 'POST' });
     if (!res.ok) throw new Error(`Failed to complete consultation ${id} (${res.status})`);
     return (await res.json()) as Consultation;
+  },
+  async remove(id: number): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/consultations/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`Failed to delete consultation ${id} (${res.status})`);
+  },
+  async removeMany(ids: number[]): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/consultations/bulk-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ids),
+    });
+    if (!res.ok) throw new Error(`Failed to delete consultations (${res.status})`);
   },
   async cancel(id: number): Promise<Consultation> {
     const res = await fetch(`${API_BASE_URL}/consultations/${id}/cancel`, { method: 'POST' });

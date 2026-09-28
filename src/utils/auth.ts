@@ -50,6 +50,7 @@ export interface User {
 
 // Local storage keys
 export const AUTH_USER_KEY = 'user';
+export const AUTH_TOKEN_KEY = 'authToken';
 
 // Utility functions for user management
 export const getCurrentUser = (): User | null => {
@@ -63,6 +64,11 @@ export const setCurrentUser = (user: User): void => {
 
 export const removeCurrentUser = (): void => {
   localStorage.removeItem(AUTH_USER_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+};
+
+export const getToken = (): string | null => {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
 };
 
 export const isAuthenticated = (): boolean => {
@@ -72,8 +78,14 @@ export const isAuthenticated = (): boolean => {
 // Authentication API calls
 export const loginAPI = async (credentials: LoginCredentials): Promise<User> => {
   const { userAPI } = await import('../services/api');
-  const user = await userAPI.login(credentials.email, credentials.password);
-  return user;
+  const response = await userAPI.login(credentials.email, credentials.password);
+  localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+  return {
+    id: response.id,
+    username: response.username,
+    email: response.email,
+    userRole: { id: 0, roleName: response.role },
+  };
 };
 
 export const registerAPI = async (userData: RegisterData, roleId: number, roleName: string): Promise<{ success: boolean; message: string }> => {
