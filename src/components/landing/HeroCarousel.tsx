@@ -88,7 +88,7 @@ export function HeroCarousel() {
       <div className="absolute inset-0 bg-gradient-to-t from-[#0f1826]/55 via-transparent to-transparent md:hidden pointer-events-none" />
 
       {hasMultipleSlides && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
+        <div className="absolute bottom-[4.5rem] left-1/2 z-20 -translate-x-1/2 flex items-center gap-3 pointer-events-auto md:bottom-6">
           <button
             type="button"
             onClick={() => setUserPaused(paused => !paused)}

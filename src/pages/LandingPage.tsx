@@ -3,6 +3,7 @@ import { ArrowRightIcon, ClipboardListIcon, FileTextIcon, UserIcon, BarChartIcon
 import { LandingHeader } from '../components/landing/LandingHeader';
 import { LandingFooter } from '../components/landing/LandingFooter';
 import { HeroCarousel } from '../components/landing/HeroCarousel';
+import { LandingLanguageSelector } from '../components/LanguageSelectors';
 const OFFICE_ADDRESS = 'Suwasiripaya, No. 385, Rev. Baddegama Wimalawansa Thero Mawatha, Colombo 10, Sri Lanka';
 const OFFICE_MAP_QUERY = encodeURIComponent(OFFICE_ADDRESS);
 const OFFICE_MAP_EMBED_URL = `https://www.google.com/maps?q=${OFFICE_MAP_QUERY}&output=embed`;
@@ -60,6 +61,7 @@ export function LandingPage() {
             </div>
           </div>
         </div>
+        <LandingLanguageSelector />
       </section>
       {/* About Section */}
       <section id="about" className="py-16 md:py-20 px-6 bg-white scroll-mt-28">

@@ -8,6 +8,13 @@
   --teal-accent: #38a3a5;
 }
 
+/* The translation library applies an inline 160px minimum width. Keep the
+   dashboard control compact without affecting the hero version. */
+.dashboard-language-selector > .notranslate {
+  width: 136px !important;
+  min-width: 136px !important;
+}
+
 /* Smooth scroll behavior */
 html {
   scroll-behavior: smooth;
