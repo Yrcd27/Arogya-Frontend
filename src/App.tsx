@@ -5,25 +5,29 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './toast-custom.css';
 
+import { TranslationProvider } from 'react-auto-google-translate';
+
 export function App() {
   return (
-    <AuthProvider>
-      <div className="w-full min-h-screen bg-gray-50">
-        <AppRouter />
-        <ChatBot />
-        <ToastContainer
-          position="top-right"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="light"
-        />
-      </div>
-    </AuthProvider>
+    <TranslationProvider originalLang="en">
+      <AuthProvider>
+        <div className="w-full min-h-screen bg-gray-50">
+          <AppRouter />
+          <ChatBot />
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+          />
+        </div>
+      </AuthProvider>
+    </TranslationProvider>
   );
 }

@@ -12,6 +12,7 @@
   "dependencies": {
     "lucide-react": "0.522.0",
     "react": "^18.3.1",
+    "react-auto-google-translate": "^1.0.3",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2",
     "react-toastify": "^11.0.5"

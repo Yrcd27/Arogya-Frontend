@@ -311,7 +311,7 @@ export function Clinics() {
                 disabled={!selectedProvince}
               >
                 <option value="">All Districts</option>
-                {selectedProvince && PROVINCES_DISTRICTS[selectedProvince as keyof typeof PROVINCES_DISTRICTS].map(district => (
+                {selectedProvince && (PROVINCES_DISTRICTS[selectedProvince as keyof typeof PROVINCES_DISTRICTS] || []).map(district => (
                   <option key={district} value={district}>{district}</option>
                 ))}
               </select>

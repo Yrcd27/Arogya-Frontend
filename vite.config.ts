@@ -129,6 +129,17 @@ export default defineConfig({
           });
         },
       },
+      // Chatbot service endpoints
+      '/chat': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/health': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

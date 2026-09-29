@@ -1,7 +1,7 @@
 // Chatbot Service — calls the Arogya Chatbot backend
 
 const isDevelopment = import.meta.env.DEV;
-const CHATBOT_BASE_URL = isDevelopment ? '' : 'http://localhost:8090';
+const CHATBOT_BASE_URL = isDevelopment ? '' : 'http://localhost:8091';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
