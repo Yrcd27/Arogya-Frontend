@@ -9,7 +9,7 @@ import { TranslationProvider } from 'react-auto-google-translate';
 
 export function App() {
   return (
-    <TranslationProvider originalLang="en">
+    <TranslationProvider originalLang="en" language="en">
       <AuthProvider>
         <div className="w-full min-h-screen bg-gray-50">
           <AppRouter />

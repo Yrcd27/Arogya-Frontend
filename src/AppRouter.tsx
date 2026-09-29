@@ -23,7 +23,7 @@ import Consultations from './pages/doctor/Consultations';
 
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
