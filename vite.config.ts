@@ -66,7 +66,7 @@ export default defineConfig({
       },
       // Queue service endpoints
       '/queue': {
-        target: 'http://localhost:8085',
+        target: 'http://localhost:8095',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -80,7 +80,7 @@ export default defineConfig({
       },
       // Consultation service endpoints
       '/consultations': {
-        target: 'http://localhost:8086',
+        target: 'http://localhost:8096',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -97,7 +97,7 @@ export default defineConfig({
       },
       // Lab tests endpoints (also part of consultation service)
       '/lab-tests': {
-        target: 'http://localhost:8086',
+        target: 'http://localhost:8096',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -128,6 +128,17 @@ export default defineConfig({
             console.log('Test-results proxy response:', proxyRes.statusCode, req.url);
           });
         },
+      },
+      // Chatbot service endpoints
+      '/chat': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/health': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+        secure: false,
       },
     },
   },
