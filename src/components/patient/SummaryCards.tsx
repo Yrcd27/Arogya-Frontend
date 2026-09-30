@@ -1,7 +1,9 @@
+import { useNavigate } from 'react-router-dom';
 import { CalendarIcon, ClipboardListIcon, FileTextIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function SummaryCards() {
+  const navigate = useNavigate();
   const { stats, loading } = useDashboardData();
 
   const cards = [{
@@ -24,7 +26,12 @@ export function SummaryCards() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       {cards.map(card => (
-        <div key={card.label} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer">
+        <button
+          key={card.label}
+          type="button"
+          onClick={() => navigate('/patient/clinics')}
+          className="text-left bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
+        >
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <p className="text-gray-600 text-sm mb-1">{card.label}</p>
@@ -42,7 +49,7 @@ export function SummaryCards() {
               }} />
             </div>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );

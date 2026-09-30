@@ -123,7 +123,7 @@ export function Clinics() {
   };
 
   const validateForm = () => {
-    const validationError = validateClinicForm(formData, selectedDoctors);
+    const validationError = validateClinicForm(formData, selectedDoctors, isEditMode);
     if (validationError) {
       setError(validationError);
       return false;
@@ -480,7 +480,7 @@ export function Clinics() {
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={isEditMode ? undefined : new Date().toISOString().split('T')[0]}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { userAPI } from '../services/api';
+import { userAPI, ApiError } from '../services/api';
 
 export function RegisterForm() {
   const navigate = useNavigate();
@@ -114,9 +114,7 @@ export function RegisterForm() {
         userRegistrationData.secretKey = formData.secretKey;
       }
 
-      console.log('Creating user account with data:', userRegistrationData);
-      const newUser = await userAPI.register(userRegistrationData);
-      console.log('User created successfully:', newUser);
+      await userAPI.register(userRegistrationData);
 
       // Success - redirect to login (no profile creation during registration)
       toast.success(`Registration successful! Welcome, ${formData.username}!`, {
@@ -139,25 +137,31 @@ export function RegisterForm() {
 
     } catch (error) {
       console.error('Registration error:', error);
-      
+
       let errorMessage = 'Registration failed. Please try again.';
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Unable to connect')) {
-          errorMessage = 'Unable to connect to the server. Please check if the backend service is running on port 8081.';
-        } else if (error.message.includes('404')) {
-          errorMessage = 'Registration service is not available. Please contact support.';
-        } else if (error.message.includes('400')) {
-          errorMessage = 'Invalid registration data. Please check your information.';
-        } else if (error.message.includes('409')) {
-          errorMessage = 'An account with this email already exists.';
-        } else if (error.message.includes('401') || error.message.includes('403')) {
-          errorMessage = 'Invalid secret key. Please check your credentials.';
-        } else {
-          errorMessage = error.message;
+
+      if (error instanceof ApiError) {
+        switch (error.status) {
+          case 0:
+            errorMessage = 'Unable to connect to the server. Please make sure the backend is running.';
+            break;
+          case 400:
+            errorMessage = error.message || 'Invalid registration data. Please check your information.';
+            break;
+          case 409:
+            errorMessage = 'An account with this email already exists.';
+            break;
+          case 401:
+          case 403:
+            errorMessage = 'Invalid secret key. Please check your credentials.';
+            break;
+          default:
+            errorMessage = error.message || errorMessage;
         }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);

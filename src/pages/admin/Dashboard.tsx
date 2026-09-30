@@ -12,28 +12,24 @@ export function Dashboard() {
     {
       label: 'Total Patients',
       value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
-      change: loading ? '' : (stats?.totalPatients ? `+${Math.round((stats.totalPatients / 100) * 12)}` : ''),
       icon: UsersIcon,
       color: '#38A3A5'
     },
     {
       label: 'Total Clinics',
       value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
-      change: loading ? '' : (stats?.totalClinics ? `+${Math.round((stats.totalClinics / 10) * 8)}` : ''),
       icon: CalendarIcon,
       color: '#38A3A5'
     },
     {
-      label: 'Active Doctors',
-      value: loading ? '...' : (stats?.activeDoctors?.toString() || '0'),
-      change: '',
+      label: 'Total Doctors',
+      value: loading ? '...' : (stats?.totalDoctors?.toString() || '0'),
       icon: UserCheckIcon,
       color: '#38A3A5'
     },
     {
       label: 'Scheduled Clinics',
       value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
-      change: '',
       icon: CalendarIcon,
       color: '#38A3A5'
     }
@@ -68,11 +64,6 @@ export function Dashboard() {
                       <p className="text-2xl lg:text-4xl font-bold text-gray-900 mb-1">
                         {stat.value}
                       </p>
-                    )}
-                    {stat.change && (
-                      <span className="text-[#57CC99] text-sm font-medium">
-                        {stat.change}
-                      </span>
                     )}
                   </div>
                   <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-lg flex items-center justify-center" style={{

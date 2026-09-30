@@ -173,8 +173,9 @@ export function Clinics() {
       const res = await queueAPI.createToken({
         clinicId: String(clinic.id),
         patientId: patientId,
-        // Placeholder: use clinic id as consultation id until consultation linkage is available
-        consultationId: String(clinic.id),
+        // No consultation exists yet at this point — the doctor creates one
+        // when they call this patient in, and links it via queueTokenId.
+        consultationId: '',
       });
       setJoinSuccess(`Token #${res.tokenNumber} created. Position: ${res.position}`);
       // Refresh queue for selected clinic if modal open on same clinic
@@ -488,7 +489,7 @@ export function Clinics() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 italic">Loading doctor information...</p>
+                    <p className="text-gray-500 italic">No doctors assigned to this clinic yet.</p>
                   )}
                 </div>
 

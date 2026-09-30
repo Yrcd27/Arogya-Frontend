@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { consultationAPI } from '../../services/consultationService';
@@ -67,8 +68,11 @@ export function CreateConsultation() {
     
     setSaving(true);
     try {
-      // Create consultation with COMPLETED status
-      const payload = {
+      // New consultations always start SCHEDULED on the backend — there's no
+      // `status` field on create. Walk it through the real transitions
+      // (SCHEDULED -> IN_PROGRESS -> COMPLETED) since this form represents a
+      // consultation that already happened.
+      const consultation = await consultationAPI.create({
         patientId: Number(token.patientId),
         doctorId: Number(currentUser?.id || 0),
         clinicId: Number(clinicId || token.clinicId || 0),
@@ -79,27 +83,24 @@ export function CreateConsultation() {
         recommendations: recom,
         sessionNumber: sessionNumber || 1,
         bookedAt: new Date().toISOString(),
-        status: 'COMPLETED',
-        completedAt: new Date().toISOString(),
-      };
-      console.debug('Creating consultation payload:', payload);
-      const consultation = await consultationAPI.create({
-        ...payload,
       });
+      await consultationAPI.update(consultation.id, { status: 'IN_PROGRESS' });
+      await consultationAPI.complete(consultation.id);
 
       // Mark the queue token as served now that the consultation is recorded
       try {
         await queueAPI.updateStatus(token.id, 'COMPLETED');
       } catch (queueError) {
         console.error('Failed to update queue token status:', queueError);
+        toast.warn('Consultation saved, but the queue token could not be marked as served.');
       }
 
-      // If lab tests are requested, try to create them (but don't fail if API not ready)
+      // If lab tests are requested, create them — don't block on failure.
       if (requestLabTests && labTests.length > 0) {
         try {
           const labTestPromises = labTests
-            .filter(test => test.testName.trim()) // Only create tests with names
-            .map(test => 
+            .filter(test => test.testName.trim())
+            .map(test =>
               labTestAPI.create({
                 consultationId: consultation.id,
                 testName: test.testName,
@@ -107,20 +108,18 @@ export function CreateConsultation() {
                 testInstructions: test.testInstructions || undefined,
               })
             );
-          
+
           await Promise.all(labTestPromises);
         } catch (labError) {
-          // Lab test creation failed (likely backend not ready) - warn but continue
           console.error('Failed to create lab tests:', labError);
-          alert('⚠️ Consultation created successfully, but lab tests could not be saved.\n\nThe backend lab test API is not available yet. Please implement the /lab-tests endpoint.');
+          toast.warn('Consultation saved, but one or more lab tests could not be created.');
         }
       }
-      
-      // Navigate back to queue with success status
+
+      toast.success('Consultation saved');
       navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId: consultation.id } });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      alert('Failed to create consultation: ' + errorMessage);
+      toast.error(err instanceof Error ? err.message : 'Failed to create consultation');
     } finally {
       setSaving(false);
     }

@@ -17,7 +17,7 @@ export function Dashboard() {
     },
     {
       label: 'Lab Tests',
-      value: loading ? '...' : (stats?.totalPatients ? Math.round(stats.totalPatients * 0.4).toString() : '0'),
+      value: loading ? '...' : (stats?.totalLabTests?.toLocaleString() || '0'),
       icon: FlaskConicalIcon,
       color: '#38A3A5'
     },
@@ -29,7 +29,7 @@ export function Dashboard() {
     },
     {
       label: 'Reports Generated',
-      value: loading ? '...' : (stats?.totalPatients ? Math.round(stats.totalPatients * 0.25).toString() : '0'),
+      value: loading ? '...' : (stats?.totalTestResults?.toLocaleString() || '0'),
       icon: ClipboardListIcon,
       color: '#38A3A5'
     }

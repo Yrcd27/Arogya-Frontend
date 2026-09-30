@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircleIcon } from 'lucide-react';
 import { profileAPI } from '../../services/api';
+import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
 import { Header } from '../../components/patient/Header';
 import { Sidebar } from '../../components/patient/Sidebar';
@@ -50,7 +52,10 @@ export function Profile() {
         });
         setHasProfile(true);
       } catch (error) {
-        console.log('No existing profile found');
+        if (!(error instanceof ApiError && error.status === 404)) {
+          console.error('Failed to load profile:', error);
+          setError('Failed to load profile information');
+        }
       }
     };
 
@@ -78,11 +83,20 @@ export function Profile() {
       }
 
       const profileData = {
-        ...formData,
-        id: formData.id, // Include profile ID for updates
-        user: user
+        ...(hasProfile ? { id: formData.id } : {}),
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        dateOfBirth: formData.dateOfBirth,
+        phoneNumber: formData.phoneNumber,
+        nicNumber: formData.nicNumber,
+        address: formData.address,
+        gender: formData.gender,
+        bloodGroup: formData.bloodGroup,
+        allergies: formData.allergies,
+        chronicDiseases: formData.chronicDiseases,
+        emergencyContact: formData.emergencyContact,
+        user: { id: user.id },
       };
-      console.log('Profile updated:', profileData);
 
       if (hasProfile) {
         // Update existing profile
@@ -123,6 +137,16 @@ export function Profile() {
               {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
             </p>
           </div>
+
+          {!hasProfile && (
+            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+              <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
+                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <form onSubmit={handleSubmit} className="space-y-6">

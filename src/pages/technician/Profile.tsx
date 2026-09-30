@@ -3,8 +3,10 @@ import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { profileAPI } from '../../services/api';
+import { ApiError } from '../../services/httpClient';
 
 interface TechnicianProfile {
+  id?: number;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -50,13 +52,9 @@ const Profile: React.FC = () => {
           
           try {
             const response = await profileAPI.getTechnician(userData.id);
-            setProfile(response);
+            setProfile(response as unknown as TechnicianProfile);
           } catch (error: unknown) {
-            if (error instanceof Error && (
-              error.message.includes('404') || 
-              error.message.includes('not found') || 
-              error.message.includes('Technician Profile not found')
-            )) {
+            if (error instanceof ApiError && error.status === 404) {
               // Profile doesn't exist yet
               setIsNewProfile(true);
               setProfile(prev => ({ 
@@ -93,13 +91,27 @@ const Profile: React.FC = () => {
     setError('');
     setSuccess('');
 
+    const requestBody: Record<string, unknown> = {
+      ...(isNewProfile ? {} : { id: profile.id }),
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      dateOfBirth: profile.dateOfBirth,
+      phoneNumber: profile.phoneNumber,
+      nicNumber: profile.nicNumber,
+      technicianField: profile.technicianField,
+      licenseNumber: profile.licenseNumber,
+      certification: profile.certification,
+      assignedEquipment: profile.assignedEquipment,
+      user: { id: profile.user.id },
+    };
+
     try {
       if (isNewProfile) {
-        await profileAPI.createTechnician(profile as unknown as Record<string, unknown>);
+        await profileAPI.createTechnician(requestBody);
         setSuccess('Profile created successfully!');
         setIsNewProfile(false);
       } else {
-        await profileAPI.updateTechnician(profile.user.id, profile as unknown as Record<string, unknown>);
+        await profileAPI.updateTechnician(requestBody);
         setSuccess('Profile updated successfully!');
       }
     } catch (error: unknown) {
@@ -135,8 +147,8 @@ const Profile: React.FC = () => {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="lg:ml-64 flex flex-col">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
           <div className="mb-4 sm:mb-6">
             <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
@@ -144,6 +156,16 @@ const Profile: React.FC = () => {
               {isNewProfile ? 'Complete Your Technician Profile' : 'Technician Profile'}
             </h1>
           </div>
+
+          {isNewProfile && (
+            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+              <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
+                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             {error && (

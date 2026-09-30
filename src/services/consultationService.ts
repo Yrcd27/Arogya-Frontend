@@ -1,23 +1,44 @@
-// Consultation Service API client (uses fetch, typed responses)
-const isDevelopment = import.meta.env.DEV;
-const envBase = (import.meta.env as any).VITE_API_BASE_URL;
-const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : (isDevelopment ? '' : 'http://localhost:8086');
+// Consultation Service API - routed through the API Gateway (see httpClient.ts)
+import { apiFetch, toQueryString } from './httpClient';
+import { unwrapList, type Page } from '../types/api';
+import type { LabTest } from '../types/labTest';
+
+export type ConsultationStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
 export interface Consultation {
   id: number;
   patientId: number;
   doctorId: number;
   clinicId: number;
-  queueTokenId: number;
+  queueTokenId?: number;
   chiefComplaint: string;
   presentIllness?: string;
   pastMedicalHistory?: string;
   recommendations?: string;
   sessionNumber?: number;
   bookedAt?: string;
-  status: string;
+  status: ConsultationStatus;
   completedAt?: string;
   updatedAt?: string;
+}
+
+export interface ConsultationWithTests extends Consultation {
+  labTests: LabTest[];
+}
+
+// The create endpoint has no `status` field — new consultations always
+// start SCHEDULED on the backend.
+export interface ConsultationCreate {
+  patientId: number;
+  doctorId: number;
+  clinicId: number;
+  queueTokenId?: number;
+  chiefComplaint: string;
+  presentIllness?: string;
+  pastMedicalHistory?: string;
+  recommendations?: string;
+  sessionNumber?: number;
+  bookedAt?: string;
 }
 
 export interface ConsultationUpdate {
@@ -25,83 +46,37 @@ export interface ConsultationUpdate {
   presentIllness?: string;
   pastMedicalHistory?: string;
   recommendations?: string;
-  status?: string;
+  status?: ConsultationStatus;
 }
 
 export const consultationAPI = {
-  async list(params: Record<string, any> = {}): Promise<Consultation[]> {
-    const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) qs.append(k, String(v));
-    });
-    const res = await fetch(`${API_BASE_URL}/consultations${qs.toString() ? `?${qs.toString()}` : ''}`);
-    if (!res.ok) throw new Error(`Failed to list consultations (${res.status})`);
-    const body = await res.json();
-    // backend returns a Page<T> with `content` — unwrap if present
-    if (body && Array.isArray(body.content)) return body.content as Consultation[];
-    if (Array.isArray(body)) return body as Consultation[];
-    return [];
+  /** Returns the page items plus the real total (from Page.totalElements). */
+  async list(params: Record<string, unknown> = {}): Promise<{ items: Consultation[]; total: number }> {
+    const body = await apiFetch<Page<Consultation> | Consultation[]>(`/consultations${toQueryString(params)}`);
+    return unwrapList<Consultation>(body);
   },
   async get(id: number): Promise<Consultation> {
-    const res = await fetch(`${API_BASE_URL}/consultations/${id}`);
-    if (!res.ok) throw new Error(`Failed to get consultation ${id} (${res.status})`);
-    return (await res.json()) as Consultation;
+    return apiFetch<Consultation>(`/consultations/${id}`);
+  },
+  async getWithTests(id: number): Promise<ConsultationWithTests> {
+    return apiFetch<ConsultationWithTests>(`/consultations/${id}/with-tests`);
+  },
+  async create(payload: ConsultationCreate): Promise<Consultation> {
+    return apiFetch<Consultation>('/consultations', { method: 'POST', body: payload });
   },
   async update(id: number, data: ConsultationUpdate): Promise<Consultation> {
-    const res = await fetch(`${API_BASE_URL}/consultations/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Failed to update consultation ${id} (${res.status})`);
-    return (await res.json()) as Consultation;
+    return apiFetch<Consultation>(`/consultations/${id}`, { method: 'PUT', body: data });
   },
   async complete(id: number): Promise<Consultation> {
-    const res = await fetch(`${API_BASE_URL}/consultations/${id}/complete`, { method: 'POST' });
-    if (!res.ok) throw new Error(`Failed to complete consultation ${id} (${res.status})`);
-    return (await res.json()) as Consultation;
-  },
-  async remove(id: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/consultations/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`Failed to delete consultation ${id} (${res.status})`);
-  },
-  async removeMany(ids: number[]): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/consultations/bulk-delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ids),
-    });
-    if (!res.ok) throw new Error(`Failed to delete consultations (${res.status})`);
+    return apiFetch<Consultation>(`/consultations/${id}/complete`, { method: 'POST' });
   },
   async cancel(id: number): Promise<Consultation> {
-    const res = await fetch(`${API_BASE_URL}/consultations/${id}/cancel`, { method: 'POST' });
-    if (!res.ok) throw new Error(`Failed to cancel consultation ${id} (${res.status})`);
-    return (await res.json()) as Consultation;
+    return apiFetch<Consultation>(`/consultations/${id}/cancel`, { method: 'POST' });
   },
-  async create(payload: Partial<Consultation> & { patientId: number; doctorId: number; clinicId: number; queueTokenId?: number; }): Promise<Consultation> {
-    const res = await fetch(`${API_BASE_URL}/consultations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      // try to read response body for a helpful message
-      let msg = `Failed to create consultation (${res.status})`;
-      try {
-        const text = await res.text();
-        if (text) {
-          try {
-            const json = JSON.parse(text);
-            msg = json.message || json.error || JSON.stringify(json);
-          } catch {
-            msg = text;
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-      throw new Error(msg);
-    }
-    return (await res.json()) as Consultation;
+  async remove(id: number): Promise<void> {
+    await apiFetch(`/consultations/${id}`, { method: 'DELETE' });
+  },
+  async removeMany(ids: number[]): Promise<void> {
+    await apiFetch('/consultations/bulk-delete', { method: 'POST', body: ids });
   },
 };

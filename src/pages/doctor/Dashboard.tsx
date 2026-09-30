@@ -24,8 +24,8 @@ export function Dashboard() {
     icon: CalendarIcon,
     color: '#38A3A5'
   }, {
-    label: 'Prescriptions',
-    value: loading ? '...' : (stats?.totalConsultations?.toString() || '0'),
+    label: 'Total Consultations',
+    value: loading ? '...' : (stats?.totalConsultations?.toLocaleString() || '0'),
     icon: FileTextIcon,
     color: '#38A3A5'
   }];

@@ -29,6 +29,7 @@ export function LabTests() {
   const [editingResult, setEditingResult] = useState<any>(null);
   const [patientByConsultation, setPatientByConsultation] = useState<Record<number, { patientId: number; name: string }>>({});
   const [resultExistsByLabTest, setResultExistsByLabTest] = useState<Record<number, boolean>>({});
+  const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
 
   useEffect(() => {
     loadLabTests();
@@ -36,13 +37,14 @@ export function LabTests() {
 
   useEffect(() => {
     filterTests();
-  }, [searchTerm, statusFilter, labTests, patientByConsultation, resultExistsByLabTest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, statusFilter, labTests, patientByConsultation, resultExistsByLabTest, assignedToMeOnly]);
 
   const loadLabTests = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await labTestAPI.list();
+      const { items: data } = await labTestAPI.list({ size: 1000 });
       setLabTests(data);
       await Promise.all([
         hydratePatientDetails(data),
@@ -133,6 +135,10 @@ export function LabTests() {
   const filterTests = () => {
     let filtered = labTests;
 
+    if (assignedToMeOnly && profile?.id) {
+      filtered = filtered.filter(test => test.assignedTechnicianId === profile.id);
+    }
+
     if (statusFilter !== 'ALL') {
       filtered = filtered.filter(test => getDisplayStatus(test) === statusFilter);
     }
@@ -197,85 +203,30 @@ export function LabTests() {
     }
   };
 
-  const handleTakeTest = (test: LabTest) => {
-    // Open the submit modal but do NOT update the backend status yet.
-    // The test should remain visible as PENDING until a result is submitted.
-    setTestToSubmit(test);
-    setShowSubmitModal(true);
+  const handleTakeTest = async (test: LabTest) => {
+    if (!profile?.id) {
+      setError('Your technician profile has not loaded yet — please try again in a moment.');
+      return;
+    }
+    try {
+      // Assign this technician, then move PENDING -> IN_PROGRESS. (A test
+      // that was previously COMPLETED and is being retaken can also be
+      // restarted this way, since /start allows COMPLETED -> IN_PROGRESS too.)
+      await labTestAPI.assign(test.id, profile.id);
+      const started = await labTestAPI.start(test.id);
+      setLabTests(prev => prev.map(t => (t.id === test.id ? started : t)));
+      setTestToSubmit(started);
+      setShowSubmitModal(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start test');
+    }
   };
 
-  const handleSubmitSuccess = async () => {
-    // Save reference before clearing modal state
-    const submittedTest = testToSubmit;
-
-    // Close the modal first so UI updates immediately
+  const handleSubmitSuccess = () => {
+    // The medical-records service marks the lab test COMPLETED itself once
+    // a result is attached, so there's nothing further to update here.
     setShowSubmitModal(false);
     setTestToSubmit(null);
-    if (submittedTest) {
-      // Optimistic UI: result was created/exists, so treat as completed in this screen.
-      setResultExistsByLabTest(prev => ({ ...prev, [submittedTest.id]: true }));
-    }
-
-    // After a test result is submitted, mark the lab test as COMPLETED
-    try {
-      if (submittedTest) {
-        try {
-          await labTestAPI.updateStatus(submittedTest.id, {
-            status: 'COMPLETED',
-            assignedTechnicianId: profile?.id,
-          });
-        } catch {
-          // Fallback for backends that don't expose /technician-update.
-          await labTestAPI.update(submittedTest.id, {
-            status: 'COMPLETED',
-            assignedTechnicianId: profile?.id,
-          });
-        }
-      }
-    } catch (err: any) {
-      // If backend returns 409 (conflict) the status may already be set server-side.
-      const msg = err?.message || '';
-      if (msg.includes('(409)') || msg.includes('409')) {
-        console.warn('Lab test status update returned 409 (conflict), retrying with step transition', msg);
-        try {
-          if (submittedTest) {
-            const latest = await labTestAPI.get(submittedTest.id);
-            if (latest.status === 'PENDING') {
-              try {
-                await labTestAPI.updateStatus(submittedTest.id, {
-                  status: 'IN_PROGRESS',
-                  assignedTechnicianId: profile?.id,
-                });
-              } catch {
-                await labTestAPI.update(submittedTest.id, {
-                  status: 'IN_PROGRESS',
-                  assignedTechnicianId: profile?.id,
-                });
-              }
-            }
-            try {
-              await labTestAPI.updateStatus(submittedTest.id, {
-                status: 'COMPLETED',
-                assignedTechnicianId: profile?.id,
-              });
-            } catch {
-              await labTestAPI.update(submittedTest.id, {
-                status: 'COMPLETED',
-                assignedTechnicianId: profile?.id,
-              });
-            }
-          }
-        } catch (retryErr) {
-          setError('Result submitted, but status transition failed due to backend conflict');
-          console.error(retryErr);
-        }
-      } else {
-        setError('Failed to update test status to COMPLETED');
-        console.error(err);
-      }
-    }
-
-    // Reload the list to reflect the new status
     loadLabTests();
   };
 
@@ -351,15 +302,26 @@ export function LabTests() {
 
           {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by test name, patient, ID, or consultation ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by test name, patient, ID, or consultation ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                />
+              </div>
+              <label className="flex items-center gap-2 px-3 text-sm text-gray-700 whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={assignedToMeOnly}
+                  onChange={(e) => setAssignedToMeOnly(e.target.checked)}
+                  className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                />
+                Assigned to me
+              </label>
             </div>
           </div>
 

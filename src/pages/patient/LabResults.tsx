@@ -4,25 +4,32 @@ import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { FlaskConicalIcon, DownloadIcon, EyeIcon, FileText, Calendar } from 'lucide-react';
 import { medicalRecordsAPI, TestResult } from '../../services/medicalRecordsService';
+import { useAuth } from '../../hooks/useAuth';
+
+const PAGE_SIZE = 10;
 
 export function LabResults() {
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedResult, setSelectedResult] = useState<TestResult | null>(null);
 
   useEffect(() => {
-    loadTestResults();
-  }, []);
+    if (user?.id) loadTestResults(user.id, page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, page]);
 
-  const loadTestResults = async () => {
+  const loadTestResults = async (patientId: number, pageNumber: number) => {
     setLoading(true);
     setError('');
     try {
-      const patientId = 5;
-      const data = await medicalRecordsAPI.getByPatientId(patientId);
-      setTestResults(data);
+      const { items, total } = await medicalRecordsAPI.getByPatientIdPaged(patientId, { page: pageNumber, size: PAGE_SIZE });
+      setTestResults(items);
+      setTotalResults(total);
     } catch (err) {
       setError('Failed to load test results');
       console.error(err);
@@ -30,6 +37,8 @@ export function LabResults() {
       setLoading(false);
     }
   };
+
+  const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
   const handleDownload = async (result: TestResult) => {
     if (!result.fileName) {
@@ -172,6 +181,31 @@ export function LabResults() {
                   </tbody>
                 </table>
               </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <span className="text-sm text-gray-600">
+                    Page <span className="font-medium text-gray-900">{page + 1}</span> of{' '}
+                    <span className="font-medium text-gray-900">{totalPages}</span> ({totalResults} results)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                      disabled={page >= totalPages - 1}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

@@ -1,111 +1,68 @@
-// Lab Test Service API client
+// Lab Test Service API - routed through the API Gateway (see httpClient.ts)
+import { apiFetch, toQueryString } from './httpClient';
+import { unwrapList, type Page } from '../types/api';
 import { LabTest, CreateLabTestRequest, UpdateLabTestRequest } from '../types/labTest';
 
-const isDevelopment = import.meta.env.DEV;
-const envBase = (import.meta.env as any).VITE_API_BASE_URL;
-const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : (isDevelopment ? '' : 'http://localhost:8086');
-
 export const labTestAPI = {
-  /**
-   * Get all lab tests (with optional filters)
-   */
-  async list(params: Record<string, any> = {}): Promise<LabTest[]> {
-    const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) qs.append(k, String(v));
-    });
-    const res = await fetch(`${API_BASE_URL}/lab-tests${qs.toString() ? `?${qs.toString()}` : ''}`);
-    if (!res.ok) throw new Error(`Failed to list lab tests (${res.status})`);
-    const body = await res.json();
-    if (body && Array.isArray(body.content)) return body.content as LabTest[];
-    if (Array.isArray(body)) return body as LabTest[];
-    return [];
+  async list(params: Record<string, unknown> = {}): Promise<{ items: LabTest[]; total: number }> {
+    const body = await apiFetch<Page<LabTest> | LabTest[]>(`/lab-tests${toQueryString(params)}`);
+    return unwrapList<LabTest>(body);
   },
 
-  /**
-   * Get lab tests for a specific consultation
-   */
   async getByConsultation(consultationId: number): Promise<LabTest[]> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/consultation/${consultationId}`);
-    if (!res.ok) throw new Error(`Failed to get lab tests for consultation ${consultationId} (${res.status})`);
-    const body = await res.json();
-    if (Array.isArray(body)) return body as LabTest[];
-    return [];
+    const body = await apiFetch<LabTest[]>(`/lab-tests/consultation/${consultationId}`);
+    return Array.isArray(body) ? body : [];
   },
 
-  /**
-   * Get a single lab test by ID
-   */
   async get(id: number): Promise<LabTest> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/${id}`);
-    if (!res.ok) throw new Error(`Failed to get lab test ${id} (${res.status})`);
-    return (await res.json()) as LabTest;
+    return apiFetch<LabTest>(`/lab-tests/${id}`);
   },
 
-  /**
-   * Create a new lab test request
-   */
   async create(data: CreateLabTestRequest): Promise<LabTest> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Failed to create lab test (${res.status})`);
-    return (await res.json()) as LabTest;
+    return apiFetch<LabTest>('/lab-tests', { method: 'POST', body: data });
   },
 
-  /**
-   * Update a lab test (typically used by technicians to add results)
-   */
   async update(id: number, data: UpdateLabTestRequest): Promise<LabTest> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Failed to update lab test ${id} (${res.status})`);
-    return (await res.json()) as LabTest;
+    return apiFetch<LabTest>(`/lab-tests/${id}`, { method: 'PUT', body: data });
   },
 
-  /**
-   * Delete a lab test
-   */
   async delete(id: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/${id}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error(`Failed to delete lab test ${id} (${res.status})`);
+    await apiFetch(`/lab-tests/${id}`, { method: 'DELETE' });
   },
 
-  /**
-   * Get lab tests assigned to a specific technician
-   */
+  /** Lab tests assigned to a given technician — there's no dedicated backend
+   *  path for this, so it's a filtered list() call. */
   async getByTechnician(technicianId: number): Promise<LabTest[]> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/technician/${technicianId}`);
-    if (!res.ok) throw new Error(`Failed to get lab tests for technician ${technicianId} (${res.status})`);
-    const body = await res.json();
-    if (Array.isArray(body)) return body as LabTest[];
-    return [];
+    const { items } = await this.list({ technicianId });
+    return items;
   },
 
-  /**
-   * Get pending lab tests (status = PENDING)
-   */
   async getPending(): Promise<LabTest[]> {
-    return this.list({ status: 'PENDING' });
+    const { items } = await this.list({ status: 'PENDING' });
+    return items;
   },
 
-  /**
-   * Update lab test status
-   */
+  /** Assigns a technician to a test (does not change status). */
+  async assign(id: number, technicianId: number): Promise<LabTest> {
+    return apiFetch<LabTest>(`/lab-tests/${id}/assign${toQueryString({ technicianId })}`, { method: 'POST' });
+  },
+
+  /** Moves a PENDING (or previously COMPLETED) test to IN_PROGRESS. */
+  async start(id: number): Promise<LabTest> {
+    return apiFetch<LabTest>(`/lab-tests/${id}/start`, { method: 'POST' });
+  },
+
+  /** Marks an IN_PROGRESS test COMPLETED. Only reachable from IN_PROGRESS. */
+  async completeTest(id: number, data?: { testResults?: string; technicianNotes?: string }): Promise<LabTest> {
+    return apiFetch<LabTest>(`/lab-tests/${id}/complete`, { method: 'POST', body: data ?? null });
+  },
+
+  async cancelTest(id: number): Promise<LabTest> {
+    return apiFetch<LabTest>(`/lab-tests/${id}/cancel`, { method: 'POST' });
+  },
+
+  /** Combined status + notes update, used by the technician worklist. */
   async updateStatus(id: number, data: UpdateLabTestRequest): Promise<LabTest> {
-    const res = await fetch(`${API_BASE_URL}/lab-tests/${id}/technician-update`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Failed to update lab test status ${id} (${res.status})`);
-    return (await res.json()) as LabTest;
+    return apiFetch<LabTest>(`/lab-tests/${id}/technician-update`, { method: 'PUT', body: data });
   },
 };

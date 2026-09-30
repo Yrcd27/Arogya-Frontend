@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { profileAPI } from '../services/userService';
+import { ApiError } from '../services/httpClient';
 import { useAuth } from './useAuth';
 
 interface UserProfile {
@@ -30,6 +31,7 @@ export const useUserProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id || !user?.userRole?.roleName) {
@@ -40,10 +42,11 @@ export const useUserProfile = () => {
     try {
       setLoading(true);
       setError(null);
-      
+      setNotFound(false);
+
       let profileData;
       const roleName = user.userRole.roleName.toLowerCase();
-      
+
       switch (roleName) {
         case 'doctor':
           profileData = await profileAPI.getDoctor(user.id);
@@ -52,13 +55,7 @@ export const useUserProfile = () => {
           profileData = await profileAPI.getPatient(user.id);
           break;
         case 'admin':
-          try {
-            profileData = await profileAPI.getAdmin(user.id);
-          } catch (adminError) {
-            // Admin profile might not exist in the database yet
-            console.warn('Admin profile not found, using basic user data');
-            profileData = null;
-          }
+          profileData = await profileAPI.getAdmin(user.id);
           break;
         case 'technician':
           profileData = await profileAPI.getTechnician(user.id);
@@ -66,11 +63,16 @@ export const useUserProfile = () => {
         default:
           throw new Error('Unknown user role');
       }
-      
+
       setProfile(profileData);
     } catch (err) {
-      console.error('Failed to fetch user profile:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch profile');
+      if (err instanceof ApiError && err.status === 404) {
+        // Expected for a user who hasn't completed their profile yet.
+        setNotFound(true);
+      } else {
+        console.error('Failed to fetch user profile:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch profile');
+      }
       setProfile(null);
     } finally {
       setLoading(false);
@@ -107,6 +109,7 @@ export const useUserProfile = () => {
     profile,
     loading,
     error,
+    notFound,
     refetchProfile: fetchProfile,
     getUserDisplayName,
     getUserInitials,
