@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
@@ -6,24 +6,28 @@ import { Header } from '../../components/doctor/Header';
 import { consultationAPI } from '../../services/consultationService';
 import { labTestAPI } from '../../services/labTestService';
 import { queueAPI } from '../../services/queueService';
+import { ApiError } from '../../services/httpClient';
 import { LabTestFormData } from '../../types/labTest';
-import { getCurrentUser } from '../../utils/auth';
+import { useAuth } from '../../hooks/useAuth';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
 
 export function CreateConsultation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: currentUser } = useAuth();
   const { token, patientName, clinicId } = location.state || {};
   
-  const currentUser = getCurrentUser();
   const [chief, setChief] = useState<string>('');
   const [present, setPresent] = useState<string>('');
   const [past, setPast] = useState<string>('');
   const [recom, setRecom] = useState<string>('');
   const [sessionNumber, setSessionNumber] = useState<number>(1);
   const [saving, setSaving] = useState(false);
+  const [partiallySaved, setPartiallySaved] = useState(false);
   const [formErrors, setFormErrors] = useState<{ diagnosis?: string; notes?: string }>({});
+  const savingRef = useRef(false);
+  const createdConsultationIdRef = useRef<number | null>(null);
 
   // Lab test states
   const [requestLabTests, setRequestLabTests] = useState(false);
@@ -51,8 +55,8 @@ export function CreateConsultation() {
 
   const save = async () => {
     if (!token) return;
-    
-    // Validate form
+    if (savingRef.current) return;
+
     const errors: { diagnosis?: string; notes?: string } = {};
     if (!chief.trim()) {
       errors.diagnosis = 'Diagnosis is required';
@@ -60,34 +64,44 @@ export function CreateConsultation() {
     if (!recom.trim()) {
       errors.notes = 'Notes are required';
     }
-    
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
-    
+
+    savingRef.current = true;
     setSaving(true);
     try {
-      // New consultations always start SCHEDULED on the backend — there's no
-      // `status` field on create. Walk it through the real transitions
-      // (SCHEDULED -> IN_PROGRESS -> COMPLETED) since this form represents a
-      // consultation that already happened.
-      const consultation = await consultationAPI.create({
-        patientId: Number(token.patientId),
-        doctorId: Number(currentUser?.id || 0),
-        clinicId: Number(clinicId || token.clinicId || 0),
-        queueTokenId: token.id,
-        chiefComplaint: chief,
-        presentIllness: present,
-        pastMedicalHistory: past,
-        recommendations: recom,
-        sessionNumber: sessionNumber || 1,
-        bookedAt: new Date().toISOString(),
-      });
-      await consultationAPI.update(consultation.id, { status: 'IN_PROGRESS' });
-      await consultationAPI.complete(consultation.id);
+      let consultationId = createdConsultationIdRef.current;
+      if (consultationId === null) {
+        const consultation = await consultationAPI.create({
+          patientId: Number(token.patientId),
+          doctorId: Number(currentUser?.id || 0),
+          clinicId: Number(clinicId || token.clinicId || 0),
+          queueTokenId: token.id,
+          chiefComplaint: chief,
+          presentIllness: present,
+          pastMedicalHistory: past,
+          recommendations: recom,
+          sessionNumber: sessionNumber || 1,
+          bookedAt: new Date().toISOString(),
+        });
+        consultationId = consultation.id;
+        createdConsultationIdRef.current = consultationId;
+      }
 
-      // Mark the queue token as served now that the consultation is recorded
+      try {
+        await consultationAPI.update(consultationId, { status: 'IN_PROGRESS' });
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 409)) throw err;
+      }
+      try {
+        await consultationAPI.complete(consultationId);
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 409)) throw err;
+      }
+
       try {
         await queueAPI.updateStatus(token.id, 'COMPLETED');
       } catch (queueError) {
@@ -95,14 +109,13 @@ export function CreateConsultation() {
         toast.warn('Consultation saved, but the queue token could not be marked as served.');
       }
 
-      // If lab tests are requested, create them — don't block on failure.
       if (requestLabTests && labTests.length > 0) {
         try {
           const labTestPromises = labTests
             .filter(test => test.testName.trim())
             .map(test =>
               labTestAPI.create({
-                consultationId: consultation.id,
+                consultationId: consultationId as number,
                 testName: test.testName,
                 testDescription: test.testDescription || undefined,
                 testInstructions: test.testInstructions || undefined,
@@ -117,10 +130,16 @@ export function CreateConsultation() {
       }
 
       toast.success('Consultation saved');
-      navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId: consultation.id } });
+      navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId } });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create consultation');
+      if (createdConsultationIdRef.current !== null) {
+        setPartiallySaved(true);
+        toast.error('The consultation record was created but could not be finalized. Click Save Consultation again to retry finishing it.');
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to create consultation');
+      }
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -151,7 +170,7 @@ export function CreateConsultation() {
       {/* Create Consultation modal */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        onClick={cancel}
+        onClick={saving ? undefined : cancel}
       >
         <div
           className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
@@ -186,6 +205,11 @@ export function CreateConsultation() {
 
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {partiallySaved && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                The consultation record was saved but not finalized. Click Save Consultation again to finish.
+              </div>
+            )}
             {/* Clinical Assessment */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50/60">

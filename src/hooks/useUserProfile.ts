@@ -1,87 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { profileAPI } from '../services/userService';
-import { ApiError } from '../services/httpClient';
+import { useContext } from 'react';
+import { UserProfileContext } from '../context/UserProfileContextType';
 import { useAuth } from './useAuth';
-
-interface UserProfile {
-  id: number;
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-  dateOfBirth: string;
-  nicNumber: string;
-  // Role-specific fields
-  specialization?: string;
-  licenseNumber?: string;
-  qualification?: string;
-  experienceYears?: number;
-  technicianField?: string;
-  certification?: string;
-  assignedEquipment?: string;
-  address?: string;
-  gender?: string;
-  bloodGroup?: string;
-  allergies?: string;
-  chronicDiseases?: string;
-  emergencyContact?: string;
-}
 
 export const useUserProfile = () => {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  const fetchProfile = useCallback(async () => {
-    if (!user?.id || !user?.userRole?.roleName) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setNotFound(false);
-
-      let profileData;
-      const roleName = user.userRole.roleName.toLowerCase();
-
-      switch (roleName) {
-        case 'doctor':
-          profileData = await profileAPI.getDoctor(user.id);
-          break;
-        case 'patient':
-          profileData = await profileAPI.getPatient(user.id);
-          break;
-        case 'admin':
-          profileData = await profileAPI.getAdmin(user.id);
-          break;
-        case 'technician':
-          profileData = await profileAPI.getTechnician(user.id);
-          break;
-        default:
-          throw new Error('Unknown user role');
-      }
-
-      setProfile(profileData);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        // Expected for a user who hasn't completed their profile yet.
-        setNotFound(true);
-      } else {
-        console.error('Failed to fetch user profile:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch profile');
-      }
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, user?.userRole?.roleName]);
-
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+  const context = useContext(UserProfileContext);
+  if (!context) throw new Error('useUserProfile must be used within UserProfileProvider');
+  const { profile, status, error, refreshProfile, replaceProfile } = context;
 
   const getUserDisplayName = () => {
     if (profile) {
@@ -107,10 +32,12 @@ export const useUserProfile = () => {
 
   return {
     profile,
-    loading,
+    loading: status === 'loading',
     error,
-    notFound,
-    refetchProfile: fetchProfile,
+    notFound: status === 'not-found',
+    status,
+    refetchProfile: refreshProfile,
+    replaceProfile,
     getUserDisplayName,
     getUserInitials,
   };

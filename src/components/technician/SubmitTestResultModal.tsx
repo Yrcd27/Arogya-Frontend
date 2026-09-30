@@ -3,6 +3,7 @@ import { X, Upload, FileText } from 'lucide-react';
 import { medicalRecordsAPI } from '../../services/medicalRecordsService';
 import { consultationAPI } from '../../services/consultationService';
 import { LabTest } from '../../types/labTest';
+import { ApiError } from '../../services/httpClient';
 
 interface SubmitTestResultModalProps {
   labTest: LabTest;
@@ -23,10 +24,12 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
     if (selectedFile) {
       const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
       if (!validTypes.includes(selectedFile.type)) {
+        setFile(null);
         setError('Invalid file type. Only PDF, DOC, DOCX, JPG, PNG allowed');
         return;
       }
       if (selectedFile.size > 10 * 1024 * 1024) {
+        setFile(null);
         setError('File size must be less than 10MB');
         return;
       }
@@ -37,6 +40,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!testResultDescription.trim()) {
       setError('Test result description is required');
       return;
@@ -46,28 +50,21 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
     setError('');
 
     try {
-      // If a result already exists for this test, avoid duplicate create and trigger status refresh.
       try {
         const existing = await medicalRecordsAPI.getByLabTestId(labTest.id);
         if (existing?.id) {
-          onSuccess();
-          return;
+          throw new Error('A result already exists for this lab test. Refresh the worklist before editing it.');
         }
-      } catch (existingErr: any) {
-        // 404 means no existing result yet; continue with create.
-        const msg = existingErr?.message || '';
-        if (!msg.includes('(404)') && !msg.toLowerCase().includes('not found')) {
-          console.warn('Failed to pre-check existing test result; continuing with create', existingErr);
-        }
+      } catch (existingErr) {
+        if (!(existingErr instanceof ApiError && existingErr.status === 404)) throw existingErr;
       }
 
-      // Resolve the patient ID from consultation; do not submit with a guessed fallback.
       let patientId: number | undefined;
       try {
         const consultation = await consultationAPI.get(labTest.consultationId);
         patientId = consultation.patientId;
-      } catch (cErr) {
-        console.warn('Could not resolve consultation -> patientId', cErr);
+      } catch {
+        patientId = undefined;
       }
 
       if (!patientId) {
@@ -83,26 +80,19 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
         file: file || undefined
       });
       onSuccess();
-    } catch (err: any) {
-      const msg = err?.message || '';
-      if (msg.toLowerCase().includes('already exists')) {
-        // Another request or previous attempt already created it; refresh parent state to mark completed.
-        onSuccess();
-        return;
-      }
-      console.error('Failed to submit test result:', err);
-      setError(msg || 'Failed to submit test result');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit test result');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={loading ? undefined : onClose}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-900">Submit Test Result</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button onClick={onClose} disabled={loading} className="text-gray-500 hover:text-gray-700 disabled:opacity-40">
             <X className="w-6 h-6" />
           </button>
         </div>

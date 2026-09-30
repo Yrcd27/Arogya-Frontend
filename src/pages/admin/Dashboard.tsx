@@ -1,35 +1,37 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, UserCheckIcon } from 'lucide-react';
+import { UsersIcon, CalendarIcon, UserCheckIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { stats, loading } = useDashboardData();
+  const { stats, failedFields, loading, error } = useDashboardData();
+
+  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const dashboardStats = [
     {
       label: 'Total Patients',
-      value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
+      value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
       icon: UsersIcon,
       color: '#38A3A5'
     },
     {
       label: 'Total Clinics',
-      value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
+      value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
       icon: CalendarIcon,
       color: '#38A3A5'
     },
     {
       label: 'Total Doctors',
-      value: loading ? '...' : (stats?.totalDoctors?.toString() || '0'),
+      value: loading ? '...' : fmt(stats.totalDoctors, failedFields.totalDoctors),
       icon: UserCheckIcon,
       color: '#38A3A5'
     },
     {
       label: 'Scheduled Clinics',
-      value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
+      value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
       icon: CalendarIcon,
       color: '#38A3A5'
     }
@@ -52,6 +54,12 @@ export function Dashboard() {
               </h1>
             </div>
           </div>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             {dashboardStats.map(stat => (
               <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">

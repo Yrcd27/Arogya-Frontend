@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
@@ -17,10 +17,10 @@ export function LabResults() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedResult, setSelectedResult] = useState<TestResult | null>(null);
+  const loadTestResultsRef = useRef<(patientId: number, pageNumber: number) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    if (user?.id) loadTestResults(user.id, page);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (user?.id) void loadTestResultsRef.current(user.id, page);
   }, [user?.id, page]);
 
   const loadTestResults = async (patientId: number, pageNumber: number) => {
@@ -37,6 +37,8 @@ export function LabResults() {
       setLoading(false);
     }
   };
+
+  loadTestResultsRef.current = loadTestResults;
 
   const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 

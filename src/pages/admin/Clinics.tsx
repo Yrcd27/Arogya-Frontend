@@ -26,6 +26,7 @@ export function Clinics() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [doctorLookupFailed, setDoctorLookupFailed] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -123,6 +124,10 @@ export function Clinics() {
   };
 
   const validateForm = () => {
+    if (isEditMode && doctorLookupFailed) {
+      setError('Could not confirm the currently assigned doctors — retry loading them before saving, or this would remove all doctor assignments.');
+      return false;
+    }
     const validationError = validateClinicForm(formData, selectedDoctors, isEditMode);
     if (validationError) {
       setError(validationError);
@@ -191,6 +196,29 @@ export function Clinics() {
     setError(null);
     setIsEditMode(false);
     setEditingClinic(null);
+    setDoctorLookupFailed(false);
+  };
+
+  const loadAssignedDoctorsForEdit = async (clinicId: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const assignedDoctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
+      const selectedDoctorsForEdit = (assignedDoctors || []).map(cd => ({
+        doctorId: cd.doctorRefId,
+        name: cd.doctorName,
+        specialization: cd.specialization,
+      }));
+      setSelectedDoctors(selectedDoctorsForEdit);
+      setDoctorLookupFailed(false);
+    } catch (error) {
+      console.error('Failed to load assigned doctors:', error);
+      setSelectedDoctors([]);
+      setDoctorLookupFailed(true);
+      setError('Could not load the doctors currently assigned to this clinic. Saving is disabled until this loads successfully, so existing assignments are never accidentally cleared.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = async (clinic: Clinic) => {
@@ -204,31 +232,11 @@ export function Clinics() {
       scheduledTime: clinic.scheduledTime.substring(0, 5), // Remove seconds
       status: clinic.status
     });
-    
+
     setIsEditMode(true);
     setIsModalOpen(true);
-    
-    // Load currently assigned doctors
-    setIsLoading(true);
-    try {
-      const assignedDoctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
-      if (assignedDoctors) {
-        const selectedDoctorsForEdit = assignedDoctors.map((cd: { doctorRefId: number; doctorName: string; specialization: string }) => ({
-          doctorId: cd.doctorRefId,
-          name: cd.doctorName,
-          specialization: cd.specialization
-        }));
-        setSelectedDoctors(selectedDoctorsForEdit);
-      } else {
-        setSelectedDoctors([]);
-      }
-    } catch (error) {
-      console.error('Failed to load assigned doctors:', error);
-      setSelectedDoctors([]);
-      setError('Warning: Could not load currently assigned doctors. You can still update the clinic and reassign doctors.');
-    } finally {
-      setIsLoading(false);
-    }
+
+    await loadAssignedDoctorsForEdit(clinic.id);
   };
 
   const handleDeleteConfirm = async () => {
@@ -534,7 +542,20 @@ export function Clinics() {
                       <p className="mt-2 text-sm text-gray-600">Loading assigned doctors...</p>
                     </div>
                   )}
-                    
+
+                  {isEditMode && !isLoading && doctorLookupFailed && (
+                    <div className="mb-3 flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <p className="text-sm text-red-700">Couldn't confirm current assignments.</p>
+                      <button
+                        type="button"
+                        onClick={() => editingClinic && loadAssignedDoctorsForEdit(editingClinic.id)}
+                        className="text-sm font-medium text-red-700 underline hover:text-red-800 flex-shrink-0"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
                   {/* Only show doctor selection when not loading */}
                   {!(isEditMode && isLoading) && (
                     <>
@@ -611,8 +632,9 @@ export function Clinics() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isLoading}
-                    className="flex-1 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+                    disabled={isLoading || (isEditMode && doctorLookupFailed)}
+                    title={isEditMode && doctorLookupFailed ? "Can't save until assigned doctors load successfully" : undefined}
+                    className="flex-1 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Saving...' : (isEditMode ? 'Update Clinic' : 'Schedule Clinic')}
                   </button>

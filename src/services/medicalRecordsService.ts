@@ -42,18 +42,10 @@ export const medicalRecordsAPI = {
     return apiFetch<TestResult>('/test-results', { method: 'POST', body: toFormData(data) });
   },
 
-  async getById(id: number): Promise<TestResult> {
-    return apiFetch<TestResult>(`/test-results/${id}`);
-  },
-
   /** Throws a 404 ApiError if no result has been submitted yet — callers
    *  treat that as "no result", it's expected, not an error state. */
   async getByLabTestId(labTestId: number): Promise<TestResult> {
     return apiFetch<TestResult>(`/test-results/lab-test/${labTestId}`);
-  },
-
-  async getByPatientId(patientId: number): Promise<TestResult[]> {
-    return apiFetch<TestResult[]>(`/test-results/patient/${patientId}`);
   },
 
   async getByPatientIdPaged(patientId: number, params: { page?: number; size?: number } = {}): Promise<{ items: TestResult[]; total: number }> {

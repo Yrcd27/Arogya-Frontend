@@ -1,35 +1,37 @@
 import { useState } from 'react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
-import { FlaskConicalIcon, ClipboardListIcon, UsersIcon, CalendarIcon } from 'lucide-react';
+import { FlaskConicalIcon, ClipboardListIcon, UsersIcon, CalendarIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { stats, loading } = useDashboardData();
+  const { stats, failedFields, loading, error } = useDashboardData();
+
+  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const techStats = [
     {
       label: 'Total Patients',
-      value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
+      value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
       icon: UsersIcon,
       color: '#38A3A5'
     },
     {
       label: 'Lab Tests',
-      value: loading ? '...' : (stats?.totalLabTests?.toLocaleString() || '0'),
+      value: loading ? '...' : fmt(stats.totalLabTests, failedFields.totalLabTests),
       icon: FlaskConicalIcon,
       color: '#38A3A5'
     },
     {
       label: 'Scheduled Clinics',
-      value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
+      value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
       icon: CalendarIcon,
       color: '#38A3A5'
     },
     {
       label: 'Reports Generated',
-      value: loading ? '...' : (stats?.totalTestResults?.toLocaleString() || '0'),
+      value: loading ? '...' : fmt(stats.totalTestResults, failedFields.totalTestResults),
       icon: ClipboardListIcon,
       color: '#38A3A5'
     }
@@ -50,6 +52,13 @@ export function Dashboard() {
               Technician Dashboard
             </h1>
           </div>
+
+          {error && (
+            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

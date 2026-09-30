@@ -2,7 +2,7 @@
 // Every page should import from here rather than from the individual
 // service files directly, so the barrel stays the single source of truth.
 
-export { userAPI, roleAPI, profileAPI, doctorAPI } from './userService';
+export { userAPI, profileAPI, doctorAPI } from './userService';
 export { clinicAPI, clinicDoctorAPI } from './clinicService';
 export { queueAPI } from './queueService';
 export { consultationAPI } from './consultationService';

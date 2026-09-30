@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
@@ -7,12 +7,43 @@ import { PatientProfileModal } from '../../components/doctor/PatientProfileModal
 import { SearchIcon, PhoneCallIcon, XIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useAuth } from '../../hooks/useAuth';
 import type { QueueTokenResponse } from '../../services/queueService';
+
+const servingTokenStorageKey = (doctorId: number, clinicId: number) => `doctorQueue:servingTokenId:${doctorId}:${clinicId}`;
+const legacyServingTokenStorageKey = (clinicId: number) => `doctorQueue:servingTokenId:${clinicId}`;
+
+const getStoredServingTokenId = (doctorId: number, clinicId: number): number | null => {
+  try {
+    sessionStorage.removeItem(legacyServingTokenStorageKey(clinicId));
+    const raw = sessionStorage.getItem(servingTokenStorageKey(doctorId, clinicId));
+    return raw ? Number(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const setStoredServingTokenId = (doctorId: number, clinicId: number, tokenId: number) => {
+  try {
+    sessionStorage.setItem(servingTokenStorageKey(doctorId, clinicId), String(tokenId));
+  } catch {
+    return;
+  }
+};
+
+const clearStoredServingTokenId = (doctorId: number, clinicId: number) => {
+  try {
+    sessionStorage.removeItem(servingTokenStorageKey(doctorId, clinicId));
+  } catch {
+    return;
+  }
+};
 
 export function Queue() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useUserProfile();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -31,6 +62,7 @@ export function Queue() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const loadQueueRef = useRef<(clinicId: number) => Promise<void>>(async () => undefined);
 
   // Only clinics this doctor is actually assigned to.
   useEffect(() => {
@@ -58,19 +90,44 @@ export function Queue() {
   // Restore the queue for the clinic in the URL once the clinic list is known.
   useEffect(() => {
     if (selectedClinicId && clinics.some(c => c.id === selectedClinicId)) {
-      loadQueue(selectedClinicId);
+      void loadQueueRef.current(selectedClinicId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClinicId, clinics]);
 
   useEffect(() => {
     if (location.state?.consultationCreated && servingToken) {
       setRecentlyDone(prev => [{ ...servingToken, status: 'COMPLETED' }, ...prev]);
       setServingToken(null);
+      if (selectedClinicId && user?.id) clearStoredServingTokenId(user.id, selectedClinicId);
       window.history.replaceState({}, document.title);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [location.state, selectedClinicId, servingToken, user?.id]);
+
+  useEffect(() => {
+    if (!selectedClinicId || !user?.id) {
+      setServingToken(null);
+      return;
+    }
+    const storedId = getStoredServingTokenId(user.id, selectedClinicId);
+    if (!storedId) {
+      setServingToken(null);
+      return;
+    }
+    (async () => {
+      try {
+        const existing = await queueAPI.getToken(storedId);
+        if (existing.status === 'SERVING') {
+          setServingToken(existing);
+        } else {
+          clearStoredServingTokenId(user.id, selectedClinicId);
+          setServingToken(null);
+        }
+      } catch {
+        clearStoredServingTokenId(user.id, selectedClinicId);
+        setServingToken(null);
+      }
+    })();
+  }, [selectedClinicId, user?.id]);
 
   const loadQueue = async (clinicId: number) => {
     try {
@@ -86,6 +143,8 @@ export function Queue() {
       setLoading(false);
     }
   };
+
+  loadQueueRef.current = loadQueue;
 
   const hydratePatientNames = async (tokens: QueueTokenResponse[]) => {
     const ids = Array.from(new Set(tokens.map(t => String(t.patientId)).filter(Boolean)));
@@ -115,7 +174,6 @@ export function Queue() {
 
   const selectClinic = (id: number | null) => {
     setQueueTokens([]);
-    setServingToken(null);
     setRecentlyDone([]);
     setSearchParams(id ? { clinicId: String(id) } : {});
   };
@@ -124,11 +182,13 @@ export function Queue() {
   // once a token moves to SERVING/CANCELLED it's tracked locally instead of
   // relying on a refetch to still include it.
   const callNext = async (token: QueueTokenResponse) => {
+    if (servingToken || actionLoadingId !== null || !selectedClinicId) return;
     setActionLoadingId(token.id);
     try {
       const updated = await queueAPI.updateStatus(token.id, 'SERVING');
       setQueueTokens(prev => prev.filter(t => t.id !== token.id));
       setServingToken(updated);
+      if (user?.id) setStoredServingTokenId(user.id, selectedClinicId, updated.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to call patient');
     } finally {
@@ -137,11 +197,15 @@ export function Queue() {
   };
 
   const cancelToken = async (token: QueueTokenResponse) => {
+    if (actionLoadingId !== null) return;
     setActionLoadingId(token.id);
     try {
       await queueAPI.updateStatus(token.id, 'CANCELLED');
       setQueueTokens(prev => prev.filter(t => t.id !== token.id));
-      if (servingToken?.id === token.id) setServingToken(null);
+      if (servingToken?.id === token.id) {
+        setServingToken(null);
+        if (selectedClinicId && user?.id) clearStoredServingTokenId(user.id, selectedClinicId);
+      }
       toast.success(`Token #${token.tokenNumber} cancelled`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to cancel token');

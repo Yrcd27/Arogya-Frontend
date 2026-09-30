@@ -1,21 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Download, Edit, Trash2, FileText } from 'lucide-react';
 import { LabTest } from '../../types/labTest';
-import { medicalRecordsAPI } from '../../services/medicalRecordsService';
-
-interface TestResult {
-  id: number;
-  labTestId: number;
-  patientId: number;
-  technicianId: number;
-  testResultDescription: string;
-  technicianNotes?: string;
-  fileName?: string;
-  fileType?: string;
-  fileSize?: number;
-  createdAt: string;
-  updatedAt: string;
-}
+import { ApiError } from '../../services/httpClient';
+import { medicalRecordsAPI, type TestResult } from '../../services/medicalRecordsService';
 
 interface TestResultDetailsModalProps {
   labTest: LabTest;
@@ -27,21 +14,27 @@ interface TestResultDetailsModalProps {
 export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: TestResultDetailsModalProps) {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadTestResult();
-  }, [labTest.id]);
-
-  const loadTestResult = async () => {
+  const loadTestResult = useCallback(async () => {
     try {
+      setLoading(true);
+      setError(null);
       const result = await medicalRecordsAPI.getByLabTestId(labTest.id);
       setTestResult(result);
     } catch (err) {
-      console.error('Failed to load test result:', err);
+      setTestResult(null);
+      if (!(err instanceof ApiError && err.status === 404)) {
+        setError(err instanceof Error ? err.message : 'Failed to load test result');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [labTest.id]);
+
+  useEffect(() => {
+    void loadTestResult();
+  }, [loadTestResult]);
 
   const handleDownload = async () => {
     if (!testResult?.id) return;
@@ -69,6 +62,8 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: T
 
         {loading ? (
           <div className="text-center py-8 text-gray-600">Loading...</div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-700">{error}</div>
         ) : testResult ? (
           <div className="space-y-4">
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">

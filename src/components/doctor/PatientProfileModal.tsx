@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, User, Mail, Phone, MapPin, Calendar, Activity } from 'lucide-react';
 import { profileAPI } from '../../services/api';
 import type { PatientProfile } from '../../types/user';
@@ -13,11 +13,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPatientProfile();
-  }, [patientId]);
-
-  const loadPatientProfile = async () => {
+  const loadPatientProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -29,7 +25,11 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     } finally {
       setLoading(false);
     }
-  };
+  }, [patientId]);
+
+  useEffect(() => {
+    void loadPatientProfile();
+  }, [loadPatientProfile]);
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();

@@ -3,7 +3,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
-import { getCurrentUser } from '../../utils/auth';
+import { useAuth } from '../../hooks/useAuth';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   formatDate, 
@@ -15,12 +15,14 @@ import {
 } from '../../utils/clinic';
 
 export function Clinics() {
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const [clinicDoctors, setClinicDoctors] = useState<ClinicDoctor[]>([]);
+  const [clinicDoctorsError, setClinicDoctorsError] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [queueTokens, setQueueTokens] = useState<import('../../services/queueService').QueueTokenResponse[]>([]);
   const [nameById, setNameById] = useState<Record<string, string>>({});
@@ -50,7 +52,6 @@ export function Clinics() {
   useEffect(() => {
     (async () => {
       try {
-        const user = getCurrentUser();
         if (!user) return;
         const profile = await profileAPI.getPatient(user.id);
         // Always use user.id as patientId (backend validates against user ID)
@@ -58,13 +59,12 @@ export function Clinics() {
         const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
         if (name) setPatientName(name);
       } catch (e) {
-        const user = getCurrentUser();
         setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
         // Fallback: still enable queue actions using the user's id
         if (user?.id) setPatientId(String(user.id));
       }
     })();
-  }, []);
+  }, [user]);
 
   const loadClinics = async () => {
     try {
@@ -87,9 +87,11 @@ export function Clinics() {
     try {
       const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
       setClinicDoctors(doctors || []);
+      setClinicDoctorsError(false);
     } catch (error) {
       console.error('Failed to load clinic doctors:', error);
       setClinicDoctors([]);
+      setClinicDoctorsError(true);
     }
   };
 
@@ -488,6 +490,8 @@ export function Clinics() {
                         </div>
                       ))}
                     </div>
+                  ) : clinicDoctorsError ? (
+                    <p className="text-red-500 italic">Couldn't load doctor information for this clinic. Please try again.</p>
                   ) : (
                     <p className="text-gray-500 italic">No doctors assigned to this clinic yet.</p>
                   )}

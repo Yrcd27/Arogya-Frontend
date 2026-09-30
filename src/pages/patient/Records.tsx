@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
-import { getCurrentUser } from '../../utils/auth';
+import { useAuth } from '../../hooks/useAuth';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -13,6 +13,7 @@ interface MedicalRecord extends Consultation {
 }
 
 export function Records() {
+  const { user: currentUser } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
@@ -20,11 +21,11 @@ export function Records() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [loadError, setLoadError] = useState('');
-  const currentUser = getCurrentUser();
+  const loadRecordsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    loadRecords();
-  }, []);
+    void loadRecordsRef.current();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -48,7 +49,15 @@ export function Records() {
     try {
       setLoading(true);
       setLoadError('');
-      const { items: consultations } = await consultationAPI.list({ patientId: currentUser.id, size: 1000 });
+      const pageSize = 200;
+      let page = 0;
+      let consultations: Consultation[] = [];
+      for (;;) {
+        const { items, total } = await consultationAPI.list({ patientId: currentUser.id, page, size: pageSize });
+        consultations = consultations.concat(items);
+        if (items.length === 0 || consultations.length >= total) break;
+        page += 1;
+      }
 
       // Look up each unique doctor/clinic only once, instead of once per row.
       // Caching the in-flight promise (not just the resolved value) avoids a
@@ -108,6 +117,8 @@ export function Records() {
       setLoading(false);
     }
   };
+
+  loadRecordsRef.current = loadRecords;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';

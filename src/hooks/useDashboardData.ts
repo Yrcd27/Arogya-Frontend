@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { profileAPI } from '../services/userService';
 import { clinicAPI } from '../services/clinicService';
 import { consultationAPI } from '../services/consultationService';
@@ -31,12 +31,27 @@ const EMPTY_STATS: DashboardStats = {
   totalTestResults: 0,
 };
 
-export const useDashboardData = () => {
+const EMPTY_FAILED: Record<keyof DashboardStats, boolean> = {
+  totalPatients: false,
+  totalDoctors: false,
+  totalAdmins: false,
+  totalTechnicians: false,
+  totalClinics: false,
+  scheduledClinics: false,
+  completedClinics: false,
+  totalConsultations: false,
+  totalLabTests: false,
+  totalTestResults: false,
+};
+
+export const useDashboardData = (options: { doctorId?: number } = {}) => {
+  const { doctorId } = options;
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [failedFields, setFailedFields] = useState<Record<keyof DashboardStats, boolean>>(EMPTY_FAILED);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -51,7 +66,7 @@ export const useDashboardData = () => {
         withTimeout(profileAPI.getAllAdmins()),
         withTimeout(profileAPI.getAllTechnicians()),
         withTimeout(clinicAPI.getAllClinics()),
-        withTimeout(consultationAPI.list({ size: 1 })),
+        withTimeout(consultationAPI.list(doctorId ? { doctorId, size: 1 } : { size: 1 })),
         withTimeout(labTestAPI.list({ size: 1 })),
         withTimeout(medicalRecordsAPI.list({ size: 1 })),
       ]);
@@ -70,6 +85,23 @@ export const useDashboardData = () => {
         totalLabTests: labTests.status === 'fulfilled' ? labTests.value.total : 0,
         totalTestResults: testResults.status === 'fulfilled' ? testResults.value.total : 0,
       });
+
+      const failed: Record<keyof DashboardStats, boolean> = {
+        totalPatients: patients.status === 'rejected',
+        totalDoctors: doctors.status === 'rejected',
+        totalAdmins: admins.status === 'rejected',
+        totalTechnicians: technicians.status === 'rejected',
+        totalClinics: clinics.status === 'rejected',
+        scheduledClinics: clinics.status === 'rejected',
+        completedClinics: clinics.status === 'rejected',
+        totalConsultations: consultations.status === 'rejected',
+        totalLabTests: labTests.status === 'rejected',
+        totalTestResults: testResults.status === 'rejected',
+      };
+      setFailedFields(failed);
+      if (Object.values(failed).some(Boolean)) {
+        setError('Some dashboard figures could not be loaded and are shown as unavailable.');
+      }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data');
@@ -77,14 +109,15 @@ export const useDashboardData = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [doctorId]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   return {
     stats,
+    failedFields,
     loading,
     error,
     refetch: fetchDashboardData,

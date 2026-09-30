@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 import { Header } from '../../components/admin/Header';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { profileAPI } from '../../services/api';
-import { ApiError } from '../../services/httpClient';
+import { useAuth } from '../../hooks/useAuth';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import type { AdminProfile as StoredAdminProfile, CreateAdminProfileInput } from '../../types/user';
 
 interface AdminProfile {
   id?: number;
@@ -18,6 +20,8 @@ interface AdminProfile {
 }
 
 const Profile: React.FC = () => {
+  const { user } = useAuth();
+  const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profile, setProfile] = useState<AdminProfile>({
     firstName: '',
@@ -29,45 +33,23 @@ const Profile: React.FC = () => {
       id: 0
     }
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isNewProfile, setIsNewProfile] = useState(false);
+  const loading = profileStatus === 'loading';
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const userData = JSON.parse(localStorage.getItem('user') || '{}');
-        if (userData.id) {
-          setProfile(prev => ({ ...prev, user: { id: userData.id } }));
-
-          try {
-            const response = await profileAPI.getAdmin(userData.id);
-            setProfile(response as unknown as AdminProfile);
-          } catch (error: unknown) {
-            if (error instanceof ApiError && error.status === 404) {
-              // Profile doesn't exist yet
-              setIsNewProfile(true);
-              setProfile(prev => ({
-                ...prev,
-                user: { id: userData.id }
-              }));
-            } else {
-              throw error;
-            }
-          }
-        }
-      } catch (error: unknown) {
-        console.error('Error fetching profile:', error);
-        setError('Failed to load profile information');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, []);
+    if (currentProfile) {
+      setProfile(currentProfile as StoredAdminProfile);
+      setIsNewProfile(false);
+    } else if (profileStatus === 'not-found' && user?.id) {
+      setProfile(prev => ({ ...prev, user: { id: user.id } }));
+      setIsNewProfile(true);
+    } else if (profileStatus === 'error') {
+      setError(profileError || 'Failed to load profile information');
+    }
+  }, [currentProfile, profileError, profileStatus, user?.id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -77,35 +59,44 @@ const Profile: React.FC = () => {
     }));
   };
 
+  const savingRef = useRef(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
 
-    const requestBody: Record<string, unknown> = {
-      ...(isNewProfile ? {} : { id: profile.id }),
+    const requestBody: CreateAdminProfileInput = {
       firstName: profile.firstName,
       lastName: profile.lastName,
       dateOfBirth: profile.dateOfBirth,
       phoneNumber: profile.phoneNumber,
       nicNumber: profile.nicNumber,
-      user: { id: profile.user.id },
+      user: { id: user?.id || profile.user.id },
     };
 
     try {
       if (isNewProfile) {
-        await profileAPI.createAdmin(requestBody);
+        const created = await profileAPI.createAdmin(requestBody);
+        setProfile(prev => ({ ...prev, id: created.id }));
+        replaceProfile(created);
         setSuccess('Profile created successfully!');
         setIsNewProfile(false);
       } else {
-        await profileAPI.updateAdmin(requestBody);
+        if (!profile.id) throw new Error('Profile ID is missing. Please refresh and try again.');
+        const updated = await profileAPI.updateAdmin({ ...requestBody, id: profile.id });
+        setProfile(prev => ({ ...prev, id: updated.id }));
+        replaceProfile(updated);
         setSuccess('Profile updated successfully!');
       }
     } catch (error: unknown) {
       console.error('Error saving profile:', error);
       setError(error instanceof Error ? error.message : 'Failed to save profile');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

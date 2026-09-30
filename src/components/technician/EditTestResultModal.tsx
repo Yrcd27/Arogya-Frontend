@@ -1,16 +1,6 @@
 import { useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
-import { medicalRecordsAPI } from '../../services/medicalRecordsService';
-
-interface TestResult {
-  id: number;
-  labTestId: number;
-  patientId: number;
-  technicianId: number;
-  testResultDescription: string;
-  technicianNotes?: string;
-  fileName?: string;
-}
+import { medicalRecordsAPI, type TestResult } from '../../services/medicalRecordsService';
 
 interface EditTestResultModalProps {
   testResult: TestResult;
@@ -30,10 +20,12 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
     if (selectedFile) {
       const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
       if (!validTypes.includes(selectedFile.type)) {
+        setFile(null);
         setError('Invalid file type. Only PDF, DOC, DOCX, JPG, PNG allowed');
         return;
       }
       if (selectedFile.size > 10 * 1024 * 1024) {
+        setFile(null);
         setError('File size must be less than 10MB');
         return;
       }
@@ -44,6 +36,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!testResultDescription.trim()) {
       setError('Test result description is required');
       return;
@@ -60,19 +53,19 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
       });
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update test result');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update test result');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={loading ? undefined : onClose}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-900">Edit Test Result</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button onClick={onClose} disabled={loading} className="text-gray-500 hover:text-gray-700 disabled:opacity-40">
             <X className="w-6 h-6" />
           </button>
         </div>

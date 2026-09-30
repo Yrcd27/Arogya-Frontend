@@ -1,35 +1,39 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
-import { UsersIcon, ClipboardListIcon, CalendarIcon, FileTextIcon } from 'lucide-react';
+import { UsersIcon, ClipboardListIcon, CalendarIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { useAuth } from '../../hooks/useAuth';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { stats, loading } = useDashboardData();
+  const { user } = useAuth();
+  const { stats, failedFields, loading, error } = useDashboardData({ doctorId: user?.id });
+
+  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const doctorStats = [{
     label: 'Total Patients',
-    value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
+    value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
     icon: UsersIcon,
     color: '#38A3A5'
   }, {
     label: 'Total Clinics',
-    value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
+    value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
     icon: ClipboardListIcon,
     color: '#38A3A5'
   }, {
     label: 'Scheduled Clinics',
-    value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
+    value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
     icon: CalendarIcon,
     color: '#38A3A5'
   }, {
-    label: 'Total Consultations',
-    value: loading ? '...' : (stats?.totalConsultations?.toLocaleString() || '0'),
+    label: 'My Consultations',
+    value: loading ? '...' : fmt(stats.totalConsultations, failedFields.totalConsultations),
     icon: FileTextIcon,
     color: '#38A3A5'
   }];
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar 
@@ -45,6 +49,12 @@ export function Dashboard() {
               Doctor Dashboard
             </h1>
           </div>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {doctorStats.map(stat => (
               <div key={stat.label} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">

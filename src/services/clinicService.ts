@@ -1,6 +1,6 @@
 // Clinic Service API - routed through the API Gateway (see httpClient.ts)
 import { apiFetch } from './httpClient';
-import type { Clinic, ClinicDoctor, CreateClinicRequest, UpdateClinicRequest, CreateClinicDoctorRequest } from '../types/clinic';
+import type { Clinic, ClinicDoctor, CreateClinicRequest, UpdateClinicRequest } from '../types/clinic';
 
 export const clinicAPI = {
   getAllClinics: async (): Promise<Clinic[]> => {
@@ -46,28 +46,11 @@ export const clinicAPI = {
 };
 
 export const clinicDoctorAPI = {
-  /** Returns [] instead of throwing when the clinic has no doctors assigned
-   *  (the backend returns a 500 for that case instead of an empty list). */
   getClinicDoctorsByClinicId: async (clinicId: number): Promise<ClinicDoctor[]> => {
-    try {
-      return await apiFetch<ClinicDoctor[]>(`/clinic_doctors/getClinicDoctorsByClinicId/${clinicId}`);
-    } catch {
-      return [];
-    }
+    return apiFetch<ClinicDoctor[]>(`/clinic_doctors/getClinicDoctorsByClinicId/${clinicId}`);
   },
 
   getAllClinicDoctors: async (): Promise<ClinicDoctor[]> => {
     return apiFetch<ClinicDoctor[]>('/clinic_doctors/getAllClinicDoctors');
-  },
-
-  // NOTE: the backend's ClinicDoctorsController only exposes GET endpoints today.
-  // These are kept typed for when create/delete are added server-side, but are
-  // not called from the UI.
-  createClinicDoctor: async (mappingData: CreateClinicDoctorRequest): Promise<ClinicDoctor> => {
-    return apiFetch<ClinicDoctor>('/clinic_doctors/createClinicDoctor', { method: 'POST', body: mappingData });
-  },
-
-  deleteClinicDoctor: async (id: number): Promise<void> => {
-    await apiFetch(`/clinic_doctors/deleteClinicDoctor/${id}`, { method: 'DELETE' });
   },
 };

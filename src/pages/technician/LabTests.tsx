@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { SubmitTestResultModal } from '../../components/technician/SubmitTestResultModal';
 import { TestResultDetailsModal } from '../../components/technician/TestResultDetailsModal';
 import { EditTestResultModal } from '../../components/technician/EditTestResultModal';
 import { labTestAPI } from '../../services/labTestService';
-import { medicalRecordsAPI } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, type TestResult } from '../../services/medicalRecordsService';
 import { consultationAPI } from '../../services/consultationService';
 import { profileAPI, userAPI } from '../../services/userService';
 import { LabTest } from '../../types/labTest';
 import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle, Play } from 'lucide-react';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { ApiError } from '../../services/httpClient';
 
 export function LabTests() {
   const { profile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
-  const [filteredTests, setFilteredTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,25 +26,30 @@ export function LabTests() {
   const [testToSubmit, setTestToSubmit] = useState<LabTest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingResult, setEditingResult] = useState<any>(null);
+  const [editingResult, setEditingResult] = useState<TestResult | null>(null);
   const [patientByConsultation, setPatientByConsultation] = useState<Record<number, { patientId: number; name: string }>>({});
   const [resultExistsByLabTest, setResultExistsByLabTest] = useState<Record<number, boolean>>({});
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const loadLabTestsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    loadLabTests();
+    void loadLabTestsRef.current();
   }, []);
-
-  useEffect(() => {
-    filterTests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, statusFilter, labTests, patientByConsultation, resultExistsByLabTest, assignedToMeOnly]);
 
   const loadLabTests = async () => {
     setLoading(true);
     setError('');
     try {
-      const { items: data } = await labTestAPI.list({ size: 1000 });
+      const pageSize = 200;
+      let page = 0;
+      let data: LabTest[] = [];
+      for (;;) {
+        const { items, total } = await labTestAPI.list({ page, size: pageSize });
+        data = data.concat(items);
+        if (items.length === 0 || data.length >= total) break;
+        page += 1;
+      }
       setLabTests(data);
       await Promise.all([
         hydratePatientDetails(data),
@@ -57,6 +62,8 @@ export function LabTests() {
       setLoading(false);
     }
   };
+
+  loadLabTestsRef.current = loadLabTests;
 
   const hydratePatientDetails = async (tests: LabTest[]) => {
     const consultationIds = Array.from(new Set(tests.map(t => t.consultationId)));
@@ -108,12 +115,9 @@ export function LabTests() {
         try {
           const result = await medicalRecordsAPI.getByLabTestId(labTestId);
           return { labTestId, exists: !!result?.id };
-        } catch (err: any) {
-          const msg = err?.message || '';
-          if (msg.includes('(404)') || msg.toLowerCase().includes('not found')) {
-            return { labTestId, exists: false };
-          }
-          return { labTestId, exists: false };
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) return { labTestId, exists: false };
+          throw err;
         }
       })
     );
@@ -125,14 +129,7 @@ export function LabTests() {
     setResultExistsByLabTest(prev => ({ ...prev, ...next }));
   };
 
-  const getDisplayStatus = (test: LabTest) => {
-    if ((test.status === 'PENDING' || test.status === 'IN_PROGRESS') && resultExistsByLabTest[test.id]) {
-      return 'COMPLETED';
-    }
-    return test.status;
-  };
-
-  const filterTests = () => {
+  const filteredTests = useMemo(() => {
     let filtered = labTests;
 
     if (assignedToMeOnly && profile?.id) {
@@ -140,7 +137,7 @@ export function LabTests() {
     }
 
     if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(test => getDisplayStatus(test) === statusFilter);
+      filtered = filtered.filter(test => test.status === statusFilter);
     }
 
     if (searchTerm) {
@@ -154,8 +151,8 @@ export function LabTests() {
       );
     }
 
-    setFilteredTests(filtered);
-  };
+    return filtered;
+  }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, searchTerm, statusFilter]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -208,17 +205,21 @@ export function LabTests() {
       setError('Your technician profile has not loaded yet — please try again in a moment.');
       return;
     }
+    if (actionLoadingId !== null) return;
+    setActionLoadingId(test.id);
+    let assigned = false;
     try {
-      // Assign this technician, then move PENDING -> IN_PROGRESS. (A test
-      // that was previously COMPLETED and is being retaken can also be
-      // restarted this way, since /start allows COMPLETED -> IN_PROGRESS too.)
       await labTestAPI.assign(test.id, profile.id);
+      assigned = true;
       const started = await labTestAPI.start(test.id);
       setLabTests(prev => prev.map(t => (t.id === test.id ? started : t)));
       setTestToSubmit(started);
       setShowSubmitModal(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start test');
+      setError(assigned ? 'The test was assigned, but could not be started. Refresh and continue from its current server status.' : err instanceof Error ? err.message : 'Failed to start test');
+      await loadLabTests();
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -235,7 +236,7 @@ export function LabTests() {
     setShowDetailsModal(true);
   };
 
-  const handleEdit = (result: any) => {
+  const handleEdit = (result: TestResult) => {
     setEditingResult(result);
     setShowDetailsModal(false);
     setShowEditModal(true);
@@ -246,10 +247,7 @@ export function LabTests() {
       await medicalRecordsAPI.delete(resultId);
       setShowDetailsModal(false);
       setSelectedTest(null);
-      // Wait a bit for backend to update lab test status
-      setTimeout(() => {
-        loadLabTests();
-      }, 500);
+      await loadLabTests();
     } catch (err) {
       setError('Failed to delete test result');
     }
@@ -263,9 +261,9 @@ export function LabTests() {
 
   const statusCounts = {
     ALL: labTests.length,
-    PENDING: labTests.filter(t => getDisplayStatus(t) === 'PENDING').length,
-    IN_PROGRESS: labTests.filter(t => getDisplayStatus(t) === 'IN_PROGRESS').length,
-    COMPLETED: labTests.filter(t => getDisplayStatus(t) === 'COMPLETED').length,
+    PENDING: labTests.filter(t => t.status === 'PENDING').length,
+    IN_PROGRESS: labTests.filter(t => t.status === 'IN_PROGRESS').length,
+    COMPLETED: labTests.filter(t => t.status === 'COMPLETED').length,
   };
 
   return (
@@ -359,7 +357,7 @@ export function LabTests() {
                       </tr>
                     ) : (
                       filteredTests.map((test) => {
-                        const displayStatus = getDisplayStatus(test);
+                        const displayStatus = test.status;
                         return (
                         <tr key={test.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4">
@@ -383,6 +381,9 @@ export function LabTests() {
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
                               {displayStatus}
                             </span>
+                            {resultExistsByLabTest[test.id] && displayStatus !== 'COMPLETED' && (
+                              <span className="ml-2 text-xs text-amber-700">Result recorded</span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
@@ -391,8 +392,8 @@ export function LabTests() {
                             {displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
                               <button
                                 onClick={() => handleTakeTest(test)}
-                                disabled={!!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
+                                disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
                               >
                                 <Play className="w-4 h-4" />
                                 Take Test

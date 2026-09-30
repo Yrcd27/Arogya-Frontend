@@ -1,30 +1,39 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarIcon, ClipboardListIcon, FileTextIcon } from 'lucide-react';
+import { CalendarIcon, ClipboardListIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function SummaryCards() {
   const navigate = useNavigate();
-  const { stats, loading } = useDashboardData();
+  const { stats, failedFields, loading, error } = useDashboardData();
+
+  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const cards = [{
     icon: CalendarIcon,
     label: 'Scheduled Clinics',
-    value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
+    value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
     color: '#38a3a5'
   }, {
     icon: ClipboardListIcon,
     label: 'Available Doctors',
-    value: loading ? '...' : (stats?.totalDoctors?.toString() || '0'),
+    value: loading ? '...' : fmt(stats.totalDoctors, failedFields.totalDoctors),
     color: '#38a3a5'
   }, {
     icon: FileTextIcon,
     label: 'Total Clinics',
-    value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
+    value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
     color: '#38a3a5'
   }];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+    <div>
+      {error && (
+        <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+          <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
       {cards.map(card => (
         <button
           key={card.label}
@@ -51,6 +60,7 @@ export function SummaryCards() {
           </div>
         </button>
       ))}
+      </div>
     </div>
   );
 }

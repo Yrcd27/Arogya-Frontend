@@ -1,5 +1,6 @@
 // Authentication utility functions for User Service Backend
 import { userAPI } from '../services/userService';
+import type { User, UserRole } from '../types/user';
 
 export interface LoginCredentials {
   email: string;
@@ -36,40 +37,59 @@ export interface RegisterData {
   assignedEquipment?: string;
 }
 
-export interface UserRole {
-  id: number;
-  roleName: string;
-  roleDescription?: string;
-}
-
-export interface User {
-  id: number;
-  username: string;
-  email: string;
-  userRole: UserRole;
-}
+export type { User, UserRole };
 
 // Local storage keys
 export const AUTH_USER_KEY = 'user';
 export const AUTH_TOKEN_KEY = 'authToken';
 
 export const getCurrentUser = (): User | null => {
-  const userStr = localStorage.getItem(AUTH_USER_KEY);
+  let userStr: string | null;
+  try {
+    userStr = localStorage.getItem(AUTH_USER_KEY);
+  } catch {
+    return null;
+  }
   if (!userStr) return null;
   try {
-    return JSON.parse(userStr) as User;
+    const value: unknown = JSON.parse(userStr);
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Partial<User>;
+    if (
+      typeof candidate.id !== 'number' ||
+      candidate.id <= 0 ||
+      typeof candidate.username !== 'string' ||
+      typeof candidate.email !== 'string' ||
+      !candidate.userRole ||
+      typeof candidate.userRole.id !== 'number' ||
+      !Number.isFinite(candidate.userRole.id) ||
+      typeof candidate.userRole.roleName !== 'string' ||
+      !candidate.userRole.roleName.trim()
+    ) {
+      return null;
+    }
+    return candidate as User;
   } catch {
     return null;
   }
 };
 
 export const removeCurrentUser = (): void => {
-  localStorage.removeItem(AUTH_USER_KEY);
-  localStorage.removeItem(AUTH_TOKEN_KEY);
+  try {
+    localStorage.removeItem(AUTH_USER_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    return;
+  }
 };
 
 export const getToken = (): string | null => {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    return token && token.trim() ? token : null;
+  } catch {
+    return null;
+  }
 };
 
 /** Decodes a JWT's payload without verifying the signature (verification
@@ -105,7 +125,11 @@ export const isAuthenticated = (): boolean => {
 // Authentication API calls
 export const loginAPI = async (credentials: LoginCredentials): Promise<User> => {
   const response = await userAPI.login(credentials.email, credentials.password);
-  localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+  try {
+    localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+  } catch {
+    throw new Error('Unable to persist the signed-in session.');
+  }
   return {
     id: response.id,
     username: response.username,

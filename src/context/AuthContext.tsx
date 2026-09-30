@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, getCurrentUser, removeCurrentUser, getToken, isTokenExpired, decodeJwtPayload } from '../utils/auth';
+import { getCurrentUser, removeCurrentUser, getToken, isTokenExpired, decodeJwtPayload } from '../utils/auth';
+import type { User } from '../types/user';
 import { AUTH_EXPIRED_EVENT } from '../services/httpClient';
 import { AuthContext } from './AuthContextType';
 
@@ -10,15 +11,23 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionKey, setSessionKey] = useState(0);
 
   const logout = useCallback(() => {
     removeCurrentUser();
     setUser(null);
+    setSessionKey(value => value + 1);
   }, []);
 
   const login = useCallback((userData: User) => {
-    localStorage.setItem('user', JSON.stringify(userData));
+    try {
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch {
+      removeCurrentUser();
+      throw new Error('Unable to persist the signed-in session.');
+    }
     setUser(userData);
+    setSessionKey(value => value + 1);
   }, []);
 
   // Load any existing session on app start, but only if the token hasn't
@@ -26,16 +35,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const savedUser = getCurrentUser();
     const token = getToken();
-    if (savedUser && !isTokenExpired(token)) {
+    if (savedUser && token && !isTokenExpired(token)) {
       setUser(savedUser);
-    } else if (savedUser) {
+    } else {
       removeCurrentUser();
     }
     setIsLoading(false);
   }, []);
 
-  // Any API call that comes back 401/403 dispatches this — log out and let
-  // ProtectedRoute bounce the user to /login.
+  useEffect(() => {
+    const syncSession = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== 'user' && event.key !== 'authToken') return;
+      const savedUser = getCurrentUser();
+      const token = getToken();
+      if (savedUser && token && !isTokenExpired(token)) {
+        setUser(savedUser);
+      } else {
+        removeCurrentUser();
+        setUser(null);
+      }
+      setSessionKey(value => value + 1);
+    };
+    window.addEventListener('storage', syncSession);
+    return () => window.removeEventListener('storage', syncSession);
+  }, []);
+
   useEffect(() => {
     const handleAuthExpired = () => logout();
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
@@ -62,6 +86,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     isAuthenticated: !!user && !isTokenExpired(getToken()),
     isLoading,
+    sessionKey,
     login,
     logout,
   };
