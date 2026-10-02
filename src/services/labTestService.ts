@@ -1,9 +1,9 @@
-// Lab Test Service API client
+﻿// Lab Test Service API client
 import { LabTest, CreateLabTestRequest, UpdateLabTestRequest } from '../types/labTest';
 
 const isDevelopment = import.meta.env.DEV;
 const envBase = (import.meta.env as any).VITE_API_BASE_URL;
-const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : (isDevelopment ? '' : 'http://localhost:8086');
+const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : ('');
 
 export const labTestAPI = {
   /**

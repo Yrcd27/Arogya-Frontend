@@ -1,6 +1,6 @@
-// Queue Service API - Backend Integration
+﻿// Queue Service API - Backend Integration
 const isDevelopment = import.meta.env.DEV;
-const QUEUE_API_BASE_URL = isDevelopment ? '' : 'http://localhost:8085';
+const QUEUE_API_BASE_URL = '';
 
 // Generic API call helper for queue service
 const queueApiCall = async (endpoint: string, options: RequestInit = {}) => {

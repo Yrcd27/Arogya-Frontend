@@ -1,7 +1,7 @@
-// Consultation Service API client (uses fetch, typed responses)
+﻿// Consultation Service API client (uses fetch, typed responses)
 const isDevelopment = import.meta.env.DEV;
 const envBase = (import.meta.env as any).VITE_API_BASE_URL;
-const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : (isDevelopment ? '' : 'http://localhost:8086');
+const API_BASE_URL = typeof envBase === 'string' && envBase.length > 0 ? envBase : ('');
 
 export interface Consultation {
   id: number;
@@ -36,7 +36,7 @@ export const consultationAPI = {
     const res = await fetch(`${API_BASE_URL}/consultations${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error(`Failed to list consultations (${res.status})`);
     const body = await res.json();
-    // backend returns a Page<T> with `content` — unwrap if present
+    // backend returns a Page<T> with `content` â€” unwrap if present
     if (body && Array.isArray(body.content)) return body.content as Consultation[];
     if (Array.isArray(body)) return body as Consultation[];
     return [];

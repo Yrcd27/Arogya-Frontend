@@ -1,6 +1,6 @@
-// User Service API - Backend Integration
+﻿// User Service API - Backend Integration
 const isDevelopment = import.meta.env.DEV;
-const API_BASE_URL = isDevelopment ? '' : 'http://localhost:8081';
+const API_BASE_URL = '';
 
 // Generic API call helper for user service
 const apiCall = async (endpoint: string, options: RequestInit = {}) => {

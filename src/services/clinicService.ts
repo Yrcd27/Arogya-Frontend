@@ -1,6 +1,6 @@
-// Clinic Service API - Backend Integration
+﻿// Clinic Service API - Backend Integration
 const isDevelopment = import.meta.env.DEV;
-const CLINIC_API_BASE_URL = isDevelopment ? '' : 'http://localhost:8082';
+const CLINIC_API_BASE_URL = '';
 
 // Clinic API helper
 const clinicApiCall = async (endpoint: string, options: RequestInit = {}) => {
