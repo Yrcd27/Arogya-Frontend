@@ -42,7 +42,7 @@ const clearStoredServingTokenId = (doctorId: number, clinicId: number) => {
 export function Queue() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile } = useUserProfile();
+  const { profile, status: profileStatus } = useUserProfile();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -66,10 +66,22 @@ export function Queue() {
 
   // Only clinics this doctor is actually assigned to.
   useEffect(() => {
-    if (!profile?.id) return;
+    if (profileStatus === 'loading') {
+      setClinicsLoading(true);
+      return;
+    }
+
+    if (!profile?.id) {
+      setClinics([]);
+      setClinicsLoading(false);
+      setError(null);
+      return;
+    }
+
     (async () => {
       try {
         setClinicsLoading(true);
+        setError(null);
         const [allClinicDoctors, allClinics] = await Promise.all([
           clinicDoctorAPI.getAllClinicDoctors(),
           clinicAPI.getAllClinics(),
@@ -85,7 +97,7 @@ export function Queue() {
         setClinicsLoading(false);
       }
     })();
-  }, [profile?.id]);
+  }, [profile?.id, profileStatus]);
 
   // Restore the queue for the clinic in the URL once the clinic list is known.
   useEffect(() => {
@@ -250,17 +262,20 @@ export function Queue() {
                 <select
                   value={selectedClinicId ?? ''}
                   onChange={(e) => selectClinic(e.target.value ? Number(e.target.value) : null)}
-                  disabled={clinicsLoading}
+                  disabled={clinicsLoading || clinics.length === 0}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
                 >
-                  <option value="">{clinicsLoading ? 'Loading your clinics...' : 'Choose clinic...'}</option>
+                  <option value="">
+                    {clinicsLoading
+                      ? 'Loading your clinics...'
+                      : clinics.length === 0
+                        ? 'You are not assigned to any clinics yet.'
+                        : 'Choose clinic...'}
+                  </option>
                   {clinics.map(c => (
                     <option key={c.id} value={c.id}>{c.clinicName}</option>
                   ))}
                 </select>
-                {!clinicsLoading && clinics.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-1">You are not assigned to any clinics yet.</p>
-                )}
               </div>
               <div className="md:col-span-2 flex items-end">
                 <div className="flex-1 relative">

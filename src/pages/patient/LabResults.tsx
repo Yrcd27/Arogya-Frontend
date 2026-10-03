@@ -3,8 +3,9 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { FlaskConicalIcon, DownloadIcon, EyeIcon, FileText, Calendar } from 'lucide-react';
-import { medicalRecordsAPI, TestResult } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, TestResult, TestResultFile } from '../../services/medicalRecordsService';
 import { useAuth } from '../../hooks/useAuth';
+import { FilePreviewModal } from '../../components/FilePreviewModal';
 
 const PAGE_SIZE = 10;
 
@@ -17,6 +18,10 @@ export function LabResults() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedResult, setSelectedResult] = useState<TestResult | null>(null);
+  const [previewFile, setPreviewFile] = useState<TestResultFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
+  const [previewOwnerId, setPreviewOwnerId] = useState<number | null>(null);
   const loadTestResultsRef = useRef<(patientId: number, pageNumber: number) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
@@ -42,18 +47,34 @@ export function LabResults() {
 
   const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
-  const handleDownload = async (result: TestResult) => {
-    if (!result.fileName) {
-      alert('No file attached to this result');
-      return;
-    }
-
+  const handleDownload = async (testResultId: number, fileId: number, fileName: string) => {
     try {
-      await medicalRecordsAPI.downloadFile(result.id);
+      await medicalRecordsAPI.downloadFile(testResultId, fileId, fileName);
     } catch (err) {
       alert('Failed to download file');
       console.error(err);
     }
+  };
+
+  const handlePreview = async (testResultId: number, file: TestResultFile) => {
+    if (previewLoadingId !== null) return;
+    setPreviewLoadingId(file.id);
+    try {
+      const { url } = await medicalRecordsAPI.getFilePreviewUrl(testResultId, file.id, file.fileName);
+      setPreviewUrl(url);
+      setPreviewFile(file);
+      setPreviewOwnerId(testResultId);
+    } catch (err) {
+      console.error('Failed to load file preview:', err);
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewFile(null);
+    setPreviewUrl(null);
+    setPreviewOwnerId(null);
   };
 
   const formatDate = (dateStr: string) => {
@@ -145,12 +166,16 @@ export function LabResults() {
                             <p className="text-sm text-gray-900 line-clamp-2">{result.testResultDescription}</p>
                           </td>
                           <td className="px-6 py-4">
-                            {result.fileName ? (
+                            {result.files.length > 0 ? (
                               <div className="flex items-center gap-2">
                                 <FileText className="w-4 h-4 text-[#38A3A5]" />
                                 <div className="text-sm">
-                                  <p className="text-gray-900 font-medium">{result.fileName}</p>
-                                  <p className="text-gray-500 text-xs">{formatFileSize(result.fileSize)}</p>
+                                  <p className="text-gray-900 font-medium">
+                                    {result.files.length === 1 ? result.files[0].fileName : `${result.files.length} files`}
+                                  </p>
+                                  {result.files.length === 1 && (
+                                    <p className="text-gray-500 text-xs">{formatFileSize(result.files[0].fileSize)}</p>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -159,16 +184,16 @@ export function LabResults() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={() => setSelectedResult(result)}
                                 className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
                                 title="View Details"
                               >
                                 <EyeIcon className="w-4 h-4" />
                               </button>
-                              {result.fileName && (
-                                <button 
-                                  onClick={() => handleDownload(result)}
+                              {result.files.length === 1 && (
+                                <button
+                                  onClick={() => handleDownload(result.id, result.files[0].id, result.files[0].fileName)}
                                   className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
                                   title="Download File"
                                 >
@@ -253,23 +278,36 @@ export function LabResults() {
                 </div>
               )}
 
-              {selectedResult.fileName && (
+              {selectedResult.files.length > 0 && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Attached File</label>
-                  <div className="mt-2 flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-8 h-8 text-[#38A3A5]" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{selectedResult.fileName}</p>
-                        <p className="text-xs text-gray-500">{formatFileSize(selectedResult.fileSize)}</p>
+                  <label className="text-sm font-medium text-gray-500">Attached Files ({selectedResult.files.length})</label>
+                  <div className="mt-2 space-y-2">
+                    {selectedResult.files.map(file => (
+                      <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="w-8 h-8 text-[#38A3A5] flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
+                            <p className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handlePreview(selectedResult.id, file)}
+                            disabled={previewLoadingId === file.id}
+                            className="px-3 py-2 text-[#38A3A5] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                          >
+                            {previewLoadingId === file.id ? 'Loading...' : 'Preview'}
+                          </button>
+                          <button
+                            onClick={() => handleDownload(selectedResult.id, file.id, file.fileName)}
+                            className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
+                          >
+                            Download
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => handleDownload(selectedResult)}
-                      className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
-                    >
-                      Download
-                    </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -285,6 +323,16 @@ export function LabResults() {
             </div>
           </div>
         </div>
+      )}
+
+      {previewFile && previewUrl && previewOwnerId !== null && (
+        <FilePreviewModal
+          fileName={previewFile.fileName}
+          fileType={previewFile.fileType}
+          url={previewUrl}
+          onClose={closePreview}
+          onDownload={() => handleDownload(previewOwnerId, previewFile.id, previewFile.fileName)}
+        />
       )}
     </div>
   );

@@ -1,20 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Download, Edit, Trash2, FileText } from 'lucide-react';
+import { X, Download, Edit, Trash2, FileText, Eye } from 'lucide-react';
 import { LabTest } from '../../types/labTest';
 import { ApiError } from '../../services/httpClient';
-import { medicalRecordsAPI, type TestResult } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, type TestResult, type TestResultFile } from '../../services/medicalRecordsService';
+import { labTestAPI } from '../../services/labTestService';
+import { FilePreviewModal } from '../FilePreviewModal';
+import { ConfirmModal } from '../ConfirmModal';
 
 interface TestResultDetailsModalProps {
   labTest: LabTest;
   onClose: () => void;
   onEdit: (result: TestResult) => void;
   onDelete: (resultId: number) => void;
+  onRetake: () => void;
 }
 
-export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: TestResultDetailsModalProps) {
+export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onRetake }: TestResultDetailsModalProps) {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<TestResultFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [retaking, setRetaking] = useState(false);
+  const [retakeError, setRetakeError] = useState<string | null>(null);
 
   const loadTestResult = useCallback(async () => {
     try {
@@ -36,13 +46,46 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: T
     void loadTestResult();
   }, [loadTestResult]);
 
-  const handleDownload = async () => {
+  const handleDownload = async (fileId: number, fileName: string) => {
     if (!testResult?.id) return;
     try {
-      await medicalRecordsAPI.downloadFile(testResult.id);
+      await medicalRecordsAPI.downloadFile(testResult.id, fileId, fileName);
     } catch (err) {
       console.error('Failed to download file:', err);
     }
+  };
+
+  const handlePreview = async (file: TestResultFile) => {
+    if (!testResult?.id || previewLoadingId !== null) return;
+    setPreviewLoadingId(file.id);
+    try {
+      const { url } = await medicalRecordsAPI.getFilePreviewUrl(testResult.id, file.id, file.fileName);
+      setPreviewUrl(url);
+      setPreviewFile(file);
+    } catch (err) {
+      console.error('Failed to load file preview:', err);
+    } finally {
+      setPreviewLoadingId(null);
+    }
+  };
+
+  const handleRetake = async () => {
+    if (retaking) return;
+    setRetaking(true);
+    setRetakeError(null);
+    try {
+      await labTestAPI.start(labTest.id);
+      onRetake();
+    } catch (err) {
+      setRetakeError(err instanceof Error ? err.message : 'Failed to reopen this test');
+    } finally {
+      setRetaking(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewFile(null);
+    setPreviewUrl(null);
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -88,22 +131,34 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: T
               </div>
             )}
 
-            {testResult.fileName && (
+            {testResult.files.length > 0 && (
               <div>
-                <label className="text-sm font-medium text-gray-500">Attached File</label>
-                <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <FileText className="w-5 h-5 text-gray-600" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{testResult.fileName}</p>
-                    <p className="text-xs text-gray-500">{formatFileSize(testResult.fileSize)}</p>
-                  </div>
-                  <button
-                    onClick={handleDownload}
-                    className="flex items-center gap-2 px-3 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download
-                  </button>
+                <label className="text-sm font-medium text-gray-500">Attached Files ({testResult.files.length})</label>
+                <div className="mt-2 space-y-2">
+                  {testResult.files.map(file => (
+                    <div key={file.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <FileText className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</p>
+                      </div>
+                      <button
+                        onClick={() => handlePreview(file)}
+                        disabled={previewLoadingId === file.id}
+                        className="flex items-center gap-1.5 px-3 py-2 text-[#38A3A5] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm disabled:opacity-50 flex-shrink-0"
+                      >
+                        <Eye className="w-4 h-4" />
+                        {previewLoadingId === file.id ? 'Loading...' : 'Preview'}
+                      </button>
+                      <button
+                        onClick={() => handleDownload(file.id, file.fileName)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm flex-shrink-0"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -128,11 +183,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: T
                 Edit Result
               </button>
               <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to delete this test result?')) {
-                    onDelete(testResult.id);
-                  }
-                }}
+                onClick={() => setConfirmingDelete(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
@@ -147,9 +198,52 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete }: T
             </div>
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-600">No test result found for this lab test.</div>
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">No test result found for this lab test.</p>
+            {labTest.status === 'COMPLETED' && (
+              <>
+                <p className="text-sm text-gray-500 mb-4">This test is marked completed but its result is missing — you can reopen it to submit a new result.</p>
+                {retakeError && (
+                  <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm inline-block">
+                    {retakeError}
+                  </div>
+                )}
+                <div>
+                  <button
+                    onClick={handleRetake}
+                    disabled={retaking}
+                    className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+                  >
+                    {retaking ? 'Reopening...' : 'Retake Test'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
+
+      {previewFile && previewUrl && (
+        <FilePreviewModal
+          fileName={previewFile.fileName}
+          fileType={previewFile.fileType}
+          url={previewUrl}
+          onClose={closePreview}
+          onDownload={() => testResult && handleDownload(previewFile.id, previewFile.fileName)}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={confirmingDelete}
+        title="Delete test result?"
+        message="This will permanently delete the test result and any attached files. This cannot be undone."
+        confirmLabel="Delete"
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          if (testResult) onDelete(testResult.id);
+        }}
+      />
     </div>
   );
 }

@@ -201,6 +201,11 @@ export function LabTests() {
   };
 
   const handleTakeTest = async (test: LabTest) => {
+    if (test.status === 'IN_PROGRESS') {
+      setTestToSubmit(test);
+      setShowSubmitModal(true);
+      return;
+    }
     if (!profile?.id) {
       setError('Your technician profile has not loaded yet — please try again in a moment.');
       return;
@@ -251,6 +256,12 @@ export function LabTests() {
     } catch (err) {
       setError('Failed to delete test result');
     }
+  };
+
+  const handleRetake = async () => {
+    setShowDetailsModal(false);
+    setSelectedTest(null);
+    await loadLabTests();
   };
 
   const handleEditSuccess = () => {
@@ -429,6 +440,7 @@ export function LabTests() {
           }}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onRetake={handleRetake}
         />
       )}
 

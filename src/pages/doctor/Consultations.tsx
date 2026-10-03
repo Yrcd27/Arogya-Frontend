@@ -9,6 +9,7 @@ import { consultationAPI, Consultation, ConsultationUpdate, ConsultationWithTest
 import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
+import { ApiError } from '../../services/httpClient';
 import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 
 type PatientInfo = {
@@ -20,6 +21,10 @@ type ClinicInfo = {
   id: number;
   clinicName: string;
 };
+
+const isEmptyConsultationsResponse = (error: unknown) =>
+  error instanceof ApiError &&
+  error.status === 400;
 
 export default function Consultations() {
   const location = useLocation();
@@ -70,13 +75,23 @@ export default function Consultations() {
   const loadConsultations = async (displayPage: number, size: number = pageSize) => {
     if (!user?.id) return;
     setLoading(true);
+    setError('');
     try {
       const [usersAll, clinicsAll] = await Promise.all([
         userAPI.getAllUsers(),
         clinicAPI.getAllClinics(),
       ]);
 
-      const { total: probedTotal } = await consultationAPI.list({ doctorId: user.id, page: 0, size: 1 });
+      let probedTotal: number;
+      try {
+        ({ total: probedTotal } = await consultationAPI.list({ doctorId: user.id, page: 0, size: 1 }));
+      } catch (error) {
+        if (!isEmptyConsultationsResponse(error)) throw error;
+        setConsultations([]);
+        setTotalElements(0);
+        setCurrentPage(1);
+        return;
+      }
       const totalBackendPages = Math.max(1, Math.ceil(probedTotal / size));
       const safeDisplayPage = Math.min(Math.max(1, displayPage), totalBackendPages);
       const backendPageIndex = totalBackendPages - safeDisplayPage;

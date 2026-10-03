@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
@@ -35,6 +35,7 @@ export function Clinics() {
   const [patientName, setPatientName] = useState<string | null>(null);
   const [patientFetchError, setPatientFetchError] = useState<string | null>(null);
   const [nameHydrationFailed, setNameHydrationFailed] = useState(false);
+  const joinRequestRef = useRef(false);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,7 +107,6 @@ export function Clinics() {
     setJoinSuccess(null);
   };
 
-  // Quick Join button: open modal focused on queue actions and preload current queue
   const handleQuickJoinOpen = async (clinic: Clinic) => {
     setSelectedClinic(clinic);
     setIsDetailsModalOpen(true);
@@ -164,14 +164,29 @@ export function Clinics() {
   };
 
   const joinQueueForClinic = async (clinic: Clinic) => {
+    if (joinRequestRef.current) return;
     setJoinSuccess(null);
     setJoinError(null);
     if (!patientId) {
       setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
       return;
     }
+    joinRequestRef.current = true;
     try {
       setJoinLoading(true);
+      const currentQueue = await queueAPI.getClinicQueue(String(clinic.id));
+      const existingToken = currentQueue.find(
+        token => String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
+      );
+
+      setQueueTokens(currentQueue);
+      await hydratePatientNames(currentQueue);
+
+      if (existingToken) {
+        setJoinError(`You are already in this clinic queue. Your token is #${existingToken.tokenNumber}.`);
+        return;
+      }
+
       const res = await queueAPI.createToken({
         clinicId: String(clinic.id),
         patientId: patientId,
@@ -180,7 +195,6 @@ export function Clinics() {
         consultationId: '',
       });
       setJoinSuccess(`Token #${res.tokenNumber} created. Position: ${res.position}`);
-      // Refresh queue for selected clinic if modal open on same clinic
       if (selectedClinic && selectedClinic.id === clinic.id) {
         await handleViewQueue();
       }
@@ -188,6 +202,7 @@ export function Clinics() {
       console.error('Failed to join queue:', error);
       setJoinError(error instanceof Error ? error.message : 'Failed to join queue');
     } finally {
+      joinRequestRef.current = false;
       setJoinLoading(false);
     }
   };
@@ -213,6 +228,10 @@ export function Clinics() {
     if (!selectedClinic) return;
     await joinQueueForClinic(selectedClinic);
   };
+
+  const activeQueueToken = queueTokens.find(
+    token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
+  );
 
   // Filter and sort clinics
   const filteredAndSortedClinics = sortClinics(
@@ -528,10 +547,10 @@ export function Clinics() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleJoinQueue}
-                      disabled={joinLoading || !!patientFetchError}
-                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
+                      disabled={joinLoading || !!patientFetchError || !!activeQueueToken}
+                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
                     >
-                      {joinLoading ? 'Joining...' : 'Join Queue'}
+                      {joinLoading ? 'Joining...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
                     </button>
                     <button
                       onClick={handleViewQueue}

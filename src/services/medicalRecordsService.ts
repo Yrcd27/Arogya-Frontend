@@ -2,6 +2,16 @@
 import { apiFetch, apiFetchBlob, toQueryString } from './httpClient';
 import { unwrapList, type Page } from '../types/api';
 
+export const MAX_TEST_RESULT_FILES = 5;
+
+export interface TestResultFile {
+  id: number;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
 export interface TestResult {
   id: number;
   labTestId: number;
@@ -9,10 +19,7 @@ export interface TestResult {
   technicianId: number;
   testResultDescription: string;
   technicianNotes?: string;
-  filePath?: string;
-  fileName?: string;
-  fileType?: string;
-  fileSize?: number;
+  files: TestResultFile[];
   createdAt: string;
   updatedAt: string;
 }
@@ -23,17 +30,25 @@ export interface CreateTestResultRequest {
   technicianId: number;
   testResultDescription: string;
   technicianNotes?: string;
-  file?: File;
+  files?: File[];
 }
 
-function toFormData(data: Partial<CreateTestResultRequest>): FormData {
+export interface UpdateTestResultRequest {
+  testResultDescription?: string;
+  technicianNotes?: string;
+  files?: File[];
+  removeFileIds?: number[];
+}
+
+function toFormData(data: Partial<CreateTestResultRequest> & Partial<UpdateTestResultRequest>): FormData {
   const formData = new FormData();
   if (data.labTestId !== undefined) formData.append('labTestId', String(data.labTestId));
   if (data.patientId !== undefined) formData.append('patientId', String(data.patientId));
   if (data.technicianId !== undefined) formData.append('technicianId', String(data.technicianId));
-  formData.append('testResultDescription', data.testResultDescription || '');
-  formData.append('technicianNotes', data.technicianNotes || '');
-  if (data.file) formData.append('file', data.file);
+  if (data.testResultDescription !== undefined) formData.append('testResultDescription', data.testResultDescription || '');
+  if (data.technicianNotes !== undefined) formData.append('technicianNotes', data.technicianNotes || '');
+  (data.files || []).forEach(file => formData.append('files', file));
+  (data.removeFileIds || []).forEach(id => formData.append('removeFileIds', String(id)));
   return formData;
 }
 
@@ -53,13 +68,22 @@ export const medicalRecordsAPI = {
     return unwrapList<TestResult>(body);
   },
 
+  async getByTechnicianId(technicianId: number): Promise<TestResult[]> {
+    return apiFetch<TestResult[]>(`/test-results/technician/${technicianId}`);
+  },
+
+  async getByTechnicianIdPaged(technicianId: number, params: { page?: number; size?: number } = {}): Promise<{ items: TestResult[]; total: number }> {
+    const body = await apiFetch<Page<TestResult>>(`/test-results/technician/${technicianId}/paged${toQueryString(params)}`);
+    return unwrapList<TestResult>(body);
+  },
+
   async list(params: { page?: number; size?: number; sortBy?: string; sortDir?: string } = {}): Promise<{ items: TestResult[]; total: number }> {
     const body = await apiFetch<Page<TestResult>>(`/test-results${toQueryString(params)}`);
     return unwrapList<TestResult>(body);
   },
 
-  async downloadFile(id: number, fallbackName = 'test-result'): Promise<void> {
-    const { blob, filename } = await apiFetchBlob(`/test-results/${id}/download`, fallbackName);
+  async downloadFile(testResultId: number, fileId: number, fallbackName = 'test-result'): Promise<void> {
+    const { blob, filename } = await apiFetchBlob(`/test-results/${testResultId}/files/${fileId}/download`, fallbackName);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -70,10 +94,15 @@ export const medicalRecordsAPI = {
     document.body.removeChild(a);
   },
 
+  async getFilePreviewUrl(testResultId: number, fileId: number, fallbackName = 'file'): Promise<{ url: string; blob: Blob }> {
+    const { blob } = await apiFetchBlob(`/test-results/${testResultId}/files/${fileId}/download`, fallbackName);
+    return { url: window.URL.createObjectURL(blob), blob };
+  },
+
   // The backend also exposes PUT /test-results/{id} and DELETE /test-results/{id},
   // but the POST variants below were added specifically to avoid a multipart
   // PUT/DELETE CORS-preflight issue, so the frontend uses those.
-  async update(id: number, data: Partial<CreateTestResultRequest>): Promise<TestResult> {
+  async update(id: number, data: UpdateTestResultRequest): Promise<TestResult> {
     return apiFetch<TestResult>(`/test-results/${id}/update`, { method: 'POST', body: toFormData(data) });
   },
 

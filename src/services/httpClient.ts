@@ -208,9 +208,18 @@ export async function apiFetchBlob(path: string, filenameFallback: string, optio
   let filename = filenameFallback;
   const contentDisposition = response.headers.get('Content-Disposition');
   if (contentDisposition) {
-    const quoted = contentDisposition.match(/filename="([^"]+)"/);
-    const unquoted = contentDisposition.match(/filename=([^;\s]+)/);
-    filename = quoted?.[1] || unquoted?.[1] || filename;
+    const encoded = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i);
+    if (encoded?.[1]) {
+      try {
+        filename = decodeURIComponent(encoded[1]);
+      } catch {
+        filename = encoded[1];
+      }
+    } else {
+      const quoted = contentDisposition.match(/filename="([^"]+)"/);
+      const unquoted = contentDisposition.match(/filename=([^;\s]+)/);
+      filename = quoted?.[1] || unquoted?.[1] || filename;
+    }
   }
   return { blob, filename };
 }

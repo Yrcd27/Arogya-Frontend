@@ -61,7 +61,7 @@ const Profile: React.FC = () => {
         specialization: storedProfile.specialization || '',
         qualification: storedProfile.qualification || '',
         experienceYears: storedProfile.experienceYears || 0,
-        user: { id: storedProfile.user.id },
+        user: { id: storedProfile.user?.id ?? user?.id ?? 0 },
       });
       setIsNewProfile(false);
     } else if (profileStatus === 'not-found' && user?.id) {
