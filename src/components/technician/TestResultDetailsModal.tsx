@@ -11,7 +11,7 @@ interface TestResultDetailsModalProps {
   labTest: LabTest;
   onClose: () => void;
   onEdit: (result: TestResult) => void;
-  onDelete: (resultId: number) => void;
+  onDelete: (resultId: number) => Promise<void>;
   onRetake: () => void;
 }
 
@@ -23,6 +23,8 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [retaking, setRetaking] = useState(false);
   const [retakeError, setRetakeError] = useState<string | null>(null);
 
@@ -86,6 +88,20 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
   const closePreview = () => {
     setPreviewFile(null);
     setPreviewUrl(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!testResult || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDelete(testResult.id);
+      setConfirmingDelete(false);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete test result. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -236,13 +252,16 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
       <ConfirmModal
         isOpen={confirmingDelete}
         title="Delete test result?"
-        message="This will permanently delete the test result and any attached files. This cannot be undone."
         confirmLabel="Delete"
-        onCancel={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          setConfirmingDelete(false);
-          if (testResult) onDelete(testResult.id);
+        loading={deleting}
+        message={deleteError || "This will permanently delete the test result and any attached files. This cannot be undone."}
+        onCancel={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+            setDeleteError(null);
+          }
         }}
+        onConfirm={() => void confirmDelete()}
       />
     </div>
   );

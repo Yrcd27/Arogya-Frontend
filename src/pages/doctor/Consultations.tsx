@@ -26,12 +26,13 @@ type ClinicInfo = {
 
 const isEmptyConsultationsResponse = (error: unknown) =>
   error instanceof ApiError &&
-  error.status === 400;
+  error.status === 400 &&
+  error.bodyEmpty === true;
 
 export default function Consultations() {
   const location = useLocation();
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -39,6 +40,7 @@ export default function Consultations() {
   const [clinics, setClinics] = useState<Record<number, ClinicInfo>>({});
   const [selectedConsultation, setSelectedConsultation] = useState<ConsultationWithTests | Consultation | null>(null);
   const [loadingLabTests, setLoadingLabTests] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalElements, setTotalElements] = useState<number | null>(null);
@@ -50,6 +52,7 @@ export default function Consultations() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
+  const detailRequestRef = useRef(0);
 
   const sortByNewestFirst = (list: Consultation[]) =>
     [...list].sort((a, b) => {
@@ -133,8 +136,10 @@ export default function Consultations() {
       const updated = await consultationAPI.complete(id);
       setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success('Consultation marked as complete');
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to complete consultation');
+      return false;
     }
   };
 
@@ -143,8 +148,10 @@ export default function Consultations() {
       const updated = await consultationAPI.cancel(id);
       setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success('Consultation cancelled');
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to cancel consultation');
+      return false;
     }
   };
 
@@ -252,16 +259,28 @@ export default function Consultations() {
     }
   };
 
+  const closeConsultationDetails = () => {
+    detailRequestRef.current += 1;
+    setSelectedConsultation(null);
+    setDetailError(null);
+    setLoadingLabTests(false);
+  };
+
   const handleConsultationClick = async (consultation: Consultation) => {
+    const requestId = ++detailRequestRef.current;
     setSelectedConsultation(consultation);
     setLoadingLabTests(true);
+    setDetailError(null);
     try {
       const withTests = await consultationAPI.getWithTests(consultation.id);
+      if (requestId !== detailRequestRef.current) return;
       setSelectedConsultation(withTests);
     } catch (err) {
+      if (requestId !== detailRequestRef.current) return;
       console.error('Failed to load consultation details:', err);
+      setDetailError(err instanceof Error ? err.message : 'Failed to load consultation details. Please try again.');
     } finally {
-      setLoadingLabTests(false);
+      if (requestId === detailRequestRef.current) setLoadingLabTests(false);
     }
   };
 
@@ -331,7 +350,7 @@ export default function Consultations() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading consultations...</div>
             </div>
-          ) : consultations.length === 0 ? (
+          ) : error ? null : consultations.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm">
               <EmptyState 
                 title="No consultations"
@@ -469,11 +488,11 @@ export default function Consultations() {
 
       {/* Detail Modal */}
       {selectedConsultation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setSelectedConsultation(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeConsultationDetails}>
           <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-xl font-semibold text-gray-900">Consultation Details</h3>
-              <button onClick={() => setSelectedConsultation(null)} className="text-gray-500 hover:text-gray-700">
+              <button onClick={closeConsultationDetails} className="text-gray-500 hover:text-gray-700" aria-label="Close consultation details">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -542,6 +561,17 @@ export default function Consultations() {
               
               {loadingLabTests ? (
                 <div className="text-center py-4 text-gray-600">Loading lab tests...</div>
+              ) : detailError ? (
+                <div className="rounded-lg bg-red-50 px-4 py-3 text-center text-red-700">
+                  <p>{detailError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleConsultationClick(selectedConsultation)}
+                    className="mt-2 text-sm font-medium text-red-800 underline"
+                  >
+                    Try again
+                  </button>
+                </div>
               ) : !selectedConsultation || !('labTests' in selectedConsultation) || selectedConsultation.labTests.length === 0 ? (
                 <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
                   No lab tests requested for this consultation
@@ -587,8 +617,7 @@ export default function Consultations() {
                 <button
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   onClick={async () => {
-                    await handleComplete(selectedConsultation.id);
-                    setSelectedConsultation(null);
+                    if (await handleComplete(selectedConsultation.id)) closeConsultationDetails();
                   }}
                 >
                   Mark Complete
@@ -598,8 +627,7 @@ export default function Consultations() {
                 <button
                   className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
                   onClick={async () => {
-                    await handleCancel(selectedConsultation.id);
-                    setSelectedConsultation(null);
+                    if (await handleCancel(selectedConsultation.id)) closeConsultationDetails();
                   }}
                 >
                   Cancel Consultation
@@ -607,7 +635,7 @@ export default function Consultations() {
               )}
               <button
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                onClick={() => setSelectedConsultation(null)}
+                onClick={closeConsultationDetails}
               >
                 Close
               </button>
@@ -644,7 +672,7 @@ export default function Consultations() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
                 <input

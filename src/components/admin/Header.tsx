@@ -11,8 +11,9 @@ export function Header({ onToggleSidebar }: AdminHeaderProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={onToggleSidebar}
+            aria-label="Toggle navigation"
             className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
-            title="Toggle Sidebar"
+            title="Toggle navigation"
           >
             <div className="w-5 h-5 sm:w-6 sm:h-6 flex flex-col justify-center gap-1">
               <div className="h-0.5 bg-current rounded"></div>

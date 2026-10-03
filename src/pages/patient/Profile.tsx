@@ -12,7 +12,7 @@ import { ProfileView } from '../../components/profile/ProfileView';
 export function Profile() {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
   const [formData, setFormData] = useState({
     id: 0,
@@ -22,8 +22,8 @@ export function Profile() {
     phoneNumber: '',
     nicNumber: '',
     address: '',
-    gender: 'Male',
-    bloodGroup: 'O+',
+    gender: '',
+    bloodGroup: '',
     allergies: '',
     chronicDiseases: '',
     emergencyContact: '',
@@ -48,8 +48,8 @@ export function Profile() {
           phoneNumber: profile.phoneNumber || '',
           nicNumber: profile.nicNumber || '',
           address: profile.address || '',
-          gender: profile.gender || 'Male',
-          bloodGroup: profile.bloodGroup || 'O+',
+          gender: profile.gender || '',
+          bloodGroup: profile.bloodGroup || '',
           allergies: profile.allergies || '',
           chronicDiseases: profile.chronicDiseases || '',
           emergencyContact: profile.emergencyContact || '',
@@ -312,6 +312,7 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
+                        <option value="">Not specified</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                       </select>
@@ -327,6 +328,7 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
+                        <option value="">Not specified</option>
                         <option value="O+">O+</option>
                         <option value="O-">O-</option>
                         <option value="A+">A+</option>

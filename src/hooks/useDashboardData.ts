@@ -44,8 +44,8 @@ const EMPTY_FAILED: Record<keyof DashboardStats, boolean> = {
   totalTestResults: false,
 };
 
-export const useDashboardData = (options: { doctorId?: number } = {}) => {
-  const { doctorId } = options;
+export const useDashboardData = (options: { doctorId?: number; includeTestResults?: boolean } = {}) => {
+  const { doctorId, includeTestResults = false } = options;
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
   const [failedFields, setFailedFields] = useState<Record<keyof DashboardStats, boolean>>(EMPTY_FAILED);
   const [loading, setLoading] = useState(true);
@@ -68,7 +68,7 @@ export const useDashboardData = (options: { doctorId?: number } = {}) => {
         withTimeout(clinicAPI.getAllClinics()),
         withTimeout(consultationAPI.list(doctorId ? { doctorId, size: 1 } : { size: 1 })),
         withTimeout(labTestAPI.list({ size: 1 })),
-        withTimeout(medicalRecordsAPI.list({ size: 1 })),
+        includeTestResults ? withTimeout(medicalRecordsAPI.list({ size: 1 })) : Promise.resolve({ items: [], total: 0 }),
       ]);
 
       const clinicsList = clinics.status === 'fulfilled' && Array.isArray(clinics.value) ? clinics.value : [];
@@ -109,7 +109,7 @@ export const useDashboardData = (options: { doctorId?: number } = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [doctorId]);
+  }, [doctorId, includeTestResults]);
 
   useEffect(() => {
     fetchDashboardData();

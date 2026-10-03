@@ -25,10 +25,18 @@ interface DoctorProfile {
   };
 }
 
+function createEmptyProfile(userId: number): DoctorProfile {
+  return {
+    firstName: '', lastName: '', dateOfBirth: '', phoneNumber: '', nicNumber: '',
+    licenseNumber: '', specialization: '', qualification: '', experienceYears: 0,
+    user: { id: userId }
+  };
+}
+
 const Profile: React.FC = () => {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [profile, setProfile] = useState<DoctorProfile>({
     firstName: '',
     lastName: '',
@@ -74,9 +82,11 @@ const Profile: React.FC = () => {
       };
       setIsEditing(false);
     } else if (profileStatus === 'not-found' && user?.id) {
-      setProfile(prev => ({ ...prev, user: { id: user.id } }));
+      const nextProfile = createEmptyProfile(user.id);
+      setProfile(nextProfile);
+      savedProfile.current = nextProfile;
       setIsNewProfile(true);
-      setIsEditing(true);
+      setIsEditing(false);
     } else if (profileStatus === 'error') {
       setError(profileError || 'Failed to load profile information');
     }

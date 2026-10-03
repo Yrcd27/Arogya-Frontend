@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { HomeIcon } from 'lucide-react';
 import { userAPI } from '../services/api';
+import { ApiError } from '../services/httpClient';
 
 export function RegisterForm() {
   const navigate = useNavigate();

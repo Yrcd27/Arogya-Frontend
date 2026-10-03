@@ -13,7 +13,7 @@ const PAGE_SIZE = 10;
 
 export function LabResults() {
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
   const [page, setPage] = useState(0);
@@ -26,24 +26,28 @@ export function LabResults() {
   const [previewOwnerId, setPreviewOwnerId] = useState<number | null>(null);
   const [testNameByLabTestId, setTestNameByLabTestId] = useState<Record<number, string>>({});
   const loadTestResultsRef = useRef<(patientId: number, pageNumber: number) => Promise<void>>(async () => undefined);
+  const latestRequest = useRef(0);
 
   useEffect(() => {
     if (user?.id) void loadTestResultsRef.current(user.id, page);
   }, [user?.id, page]);
 
   const loadTestResults = async (patientId: number, pageNumber: number) => {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     setError('');
     try {
       const { items, total } = await medicalRecordsAPI.getByPatientIdPaged(patientId, { page: pageNumber, size: PAGE_SIZE });
+      if (requestId !== latestRequest.current) return;
       setTestResults(items);
       setTotalResults(total);
       await hydrateTestNames(items);
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       setError('Failed to load test results');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   };
 
@@ -140,8 +144,15 @@ export function LabResults() {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
+            <div className="mb-4 flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => user?.id && void loadTestResults(user.id, page)}
+                className="shrink-0 rounded px-3 py-1.5 font-medium text-red-800 hover:bg-red-200"
+              >
+                Try again
+              </button>
             </div>
           )}
 
@@ -149,7 +160,7 @@ export function LabResults() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading test results...</div>
             </div>
-          ) : testResults.length === 0 ? (
+          ) : error ? null : testResults.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm">
               <EmptyState 
                 title="No lab results yet"

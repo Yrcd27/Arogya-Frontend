@@ -9,13 +9,15 @@ export class ApiError extends Error {
   status: number;
   errors?: Record<string, string>;
   aborted?: boolean;
+  bodyEmpty?: boolean;
 
-  constructor(status: number, message: string, errors?: Record<string, string>, aborted?: boolean) {
+  constructor(status: number, message: string, errors?: Record<string, string>, aborted?: boolean, bodyEmpty?: boolean) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.errors = errors;
     this.aborted = aborted;
+    this.bodyEmpty = bodyEmpty;
   }
 }
 
@@ -142,13 +144,13 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
   }
 
   if (!response.ok) {
-    const { message, errors } = await readErrorMessage(response);
+    const { message, errors, bodyEmpty } = await readErrorMessage(response);
 
     if (response.status === 401 && !skipAuth) {
       window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
     }
 
-    throw new ApiError(response.status, message, errors);
+    throw new ApiError(response.status, message, errors, undefined, bodyEmpty);
   }
 
   if (response.status === 204) return null as T;

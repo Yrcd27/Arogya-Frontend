@@ -17,7 +17,7 @@ const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:b
 const Profile: React.FC = () => {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [profile, setProfile] = useState<AdminProfile>(emptyProfile);
   const savedProfile = useRef<AdminProfile>(emptyProfile);
   const [saving, setSaving] = useState(false);
@@ -40,7 +40,7 @@ const Profile: React.FC = () => {
       setProfile(nextProfile);
       savedProfile.current = nextProfile;
       setIsNewProfile(true);
-      setIsEditing(true);
+      setIsEditing(false);
     } else if (profileStatus === 'error') setError(profileError || 'Failed to load profile information');
   }, [currentProfile, profileError, profileStatus, user?.id]);
 
