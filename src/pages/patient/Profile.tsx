@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircleIcon } from 'lucide-react';
+import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { profileAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import type { CreatePatientProfileInput, PatientProfile } from '../../types/user';
 import { Header } from '../../components/patient/Header';
 import { Sidebar } from '../../components/patient/Sidebar';
+import { ProfileView } from '../../components/profile/ProfileView';
 
 export function Profile() {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
   const [formData, setFormData] = useState({
     id: 0,
@@ -20,8 +22,8 @@ export function Profile() {
     phoneNumber: '',
     nicNumber: '',
     address: '',
-    gender: 'Male',
-    bloodGroup: 'O+',
+    gender: '',
+    bloodGroup: '',
     allergies: '',
     chronicDiseases: '',
     emergencyContact: '',
@@ -31,6 +33,9 @@ export function Profile() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hasProfile, setHasProfile] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const savedFormData = useRef(formData);
+  useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
 
   useEffect(() => {
     const profile = currentProfile as PatientProfile | null;
@@ -43,19 +48,34 @@ export function Profile() {
           phoneNumber: profile.phoneNumber || '',
           nicNumber: profile.nicNumber || '',
           address: profile.address || '',
-          gender: profile.gender || 'Male',
-          bloodGroup: profile.bloodGroup || 'O+',
+          gender: profile.gender || '',
+          bloodGroup: profile.bloodGroup || '',
           allergies: profile.allergies || '',
           chronicDiseases: profile.chronicDiseases || '',
           emergencyContact: profile.emergencyContact || '',
         });
         setHasProfile(true);
+        setIsEditing(false);
       } else if (profileStatus === 'not-found') {
         setHasProfile(false);
+        setIsEditing(false);
       } else if (profileStatus === 'error') {
         setError(profileError || 'Failed to load profile information');
       }
   }, [currentProfile, profileError, profileStatus]);
+
+  const startEditing = () => {
+    savedFormData.current = formData;
+    setError('');
+    setSuccess('');
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setFormData(savedFormData.current);
+    setError('');
+    setIsEditing(false);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -109,6 +129,7 @@ export function Profile() {
         setSuccess('Profile created successfully!');
         setHasProfile(true);
       }
+      setIsEditing(false);
     } catch (error) {
       console.error('Profile operation failed:', error);
       setError(error instanceof Error ? error.message : 'Failed to save profile. Please try again.');
@@ -129,6 +150,7 @@ export function Profile() {
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          {profileStatus === 'loading' ? <div className="py-24 text-center text-gray-500">Loading profile...</div> : <>
           <div className="mb-4 sm:mb-6">
             <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
@@ -139,17 +161,28 @@ export function Profile() {
             </p>
           </div>
 
-          {!hasProfile && (
+          {!hasProfile && !isEditing && (
             <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
-                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
+                <p className="text-sm text-amber-700">Select Complete Profile to add your details.</p>
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          {success && (
+            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+              <CheckCircleIcon className="h-5 w-5" />{success}
+            </div>
+          )}
+          {error && !isEditing && (
+            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+              <AlertCircleIcon className="h-5 w-5" />{error}
+            </div>
+          )}
+
+          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Success/Error Messages */}
                 {success && (
@@ -279,6 +312,7 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
+                        <option value="">Not specified</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                       </select>
@@ -294,6 +328,7 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       >
+                        <option value="">Not specified</option>
                         <option value="O+">O+</option>
                         <option value="O-">O-</option>
                         <option value="A+">A+</option>
@@ -374,17 +409,38 @@ export function Profile() {
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex justify-end pt-6 border-t border-gray-200">
+                <div className="flex flex-col-reverse gap-3 pt-6 border-t border-gray-200 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    <XIcon className="h-4 w-4" />
+                    Cancel
+                  </button>
                   <button
                     type="submit"
                     disabled={loading}
                     className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
                   >
-                    {loading ? 'Saving...' : (hasProfile ? 'Update Profile' : 'Create Profile')}
+                    <SaveIcon className="h-4 w-4" />
+                    {loading ? 'Saving...' : (hasProfile ? 'Save Changes' : 'Create Profile')}
                   </button>
                 </div>
               </form>
-            </div>
+            </div> : <ProfileView
+              role="Patient"
+              name={`${formData.firstName} ${formData.lastName}`.trim()}
+              incomplete={!hasProfile}
+              onEdit={startEditing}
+              sections={[
+                { title: 'Personal information', details: [{ label: 'First name', value: formData.firstName }, { label: 'Last name', value: formData.lastName }, { label: 'Date of birth', value: formData.dateOfBirth }, { label: 'NIC number', value: formData.nicNumber }, { label: 'Gender', value: hasProfile ? formData.gender : '' }] },
+                { title: 'Medical information', details: [{ label: 'Blood group', value: hasProfile ? formData.bloodGroup : '' }, { label: 'Allergies', value: formData.allergies }, { label: 'Chronic diseases', value: formData.chronicDiseases }] },
+                { title: 'Contact information', details: [{ label: 'Phone number', value: formData.phoneNumber }, { label: 'Address', value: formData.address }, { label: 'Emergency contact', value: formData.emergencyContact }] },
+              ]}
+            />}
+          </>}
         </main>
       </div>
     </div>

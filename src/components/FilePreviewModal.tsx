@@ -11,17 +11,22 @@ interface FilePreviewModalProps {
 
 export function FilePreviewModal({ fileName, fileType, url, onClose, onDownload }: FilePreviewModalProps) {
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       window.URL.revokeObjectURL(url);
     };
-  }, [url]);
+  }, [onClose, url]);
 
   const isImage = fileType.startsWith('image/');
   const isPdf = fileType === 'application/pdf';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70 p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={`Preview ${fileName}`} className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center px-4 py-3 border-b">
           <p className="text-sm font-medium text-gray-900 truncate pr-4">{fileName}</p>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -32,7 +37,7 @@ export function FilePreviewModal({ fileName, fileType, url, onClose, onDownload 
               <Download className="w-4 h-4" />
               Download
             </button>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1.5">
+            <button onClick={onClose} aria-label="Close preview" className="text-gray-500 hover:text-gray-700 p-1.5">
               <X className="w-5 h-5" />
             </button>
           </div>

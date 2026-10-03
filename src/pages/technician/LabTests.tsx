@@ -12,10 +12,15 @@ import { LabTest } from '../../types/labTest';
 import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle, Play } from 'lucide-react';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { ApiError } from '../../services/httpClient';
+import { StatusBadge } from '../../components/StatusBadge';
+import { PaginationFooter } from '../../components/PaginationFooter';
+import { EmptyState } from '../../components/EmptyState';
+
+type ResultAvailability = 'checking' | 'present' | 'absent' | 'error';
 
 export function LabTests() {
-  const { profile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { profile, status: profileStatus } = useUserProfile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,9 +33,13 @@ export function LabTests() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingResult, setEditingResult] = useState<TestResult | null>(null);
   const [patientByConsultation, setPatientByConsultation] = useState<Record<number, { patientId: number; name: string }>>({});
-  const [resultExistsByLabTest, setResultExistsByLabTest] = useState<Record<number, boolean>>({});
+  const [resultAvailabilityByLabTest, setResultAvailabilityByLabTest] = useState<Record<number, ResultAvailability>>({});
+  const [resultAvailabilityErrors, setResultAvailabilityErrors] = useState<Record<number, string>>({});
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [actionErrors, setActionErrors] = useState<Record<number, string>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const loadLabTestsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
@@ -51,10 +60,8 @@ export function LabTests() {
         page += 1;
       }
       setLabTests(data);
-      await Promise.all([
-        hydratePatientDetails(data),
-        hydrateResultPresence(data),
-      ]);
+      void hydratePatientDetails(data);
+      void hydrateResultPresence(data);
     } catch (err) {
       setError('Failed to load lab tests');
       console.error(err);
@@ -110,23 +117,40 @@ export function LabTests() {
       .map(t => t.id);
     if (candidateIds.length === 0) return;
 
+    setResultAvailabilityByLabTest(previous => ({
+      ...previous,
+      ...Object.fromEntries(candidateIds.map(id => [id, 'checking' as ResultAvailability])),
+    }));
+    setResultAvailabilityErrors(previous => {
+      const next = { ...previous };
+      candidateIds.forEach(id => delete next[id]);
+      return next;
+    });
+
     const checks = await Promise.all(
       candidateIds.map(async (labTestId) => {
         try {
           const result = await medicalRecordsAPI.getByLabTestId(labTestId);
-          return { labTestId, exists: !!result?.id };
+          return { labTestId, availability: result?.id ? 'present' as const : 'error' as const };
         } catch (err) {
-          if (err instanceof ApiError && err.status === 404) return { labTestId, exists: false };
-          throw err;
+          if (err instanceof ApiError && err.status === 404) return { labTestId, availability: 'absent' as const };
+          return {
+            labTestId,
+            availability: 'error' as const,
+            message: err instanceof Error ? err.message : 'Unable to verify whether a result already exists.',
+          };
         }
       })
     );
 
-    const next: Record<number, boolean> = {};
-    checks.forEach(({ labTestId, exists }) => {
-      next[labTestId] = exists;
+    const next: Record<number, ResultAvailability> = {};
+    const nextErrors: Record<number, string> = {};
+    checks.forEach(({ labTestId, availability, ...result }) => {
+      next[labTestId] = availability;
+      if ('message' in result && result.message) nextErrors[labTestId] = result.message;
     });
-    setResultExistsByLabTest(prev => ({ ...prev, ...next }));
+    setResultAvailabilityByLabTest(prev => ({ ...prev, ...next }));
+    setResultAvailabilityErrors(prev => ({ ...prev, ...nextErrors }));
   };
 
   const filteredTests = useMemo(() => {
@@ -154,6 +178,14 @@ export function LabTests() {
     return filtered;
   }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, searchTerm, statusFilter]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [assignedToMeOnly, searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTests.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedTests = filteredTests.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -166,21 +198,6 @@ export function LabTests() {
         return <XCircle className="w-5 h-5 text-red-600" />;
       default:
         return <FlaskConical className="w-5 h-5 text-gray-600" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'IN_PROGRESS':
-        return 'bg-blue-100 text-blue-700';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-700';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -201,27 +218,58 @@ export function LabTests() {
   };
 
   const handleTakeTest = async (test: LabTest) => {
+    const resultAvailability = resultAvailabilityByLabTest[test.id] ?? 'checking';
+    if (resultAvailability === 'present') {
+      handleViewDetails(test);
+      return;
+    }
+    if (resultAvailability !== 'absent') {
+      setActionErrors(previous => ({
+        ...previous,
+        [test.id]: resultAvailability === 'error'
+          ? 'Verify result availability before submitting a result.'
+          : 'Checking result availability. Please wait.',
+      }));
+      return;
+    }
     if (test.status === 'IN_PROGRESS') {
       setTestToSubmit(test);
       setShowSubmitModal(true);
       return;
     }
     if (!profile?.id) {
-      setError('Your technician profile has not loaded yet — please try again in a moment.');
+      setError(profileStatus === 'not-found'
+        ? 'Please complete your profile first, then try again.'
+        : 'Your technician profile has not loaded yet — please try again in a moment.');
       return;
     }
     if (actionLoadingId !== null) return;
     setActionLoadingId(test.id);
+    setActionErrors(previous => {
+      const next = { ...previous };
+      delete next[test.id];
+      return next;
+    });
     let assigned = false;
     try {
-      await labTestAPI.assign(test.id, profile.id);
-      assigned = true;
+      if (test.assignedTechnicianId && test.assignedTechnicianId !== profile.id) {
+        throw new Error('This test is assigned to another technician.');
+      }
+      if (test.assignedTechnicianId !== profile.id) {
+        await labTestAPI.assign(test.id, profile.id);
+        assigned = true;
+      }
       const started = await labTestAPI.start(test.id);
       setLabTests(prev => prev.map(t => (t.id === test.id ? started : t)));
       setTestToSubmit(started);
       setShowSubmitModal(true);
     } catch (err) {
-      setError(assigned ? 'The test was assigned, but could not be started. Refresh and continue from its current server status.' : err instanceof Error ? err.message : 'Failed to start test');
+      setActionErrors(previous => ({
+        ...previous,
+        [test.id]: assigned
+          ? 'The test was assigned, but could not be started. Refresh and continue from its current server status.'
+          : err instanceof Error ? err.message : 'Failed to start test',
+      }));
       await loadLabTests();
     } finally {
       setActionLoadingId(null);
@@ -248,14 +296,10 @@ export function LabTests() {
   };
 
   const handleDelete = async (resultId: number) => {
-    try {
-      await medicalRecordsAPI.delete(resultId);
-      setShowDetailsModal(false);
-      setSelectedTest(null);
-      await loadLabTests();
-    } catch (err) {
-      setError('Failed to delete test result');
-    }
+    await medicalRecordsAPI.delete(resultId);
+    setShowDetailsModal(false);
+    setSelectedTest(null);
+    await loadLabTests();
   };
 
   const handleRetake = async () => {
@@ -344,15 +388,17 @@ export function LabTests() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading lab tests...</div>
             </div>
+          ) : filteredTests.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm">
+              <EmptyState title="No lab tests found" description="Try adjusting your search or filters." />
+            </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">ID</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Consultation</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Created At</th>
@@ -360,71 +406,92 @@ export function LabTests() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredTests.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                          No lab tests found
+                    {paginatedTests.map((test) => {
+                      const displayStatus = test.status;
+                      const resultAvailability = resultAvailabilityByLabTest[test.id]
+                        ?? (displayStatus === 'PENDING' || displayStatus === 'IN_PROGRESS' ? 'checking' : 'present');
+                      return (
+                      <tr key={test.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(displayStatus)}
+                            <span className="text-sm font-medium text-gray-900">{test.testName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {patientByConsultation[test.consultationId]?.name ? (
+                            <span className="text-sm text-gray-700">{patientByConsultation[test.consultationId]?.name}</span>
+                          ) : (
+                            <span className="inline-block bg-gray-200 animate-pulse rounded h-4 w-24" />
+                          )}
+                          <div className="text-xs text-gray-400">Test #{test.id} · Consultation #{test.consultationId}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={displayStatus} />
+                          {resultAvailability === 'present' && displayStatus !== 'COMPLETED' && (
+                            <span className="ml-2 text-xs text-amber-700">Result recorded</span>
+                          )}
+                          {resultAvailability === 'error' && (
+                            <span className="ml-2 text-xs text-red-700">Result availability unknown</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {displayStatus === 'COMPLETED' || resultAvailability === 'present' ? (
+                            <button
+                              onClick={() => handleViewDetails(test)}
+                              className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
+                            >
+                              View Result
+                            </button>
+                          ) : resultAvailability === 'checking' ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="px-4 py-2 rounded-lg bg-gray-200 text-sm font-medium text-gray-600"
+                            >
+                              Checking result...
+                            </button>
+                          ) : resultAvailability === 'error' ? (
+                            <button
+                              type="button"
+                              onClick={() => void hydrateResultPresence([test])}
+                              className="px-4 py-2 rounded-lg border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50"
+                            >
+                              Retry check
+                            </button>
+                          ) : displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
+                            <button
+                              onClick={() => handleTakeTest(test)}
+                              disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
+                            >
+                              <Play className="w-4 h-4" />
+                              Take Test
+                            </button>
+                          ) : null}
+                          {(actionErrors[test.id] || resultAvailabilityErrors[test.id]) && (
+                            <p className="mt-2 max-w-xs text-xs text-red-700">
+                              {actionErrors[test.id] || resultAvailabilityErrors[test.id]}
+                            </p>
+                          )}
                         </td>
                       </tr>
-                    ) : (
-                      filteredTests.map((test) => {
-                        const displayStatus = test.status;
-                        return (
-                        <tr key={test.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-gray-900">{test.id}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              {getStatusIcon(displayStatus)}
-                              <span className="text-sm font-medium text-gray-900">{test.testName}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700"># {test.consultationId}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700">
-                              {patientByConsultation[test.consultationId]?.name || 'Loading...'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
-                              {displayStatus}
-                            </span>
-                            {resultExistsByLabTest[test.id] && displayStatus !== 'COMPLETED' && (
-                              <span className="ml-2 text-xs text-amber-700">Result recorded</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
-                              <button
-                                onClick={() => handleTakeTest(test)}
-                                disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
-                              >
-                                <Play className="w-4 h-4" />
-                                Take Test
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleViewDetails(test)}
-                                className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
-                              >
-                                View Result
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        );
-                      })
-                    )}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+              <PaginationFooter
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredTests.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+              />
             </div>
           )}
         </main>

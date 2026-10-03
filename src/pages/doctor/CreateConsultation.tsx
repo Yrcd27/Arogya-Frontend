@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { consultationAPI } from '../../services/consultationService';
+import type { ConsultationCreate } from '../../services/consultationService';
 import { labTestAPI } from '../../services/labTestService';
 import { queueAPI } from '../../services/queueService';
 import { ApiError } from '../../services/httpClient';
@@ -12,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
 
 export function CreateConsultation() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuth();
@@ -28,6 +29,7 @@ export function CreateConsultation() {
   const [formErrors, setFormErrors] = useState<{ diagnosis?: string; notes?: string }>({});
   const savingRef = useRef(false);
   const createdConsultationIdRef = useRef<number | null>(null);
+  const createdConsultationPayloadRef = useRef<ConsultationCreate | null>(null);
 
   // Lab test states
   const [requestLabTests, setRequestLabTests] = useState(false);
@@ -59,10 +61,10 @@ export function CreateConsultation() {
 
     const errors: { diagnosis?: string; notes?: string } = {};
     if (!chief.trim()) {
-      errors.diagnosis = 'Diagnosis is required';
+      errors.diagnosis = 'Chief complaint is required';
     }
     if (!recom.trim()) {
-      errors.notes = 'Notes are required';
+      errors.notes = 'Recommendations are required';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -75,7 +77,7 @@ export function CreateConsultation() {
     try {
       let consultationId = createdConsultationIdRef.current;
       if (consultationId === null) {
-        const consultation = await consultationAPI.create({
+        createdConsultationPayloadRef.current = {
           patientId: Number(token.patientId),
           doctorId: Number(currentUser?.id || 0),
           clinicId: Number(clinicId || token.clinicId || 0),
@@ -86,7 +88,8 @@ export function CreateConsultation() {
           recommendations: recom,
           sessionNumber: sessionNumber || 1,
           bookedAt: new Date().toISOString(),
-        });
+        };
+        const consultation = await consultationAPI.create(createdConsultationPayloadRef.current);
         consultationId = consultation.id;
         createdConsultationIdRef.current = consultationId;
       }
@@ -145,6 +148,10 @@ export function CreateConsultation() {
   };
 
   const cancel = () => {
+    if (partiallySaved) {
+      toast.warn('This consultation was already created. Finish saving it before returning to the queue.');
+      return;
+    }
     navigate('/doctor/queue');
   };
 
@@ -170,7 +177,7 @@ export function CreateConsultation() {
       {/* Create Consultation modal */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        onClick={saving ? undefined : cancel}
+        onClick={saving || partiallySaved ? undefined : cancel}
       >
         <div
           className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
@@ -204,7 +211,8 @@ export function CreateConsultation() {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+          <fieldset disabled={saving || partiallySaved} className="p-6 space-y-6">
             {partiallySaved && (
               <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
                 The consultation record was saved but not finalized. Click Save Consultation again to finish.
@@ -430,6 +438,7 @@ export function CreateConsultation() {
                 </div>
               )}
             </div>
+          </fieldset>
           </div>
 
           {/* Modal footer */}
@@ -446,7 +455,7 @@ export function CreateConsultation() {
               onClick={save}
               disabled={saving}
             >
-              {saving ? 'Saving...' : 'Save Consultation'}
+              {saving ? 'Saving...' : partiallySaved ? 'Finish Saving' : 'Save Consultation'}
             </button>
           </div>
         </div>

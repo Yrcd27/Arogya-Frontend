@@ -8,6 +8,10 @@ export const labTestAPI = {
     return unwrapList<LabTest>(body);
   },
 
+  async get(id: number): Promise<LabTest> {
+    return apiFetch<LabTest>(`/lab-tests/${id}`);
+  },
+
   async create(data: CreateLabTestRequest): Promise<LabTest> {
     return apiFetch<LabTest>('/lab-tests', { method: 'POST', body: data });
   },

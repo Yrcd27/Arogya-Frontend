@@ -5,7 +5,7 @@ import { PatientCard } from '../../components/patient/PatientCard';
 import { SummaryCards } from '../../components/patient/SummaryCards';
 
 export function Dashboard() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
   return <div className="min-h-screen bg-gray-50">
       <Sidebar 

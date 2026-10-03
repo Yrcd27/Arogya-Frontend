@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationFooter } from '../../components/PaginationFooter';
 import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
@@ -14,13 +15,15 @@ interface MedicalRecord extends Consultation {
 
 export function Records() {
   const { user: currentUser } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const loadRecordsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
@@ -42,6 +45,14 @@ export function Records() {
       setFilteredRecords(filtered);
     }
   }, [searchTerm, records]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const loadRecords = async () => {
     if (!currentUser) return;
@@ -214,7 +225,7 @@ export function Records() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredRecords.map(record => <tr key={record.id} className="hover:bg-gray-50">
+                    {paginatedRecords.map(record => <tr key={record.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {formatDate(record.bookedAt)}
                         </td>
@@ -247,6 +258,16 @@ export function Records() {
                 </table>
               </div>
             )}
+            {!loading && filteredRecords.length > 0 && (
+              <PaginationFooter
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredRecords.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+              />
+            )}
           </div>
         </main>
       </div>
@@ -268,10 +289,6 @@ export function Records() {
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Prescription ID</p>
-                  <p className="font-medium">#{selectedRecord.id}</p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-600 mb-1">Status</p>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRecord.status)}`}>
                     {selectedRecord.status}
@@ -280,10 +297,6 @@ export function Records() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Date</p>
                   <p className="font-medium">{formatDate(selectedRecord.bookedAt)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Session Number</p>
-                  <p className="font-medium">{selectedRecord.sessionNumber || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Doctor</p>

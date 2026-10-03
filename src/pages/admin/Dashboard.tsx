@@ -5,7 +5,7 @@ import { UsersIcon, CalendarIcon, UserCheckIcon, AlertCircleIcon } from 'lucide-
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const { stats, failedFields, loading, error } = useDashboardData();
 
   const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());

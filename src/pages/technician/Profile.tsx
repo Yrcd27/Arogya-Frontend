@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
+import { SaveIcon, AlertCircleIcon, CheckCircleIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { profileAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
+import { ProfileView } from '../../components/profile/ProfileView';
 import type { CreateTechnicianProfileInput, TechnicianProfile as StoredTechnicianProfile } from '../../types/user';
 
 interface TechnicianProfile {
@@ -23,10 +25,18 @@ interface TechnicianProfile {
   };
 }
 
+function createEmptyProfile(userId: number): TechnicianProfile {
+  return {
+    firstName: '', lastName: '', dateOfBirth: '', phoneNumber: '', nicNumber: '',
+    technicianField: '', licenseNumber: '', certification: '', assignedEquipment: '',
+    user: { id: userId }
+  };
+}
+
 const Profile: React.FC = () => {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [profile, setProfile] = useState<TechnicianProfile>({
     firstName: '',
     lastName: '',
@@ -45,6 +55,9 @@ const Profile: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isNewProfile, setIsNewProfile] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const savedProfile = useRef<TechnicianProfile | null>(null);
+  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
   const loading = profileStatus === 'loading';
 
   useEffect(() => {
@@ -64,13 +77,33 @@ const Profile: React.FC = () => {
         user: { id: storedProfile.user.id },
       });
       setIsNewProfile(false);
+      savedProfile.current = {
+        id: storedProfile.id, firstName: storedProfile.firstName || '', lastName: storedProfile.lastName || '', dateOfBirth: storedProfile.dateOfBirth || '', phoneNumber: storedProfile.phoneNumber || '', nicNumber: storedProfile.nicNumber || '', technicianField: storedProfile.technicianField || '', licenseNumber: storedProfile.licenseNumber || '', certification: storedProfile.certification || '', assignedEquipment: storedProfile.assignedEquipment || '', user: { id: storedProfile.user.id },
+      };
+      setIsEditing(false);
     } else if (profileStatus === 'not-found' && user?.id) {
-      setProfile(prev => ({ ...prev, user: { id: user.id } }));
+      const nextProfile = createEmptyProfile(user.id);
+      setProfile(nextProfile);
+      savedProfile.current = nextProfile;
       setIsNewProfile(true);
+      setIsEditing(false);
     } else if (profileStatus === 'error') {
       setError(profileError || 'Failed to load profile information');
     }
   }, [currentProfile, profileError, profileStatus, user?.id]);
+
+  const startEditing = () => {
+    savedProfile.current = profile;
+    setError('');
+    setSuccess('');
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    if (savedProfile.current) setProfile(savedProfile.current);
+    setError('');
+    setIsEditing(false);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -117,6 +150,7 @@ const Profile: React.FC = () => {
         replaceProfile(updated);
         setSuccess('Profile updated successfully!');
       }
+      setIsEditing(false);
     } catch (error: unknown) {
       console.error('Error saving profile:', error);
       setError(error instanceof Error ? error.message : 'Failed to save profile');
@@ -161,7 +195,7 @@ const Profile: React.FC = () => {
             </h1>
           </div>
 
-          {isNewProfile && (
+          {isNewProfile && !isEditing && (
             <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -171,7 +205,19 @@ const Profile: React.FC = () => {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          {error && !isEditing && (
+            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+              <AlertCircleIcon className="h-5 w-5" />{error}
+            </div>
+          )}
+
+          {success && !isEditing && (
+            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+              <CheckCircleIcon className="h-5 w-5" />{success}
+            </div>
+          )}
+
+          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
             {error && (
               <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
@@ -343,7 +389,16 @@ const Profile: React.FC = () => {
                 />
               </div>
 
-              <div className="flex justify-end pt-6 border-t border-gray-200">
+              <div className="flex flex-col-reverse gap-3 pt-6 border-t border-gray-200 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                  className="flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <XIcon className="h-4 w-4" />
+                  Cancel
+                </button>
                 <button
                   type="submit"
                   disabled={saving}
@@ -354,7 +409,17 @@ const Profile: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div> : <ProfileView
+            role="Technician"
+            name={`${profile.firstName} ${profile.lastName}`.trim()}
+            incomplete={isNewProfile}
+            onEdit={startEditing}
+            sections={[
+              { title: 'Personal information', details: [{ label: 'First name', value: profile.firstName }, { label: 'Last name', value: profile.lastName }, { label: 'Date of birth', value: profile.dateOfBirth }, { label: 'NIC number', value: profile.nicNumber }] },
+              { title: 'Professional information', details: [{ label: 'Technician field', value: profile.technicianField }, { label: 'License number', value: profile.licenseNumber }, { label: 'Certification', value: profile.certification }, { label: 'Assigned equipment', value: profile.assignedEquipment }] },
+              { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] },
+            ]}
+          />}
         </main>
       </div>
     </div>

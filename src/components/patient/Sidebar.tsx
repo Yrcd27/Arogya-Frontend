@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { HomeIcon, FileTextIcon, FlaskConicalIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
-import { SidebarLanguageSelector } from '../LanguageSelectors';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -39,7 +38,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
   const handleNavigation = (path: string) => {
     navigate(path);
-    onClose?.(); // Close sidebar on mobile after navigation
+    if (window.matchMedia('(max-width: 767px)').matches) onClose?.();
   };
 
   return (
@@ -70,16 +69,18 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close navigation"
             className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
           >
             <XIcon className="h-6 w-6" />
           </button>
         </div>
-        <nav className="flex-1 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto mt-6">
+        <nav className="flex-1 min-h-0 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto mt-6">
           {navItems.map(item => (
             <button
               key={item.label}
               onClick={() => handleNavigation(item.path)}
+              aria-current={location.pathname === item.path ? 'page' : undefined}
               className={`
                 w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg
                 transition-colors duration-200 text-sm sm:text-base
@@ -92,7 +93,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
           ))}
         </nav>
         <div className="p-3 sm:p-4 border-t border-gray-200">
-          <SidebarLanguageSelector />
           <button
             onClick={() => setShowLogoutModal(true)}
             className="w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-sm sm:text-base"

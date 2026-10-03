@@ -28,11 +28,6 @@ export function LandingFooter() {
                   Contact
                 </a>
               </li>
-              <li>
-                <a href="#" className="text-gray-400 hover:text-white">
-                  Privacy Policy
-                </a>
-              </li>
             </ul>
           </div>
           <div>
@@ -43,7 +38,7 @@ export function LandingFooter() {
           </div>
         </div>
         <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
-          <p>© 2024 Ministry of Health Sri Lanka. All rights reserved.</p>
+          <p>© 2026 Ministry of Health Sri Lanka. All rights reserved.</p>
         </div>
       </div>
     </footer>;

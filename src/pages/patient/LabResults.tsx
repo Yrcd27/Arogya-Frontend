@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationFooter } from '../../components/PaginationFooter';
 import { FlaskConicalIcon, DownloadIcon, EyeIcon, FileText, Calendar } from 'lucide-react';
 import { medicalRecordsAPI, TestResult, TestResultFile } from '../../services/medicalRecordsService';
+import { labTestAPI } from '../../services/labTestService';
 import { useAuth } from '../../hooks/useAuth';
 import { FilePreviewModal } from '../../components/FilePreviewModal';
 
@@ -11,7 +13,7 @@ const PAGE_SIZE = 10;
 
 export function LabResults() {
   const { user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
   const [page, setPage] = useState(0);
@@ -22,28 +24,54 @@ export function LabResults() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoadingId, setPreviewLoadingId] = useState<number | null>(null);
   const [previewOwnerId, setPreviewOwnerId] = useState<number | null>(null);
+  const [testNameByLabTestId, setTestNameByLabTestId] = useState<Record<number, string>>({});
   const loadTestResultsRef = useRef<(patientId: number, pageNumber: number) => Promise<void>>(async () => undefined);
+  const latestRequest = useRef(0);
 
   useEffect(() => {
     if (user?.id) void loadTestResultsRef.current(user.id, page);
   }, [user?.id, page]);
 
   const loadTestResults = async (patientId: number, pageNumber: number) => {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     setError('');
     try {
       const { items, total } = await medicalRecordsAPI.getByPatientIdPaged(patientId, { page: pageNumber, size: PAGE_SIZE });
+      if (requestId !== latestRequest.current) return;
       setTestResults(items);
       setTotalResults(total);
+      await hydrateTestNames(items);
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       setError('Failed to load test results');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   };
 
   loadTestResultsRef.current = loadTestResults;
+
+  const hydrateTestNames = async (results: TestResult[]) => {
+    const missingIds = Array.from(new Set(results.map(r => r.labTestId))).filter(id => !testNameByLabTestId[id]);
+    if (missingIds.length === 0) return;
+
+    const resolved = await Promise.all(
+      missingIds.map(async (labTestId) => {
+        try {
+          const test = await labTestAPI.get(labTestId);
+          return { labTestId, name: test.testName || `Test #${labTestId}` };
+        } catch {
+          return { labTestId, name: `Test #${labTestId}` };
+        }
+      })
+    );
+
+    const next: Record<number, string> = {};
+    resolved.forEach(r => { next[r.labTestId] = r.name; });
+    setTestNameByLabTestId(prev => ({ ...prev, ...next }));
+  };
 
   const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
@@ -116,8 +144,15 @@ export function LabResults() {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
+            <div className="mb-4 flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => user?.id && void loadTestResults(user.id, page)}
+                className="shrink-0 rounded px-3 py-1.5 font-medium text-red-800 hover:bg-red-200"
+              >
+                Try again
+              </button>
             </div>
           )}
 
@@ -125,7 +160,7 @@ export function LabResults() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading test results...</div>
             </div>
-          ) : testResults.length === 0 ? (
+          ) : error ? null : testResults.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm">
               <EmptyState 
                 title="No lab results yet"
@@ -139,7 +174,7 @@ export function LabResults() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test ID</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test Name</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Result</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">File</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
@@ -159,7 +194,11 @@ export function LabResults() {
                               <div className="w-10 h-10 bg-[#38A3A5] bg-opacity-10 rounded-lg flex items-center justify-center">
                                 <FlaskConicalIcon className="w-5 h-5 text-[#38A3A5]" />
                               </div>
-                              <span className="text-sm font-medium text-gray-900">Test #{result.labTestId}</span>
+                              {testNameByLabTestId[result.labTestId] ? (
+                                <span className="text-sm font-medium text-gray-900">{testNameByLabTestId[result.labTestId]}</span>
+                              ) : (
+                                <span className="inline-block bg-gray-200 animate-pulse rounded h-4 w-24" />
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -209,30 +248,13 @@ export function LabResults() {
                 </table>
               </div>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-                  <span className="text-sm text-gray-600">
-                    Page <span className="font-medium text-gray-900">{page + 1}</span> of{' '}
-                    <span className="font-medium text-gray-900">{totalPages}</span> ({totalResults} results)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(0, p - 1))}
-                      disabled={page === 0}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                      disabled={page >= totalPages - 1}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
+              <PaginationFooter
+                currentPage={page + 1}
+                totalPages={totalPages}
+                pageSize={PAGE_SIZE}
+                totalItems={totalResults}
+                onPageChange={(newPage) => setPage(newPage - 1)}
+              />
             </div>
           )}
         </main>
@@ -253,8 +275,8 @@ export function LabResults() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Test ID</label>
-                  <p className="text-gray-900">#{selectedResult.labTestId}</p>
+                  <label className="text-sm font-medium text-gray-500">Test Name</label>
+                  <p className="text-gray-900">{testNameByLabTestId[selectedResult.labTestId] || 'Loading...'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Date</label>

@@ -1,264 +1,83 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/admin/Header';
 import { Sidebar } from '../../components/admin/Sidebar';
+import { ProfileView } from '../../components/profile/ProfileView';
 import { profileAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import type { AdminProfile as StoredAdminProfile, CreateAdminProfileInput } from '../../types/user';
 
-interface AdminProfile {
-  id?: number;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  phoneNumber: string;
-  nicNumber: string;
-  user: {
-    id: number;
-  };
-}
+interface AdminProfile { id?: number; firstName: string; lastName: string; dateOfBirth: string; phoneNumber: string; nicNumber: string; user: { id: number }; }
+
+const emptyProfile: AdminProfile = { firstName: '', lastName: '', dateOfBirth: '', phoneNumber: '', nicNumber: '', user: { id: 0 } };
+const inputClass = 'w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-transparent focus:ring-2 focus:ring-[#38A3A5]';
 
 const Profile: React.FC = () => {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [profile, setProfile] = useState<AdminProfile>({
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    phoneNumber: '',
-    nicNumber: '',
-    user: {
-      id: 0
-    }
-  });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const [profile, setProfile] = useState<AdminProfile>(emptyProfile);
+  const savedProfile = useRef<AdminProfile>(emptyProfile);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isNewProfile, setIsNewProfile] = useState(false);
-  const loading = profileStatus === 'loading';
+  const [isEditing, setIsEditing] = useState(false);
+  const savingRef = useRef(false);
+  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
 
   useEffect(() => {
     if (currentProfile) {
-      setProfile(currentProfile as StoredAdminProfile);
+      const nextProfile = currentProfile as StoredAdminProfile;
+      setProfile(nextProfile);
+      savedProfile.current = nextProfile;
       setIsNewProfile(false);
+      setIsEditing(false);
     } else if (profileStatus === 'not-found' && user?.id) {
-      setProfile(prev => ({ ...prev, user: { id: user.id } }));
+      const nextProfile = { ...emptyProfile, user: { id: user.id } };
+      setProfile(nextProfile);
+      savedProfile.current = nextProfile;
       setIsNewProfile(true);
-    } else if (profileStatus === 'error') {
-      setError(profileError || 'Failed to load profile information');
-    }
+      setIsEditing(false);
+    } else if (profileStatus === 'error') setError(profileError || 'Failed to load profile information');
   }, [currentProfile, profileError, profileStatus, user?.id]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setProfile(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setProfile(previous => ({ ...previous, [name]: value }));
   };
+  const startEditing = () => { savedProfile.current = profile; setError(''); setSuccess(''); setIsEditing(true); };
+  const cancelEditing = () => { setProfile(savedProfile.current); setError(''); setIsEditing(false); };
 
-  const savingRef = useRef(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
-
-    const requestBody: CreateAdminProfileInput = {
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      dateOfBirth: profile.dateOfBirth,
-      phoneNumber: profile.phoneNumber,
-      nicNumber: profile.nicNumber,
-      user: { id: user?.id || profile.user.id },
-    };
-
+    const requestBody: CreateAdminProfileInput = { firstName: profile.firstName, lastName: profile.lastName, dateOfBirth: profile.dateOfBirth, phoneNumber: profile.phoneNumber, nicNumber: profile.nicNumber, user: { id: user?.id || profile.user.id } };
     try {
       if (isNewProfile) {
         const created = await profileAPI.createAdmin(requestBody);
-        setProfile(prev => ({ ...prev, id: created.id }));
-        replaceProfile(created);
-        setSuccess('Profile created successfully!');
-        setIsNewProfile(false);
+        const nextProfile = { ...profile, id: created.id };
+        setProfile(nextProfile); savedProfile.current = nextProfile; replaceProfile(created); setSuccess('Profile created successfully!'); setIsNewProfile(false);
       } else {
         if (!profile.id) throw new Error('Profile ID is missing. Please refresh and try again.');
         const updated = await profileAPI.updateAdmin({ ...requestBody, id: profile.id });
-        setProfile(prev => ({ ...prev, id: updated.id }));
-        replaceProfile(updated);
-        setSuccess('Profile updated successfully!');
+        const nextProfile = { ...profile, id: updated.id };
+        setProfile(nextProfile); savedProfile.current = nextProfile; replaceProfile(updated); setSuccess('Profile updated successfully!');
       }
-    } catch (error: unknown) {
-      console.error('Error saving profile:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save profile');
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
+      setIsEditing(false);
+    } catch (saveError: unknown) {
+      console.error('Error saving profile:', saveError);
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save profile');
+    } finally { savingRef.current = false; setSaving(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-        />
-        <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
-          <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-500">Loading profile...</div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
-        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-4 sm:mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              {isNewProfile ? 'Complete Your Admin Profile' : 'Admin Profile'}
-            </h1>
-          </div>
-
-          {isNewProfile && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
-              <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
-                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            {error && (
-              <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
-                <span className="text-red-700">{error}</span>
-              </div>
-            )}
-
-            {success && (
-              <div className="mb-6 flex items-center p-4 bg-green-50 border border-green-200 rounded-lg">
-                <CheckCircleIcon className="h-5 w-5 text-green-600 mr-2" />
-                <span className="text-green-700">{success}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* First Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={profile.firstName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-                    placeholder="Enter first name"
-                  />
-                </div>
-
-                {/* Last Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={profile.lastName}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-                    placeholder="Enter last name"
-                  />
-                </div>
-
-                {/* Date of Birth */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date of Birth *
-                  </label>
-                  <input
-                    type="date"
-                    name="dateOfBirth"
-                    value={profile.dateOfBirth}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="tel"
-                    name="phoneNumber"
-                    value={profile.phoneNumber}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-                    placeholder="+94771234567"
-                  />
-                </div>
-
-                {/* NIC Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    NIC Number *
-                  </label>
-                  <input
-                    type="text"
-                    name="nicNumber"
-                    value={profile.nicNumber}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-                    placeholder="123456789V or 123456789012"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-6 border-t border-gray-200">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
-                >
-                  <SaveIcon className="h-4 w-4" />
-                  {saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Update Profile'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-gray-50"><Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} /><div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}><Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} /><main className="flex-1 p-4 sm:p-6 lg:p-8">{profileStatus === 'loading' ? <div className="py-24 text-center text-gray-500">Loading profile...</div> : <><div className="mb-5 sm:mb-7"><p className="mb-2 text-sm text-gray-600">Dashboard / Profile</p><h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{isNewProfile ? 'Complete Your Admin Profile' : 'Admin Profile'}</h1></div>{isNewProfile && !isEditing && <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><AlertCircleIcon className="mt-0.5 h-5 w-5 shrink-0" />Your profile is not complete yet. Select Complete Profile to add your details.</div>}{error && <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700"><AlertCircleIcon className="h-5 w-5" />{error}</div>}{success && <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700"><CheckCircleIcon className="h-5 w-5" />{success}</div>}{isEditing ? <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 sm:p-7"><div className="mb-6"><h2 className="text-xl font-bold text-gray-900">{isNewProfile ? 'Complete profile' : 'Edit profile'}</h2><p className="mt-1 text-sm text-gray-600">Update your personal and contact information.</p></div><form onSubmit={handleSubmit} className="space-y-6"><div className="grid grid-cols-1 gap-5 md:grid-cols-2">{[['First Name', 'firstName', 'Enter first name'], ['Last Name', 'lastName', 'Enter last name'], ['Date of Birth', 'dateOfBirth', ''], ['Phone Number', 'phoneNumber', '+94771234567'], ['NIC Number', 'nicNumber', '123456789V or 123456789012']].map(([label, name, placeholder]) => <div key={name}><label className="mb-2 block text-sm font-medium text-gray-700">{label} *</label><input type={name === 'dateOfBirth' ? 'date' : name === 'phoneNumber' ? 'tel' : 'text'} name={name} value={profile[name as keyof Omit<AdminProfile, 'id' | 'user'>]} onChange={handleInputChange} required placeholder={placeholder} className={inputClass} /></div>)}</div><div className="flex flex-col-reverse gap-3 border-t border-gray-200 pt-6 sm:flex-row sm:justify-end"><button type="button" onClick={cancelEditing} disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><XIcon className="h-4 w-4" />Cancel</button><button type="submit" disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#38A3A5] px-5 py-2.5 font-medium text-white hover:bg-[#2d8284] disabled:opacity-50"><SaveIcon className="h-4 w-4" />{saving ? 'Saving...' : isNewProfile ? 'Create Profile' : 'Save Changes'}</button></div></form></section> : <ProfileView role="Administrator" name={`${profile.firstName} ${profile.lastName}`.trim()} incomplete={isNewProfile} onEdit={startEditing} sections={[{ title: 'Personal information', details: [{ label: 'First name', value: profile.firstName }, { label: 'Last name', value: profile.lastName }, { label: 'Date of birth', value: profile.dateOfBirth }, { label: 'NIC number', value: profile.nicNumber }] }, { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] }]} />}</>}</main></div></div>;
 };
 
 export default Profile;

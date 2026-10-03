@@ -6,7 +6,7 @@ import { useDashboardData } from '../../hooks/useDashboardData';
 import { useAuth } from '../../hooks/useAuth';
 
 export function Dashboard() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const { user } = useAuth();
   const { stats, failedFields, loading, error } = useDashboardData({ doctorId: user?.id });
 

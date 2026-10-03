@@ -5,8 +5,8 @@ import { FlaskConicalIcon, ClipboardListIcon, UsersIcon, CalendarIcon, AlertCirc
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { stats, failedFields, loading, error } = useDashboardData();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const { stats, failedFields, loading, error } = useDashboardData({ includeTestResults: true });
 
   const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 

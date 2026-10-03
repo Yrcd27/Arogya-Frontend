@@ -14,7 +14,7 @@ import {
 } from '../../utils/clinic';
 
 export function Clinics() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingClinic, setEditingClinic] = useState<Clinic | null>(null);

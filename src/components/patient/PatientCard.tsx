@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import { profileAPI } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useUserProfile } from '../../hooks/useUserProfile';
 
 interface PatientProfile {
   firstName: string;
@@ -32,38 +30,12 @@ const getInitials = (firstName: string, lastName: string): string => {
 };
 
 export function PatientCard() {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<PatientProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchPatientProfile = async () => {
-      if (!user?.id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const patientProfile = await profileAPI.getPatient(user.id);
-        setProfile({
-          firstName: patientProfile.firstName || '',
-          lastName: patientProfile.lastName || '',
-          nicNumber: patientProfile.nicNumber || '',
-          dateOfBirth: patientProfile.dateOfBirth || '',
-          bloodGroup: patientProfile.bloodGroup || '',
-        });
-      } catch (err) {
-        console.error('Failed to fetch patient profile:', err);
-        setError('Unable to load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPatientProfile();
-  }, [user]);
+  const { profile: currentProfile, status, refetchProfile } = useUserProfile();
+  const profile = currentProfile as PatientProfile | null;
+  const loading = status === 'loading';
+  const profileMissing = status === 'not-found';
+  const profileError = status === 'error';
 
   const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Loading...';
   const initials = profile ? getInitials(profile.firstName, profile.lastName) : '...';
@@ -97,7 +69,7 @@ export function PatientCard() {
         </div>
         <div className="flex-1">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">
-            {error ? 'Unable to load profile' : fullName}
+            {profileError ? 'Unable to load profile' : profileMissing ? 'Profile incomplete' : fullName}
           </h2>
           <div className="flex flex-wrap gap-4 sm:gap-6 text-gray-600 text-sm sm:text-base">
             <div>
@@ -112,11 +84,11 @@ export function PatientCard() {
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <button 
-            onClick={() => navigate('/patient/profile')}
+          <button
+            onClick={() => profileError ? void refetchProfile() : navigate('/patient/profile')}
             className="px-4 sm:px-6 py-2 sm:py-3 text-[#38a3a5] border-2 border-[#38a3a5] rounded-lg font-medium hover:bg-[#38a3a5] hover:text-white transition-colors text-sm sm:text-base"
           >
-            Update Info
+            {profileError ? 'Retry' : profileMissing ? 'Complete Profile' : 'Update Info'}
           </button>
           <button 
             onClick={() => navigate('/patient/clinics')}
