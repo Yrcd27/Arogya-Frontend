@@ -8,11 +8,28 @@
   --teal-accent: #38a3a5;
 }
 
-/* The translation library applies an inline 160px minimum width. Keep the
-   dashboard control compact without affecting the hero version. */
-.dashboard-language-selector > .notranslate {
-  width: 136px !important;
-  min-width: 136px !important;
+html {
+  margin-top: 0 !important;
+}
+
+body {
+  top: 0 !important;
+}
+
+iframe.VIpgJd-ZVi9od-ORHb-OEVmcd.skiptranslate,
+.goog-te-banner-frame.skiptranslate {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.google-translate-host {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Smooth scroll behavior */

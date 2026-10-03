@@ -12,9 +12,12 @@ import { LabTest } from '../../types/labTest';
 import { FlaskConical, Search, Clock, CheckCircle, XCircle, AlertCircle, Play } from 'lucide-react';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { ApiError } from '../../services/httpClient';
+import { StatusBadge } from '../../components/StatusBadge';
+import { PaginationFooter } from '../../components/PaginationFooter';
+import { EmptyState } from '../../components/EmptyState';
 
 export function LabTests() {
-  const { profile } = useUserProfile();
+  const { profile, status: profileStatus } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,6 +34,8 @@ export function LabTests() {
   const [resultExistsByLabTest, setResultExistsByLabTest] = useState<Record<number, boolean>>({});
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const loadLabTestsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
@@ -154,6 +159,14 @@ export function LabTests() {
     return filtered;
   }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, searchTerm, statusFilter]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [assignedToMeOnly, searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTests.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedTests = filteredTests.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -166,21 +179,6 @@ export function LabTests() {
         return <XCircle className="w-5 h-5 text-red-600" />;
       default:
         return <FlaskConical className="w-5 h-5 text-gray-600" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'IN_PROGRESS':
-        return 'bg-blue-100 text-blue-700';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-700';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -207,7 +205,9 @@ export function LabTests() {
       return;
     }
     if (!profile?.id) {
-      setError('Your technician profile has not loaded yet — please try again in a moment.');
+      setError(profileStatus === 'not-found'
+        ? 'Please complete your profile first, then try again.'
+        : 'Your technician profile has not loaded yet — please try again in a moment.');
       return;
     }
     if (actionLoadingId !== null) return;
@@ -344,15 +344,17 @@ export function LabTests() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading lab tests...</div>
             </div>
+          ) : filteredTests.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm">
+              <EmptyState title="No lab tests found" description="Try adjusting your search or filters." />
+            </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">ID</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Consultation</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Created At</th>
@@ -360,71 +362,66 @@ export function LabTests() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredTests.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                          No lab tests found
+                    {paginatedTests.map((test) => {
+                      const displayStatus = test.status;
+                      return (
+                      <tr key={test.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(displayStatus)}
+                            <span className="text-sm font-medium text-gray-900">{test.testName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {patientByConsultation[test.consultationId]?.name ? (
+                            <span className="text-sm text-gray-700">{patientByConsultation[test.consultationId]?.name}</span>
+                          ) : (
+                            <span className="inline-block bg-gray-200 animate-pulse rounded h-4 w-24" />
+                          )}
+                          <div className="text-xs text-gray-400">Test #{test.id} · Consultation #{test.consultationId}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={displayStatus} />
+                          {resultExistsByLabTest[test.id] && displayStatus !== 'COMPLETED' && (
+                            <span className="ml-2 text-xs text-amber-700">Result recorded</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
+                            <button
+                              onClick={() => handleTakeTest(test)}
+                              disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
+                            >
+                              <Play className="w-4 h-4" />
+                              Take Test
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleViewDetails(test)}
+                              className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
+                            >
+                              View Result
+                            </button>
+                          )}
                         </td>
                       </tr>
-                    ) : (
-                      filteredTests.map((test) => {
-                        const displayStatus = test.status;
-                        return (
-                        <tr key={test.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-gray-900">{test.id}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              {getStatusIcon(displayStatus)}
-                              <span className="text-sm font-medium text-gray-900">{test.testName}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700"># {test.consultationId}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700">
-                              {patientByConsultation[test.consultationId]?.name || 'Loading...'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}>
-                              {displayStatus}
-                            </span>
-                            {resultExistsByLabTest[test.id] && displayStatus !== 'COMPLETED' && (
-                              <span className="ml-2 text-xs text-amber-700">Result recorded</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
-                              <button
-                                onClick={() => handleTakeTest(test)}
-                                disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}
-                              >
-                                <Play className="w-4 h-4" />
-                                Take Test
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleViewDetails(test)}
-                                className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
-                              >
-                                View Result
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        );
-                      })
-                    )}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+              <PaginationFooter
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredTests.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(newSize) => { setPageSize(newSize); setCurrentPage(1); }}
+              />
             </div>
           )}
         </main>

@@ -529,7 +529,7 @@ export function Clinics() {
                   <h4 className="font-semibold text-gray-900">Queue Actions</h4>
                   <div className="text-sm text-gray-700">
                     {patientFetchError ? (
-                      <span className="text-red-700">{patientFetchError}</span>
+                      <span className="text-red-700">Please complete your profile first, then try again.</span>
                     ) : patientId ? (
                       <span>
                         Joining as <span className="font-medium">{patientName || `Patient #${patientId}`}</span>
@@ -561,7 +561,7 @@ export function Clinics() {
                     </button>
                   </div>
                   {patientFetchError && (
-                    <p className="text-xs text-red-500 mt-1">Cannot join queue — your patient profile could not be verified.</p>
+                    <p className="text-xs text-red-500 mt-1">Cannot join queue — please complete your profile first, then try again.</p>
                   )}
                 </div>
 

@@ -4,6 +4,8 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { StatusBadge } from '../../components/StatusBadge';
+import { PaginationFooter } from '../../components/PaginationFooter';
 import { toast } from 'react-toastify';
 import { consultationAPI, Consultation, ConsultationUpdate, ConsultationWithTests } from "../../services/consultationService";
 import { userAPI } from "../../services/userService";
@@ -263,42 +265,9 @@ export default function Consultations() {
     }
   };
 
-  const getLabTestStatusColor = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'IN_PROGRESS':
-        return 'bg-blue-100 text-blue-700';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-700';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
-
   const totalPages = Math.max(1, Math.ceil((totalElements ?? 0) / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * pageSize;
   const paginatedConsultations = consultations;
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const windowSize = 1;
-    for (let p = 1; p <= totalPages; p++) {
-      if (
-        p === 1 ||
-        p === totalPages ||
-        (p >= safePage - windowSize && p <= safePage + windowSize)
-      ) {
-        pages.push(p);
-      } else if (pages[pages.length - 1] !== 'ellipsis') {
-        pages.push('ellipsis');
-      }
-    }
-    return pages;
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -383,11 +352,8 @@ export default function Consultations() {
                           className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
                         />
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">ID</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Clinic</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Chief Complaint</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Session #</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Booked At</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
                       <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Actions</th>
@@ -409,36 +375,25 @@ export default function Consultations() {
                             />
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-gray-900">{c.id}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-900">
-                              {patients[c.patientId]?.name || `Patient #${c.patientId}`}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-900">
-                              {clinics[c.clinicId]?.clinicName || `Clinic #${c.clinicId}`}
-                            </span>
+                            {patients[c.patientId]?.name ? (
+                              <span className="text-sm text-gray-900">{patients[c.patientId]?.name}</span>
+                            ) : (
+                              <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                            )}
+                            {clinics[c.clinicId]?.clinicName ? (
+                              <p className="text-xs text-gray-500">{clinics[c.clinicId]?.clinicName}</p>
+                            ) : (
+                              <span className="block mt-1 h-3 w-16 bg-gray-100 rounded animate-pulse" />
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-sm text-gray-700">{c.chiefComplaint || '-'}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700">{c.sessionNumber || '-'}</span>
-                          </td>
-                          <td className="px-6 py-4">
                             <span className="text-sm text-gray-600">{formatDateTime(c.bookedAt)}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              c.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                              c.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                              c.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-700' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {c.status}
-                            </span>
+                            <StatusBadge status={c.status} />
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-end gap-2">
@@ -495,66 +450,18 @@ export default function Consultations() {
                 </table>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span>
-                    Showing <span className="font-medium text-gray-900">{startIndex + 1}</span>–
-                    <span className="font-medium text-gray-900">{Math.min(startIndex + pageSize, totalElements ?? 0)}</span> of{' '}
-                    <span className="font-medium text-gray-900">{totalElements ?? 0}</span>
-                  </span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      const newSize = Number(e.target.value);
-                      setPageSize(newSize);
-                      loadConsultations(1, newSize);
-                    }}
-                    disabled={loading}
-                    className="ml-2 border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
-                  >
-                    <option value={10}>10 / page</option>
-                    <option value={25}>25 / page</option>
-                    <option value={50}>50 / page</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => loadConsultations(Math.max(1, safePage - 1))}
-                    disabled={loading || safePage === 1}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  {getPageNumbers().map((p, idx) =>
-                    p === 'ellipsis' ? (
-                      <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 select-none">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => loadConsultations(p)}
-                        disabled={loading}
-                        className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors disabled:opacity-60 ${
-                          p === safePage
-                            ? 'bg-[#38A3A5] text-white'
-                            : 'text-gray-600 hover:bg-gray-100 border border-gray-300'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                  <button
-                    onClick={() => loadConsultations(Math.min(totalPages, safePage + 1))}
-                    disabled={loading || safePage === totalPages}
-                    className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+              <PaginationFooter
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={totalElements ?? 0}
+                loading={loading}
+                onPageChange={(p) => loadConsultations(p)}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  loadConsultations(1, newSize);
+                }}
+              />
             </div>
           )}
         </main>
@@ -581,14 +488,7 @@ export default function Consultations() {
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <p>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    selectedConsultation.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                    selectedConsultation.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                    selectedConsultation.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-700' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {selectedConsultation.status}
-                  </span>
+                  <StatusBadge status={selectedConsultation.status} />
                 </p>
               </div>
               <div>
@@ -602,10 +502,6 @@ export default function Consultations() {
               <div>
                 <label className="text-sm font-medium text-gray-500">Session Number</label>
                 <p className="text-gray-900">{selectedConsultation.sessionNumber || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Queue Token ID</label>
-                <p className="text-gray-900">{selectedConsultation.queueTokenId}</p>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium text-gray-500">Chief Complaint</label>
@@ -659,9 +555,7 @@ export default function Consultations() {
                           <FlaskConical className="w-4 h-4 text-[#38A3A5]" />
                           <h5 className="font-semibold text-gray-900">{test.testName}</h5>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getLabTestStatusColor(test.status)}`}>
-                          {test.status}
-                        </span>
+                        <StatusBadge status={test.status} />
                       </div>
                       {test.testDescription && (
                         <p className="text-sm text-gray-700 mb-2">{test.testDescription}</p>

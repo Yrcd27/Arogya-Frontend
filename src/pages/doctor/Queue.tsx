@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { PatientProfileModal } from '../../components/doctor/PatientProfileModal';
+import { StatusBadge } from '../../components/StatusBadge';
 import { SearchIcon, PhoneCallIcon, XIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -74,7 +75,7 @@ export function Queue() {
     if (!profile?.id) {
       setClinics([]);
       setClinicsLoading(false);
-      setError(null);
+      setError(profileStatus === 'not-found' ? 'Please complete your profile first, then try again.' : null);
       return;
     }
 
@@ -305,7 +306,11 @@ export function Queue() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Now serving</p>
-                  <p className="font-medium text-gray-900">{nameById[String(servingToken.patientId)] || `User #${servingToken.patientId}`}</p>
+                  {nameById[String(servingToken.patientId)] ? (
+                    <p className="font-medium text-gray-900">{nameById[String(servingToken.patientId)]}</p>
+                  ) : (
+                    <span className="inline-block h-5 w-28 bg-gray-200 rounded animate-pulse" />
+                  )}
                 </div>
               </div>
               <button
@@ -344,10 +349,14 @@ export function Queue() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{nameById[String(t.patientId)] || `User #${t.patientId}`}</div>
+                        {nameById[String(t.patientId)] ? (
+                          <div className="text-sm font-medium text-gray-900">{nameById[String(t.patientId)]}</div>
+                        ) : (
+                          <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse" />
+                        )}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{t.status}</span>
+                        <StatusBadge status={t.status} />
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-600">{new Date(t.issuedAt).toLocaleString()}</div>

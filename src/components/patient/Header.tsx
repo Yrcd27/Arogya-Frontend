@@ -19,7 +19,7 @@ export function Header({ onToggleSidebar }: HeaderProps) {
               <div className="h-0.5 bg-current rounded"></div>
             </div>
           </button>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Dashboard</h2>
+          <h2 className="whitespace-nowrap text-lg sm:text-xl font-bold text-gray-900">Dashboard</h2>
         </div>
         <div className="flex items-center">
           <HeaderLanguageSelector />

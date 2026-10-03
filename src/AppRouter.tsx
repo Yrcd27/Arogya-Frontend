@@ -21,12 +21,13 @@ import { Queue as DoctorQueue } from './pages/doctor/Queue';
 import { CreateConsultation as DoctorCreateConsultation } from './pages/doctor/CreateConsultation';
 import Consultations from './pages/doctor/Consultations';
 import { NotFound } from './pages/NotFound';
-import { GlobalLanguageSelector } from './components/LanguageSelectors';
+import { LanguageProvider } from './context/LanguageContext';
 
 export function AppRouter() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <Routes>
+      <LanguageProvider>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
@@ -57,8 +58,9 @@ export function AppRouter() {
         <Route path="/technician/profile" element={<ProtectedRoute requiredRole="technician"><TechnicianProfile /></ProtectedRoute>} />
         <Route path="/technician/lab-tests" element={<ProtectedRoute requiredRole="technician"><TechnicianLabTests /></ProtectedRoute>} />
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }
