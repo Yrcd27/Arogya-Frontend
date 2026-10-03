@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { getDashboardRoute, isKnownDashboardRole } from '../utils/auth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,9 +32,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (requiredRole && user?.userRole.roleName.toLowerCase() !== requiredRole.toLowerCase()) {
-    // User doesn't have the required role, redirect to their dashboard
-    const userRole = user?.userRole.roleName.toLowerCase();
-    const redirectPath = userRole ? `/${userRole}/dashboard` : '/login';
+    // User doesn't have the required role — send them to their own
+    // dashboard, or back to login if their role isn't one we recognize.
+    const userRole = user?.userRole.roleName;
+    const redirectPath = isKnownDashboardRole(userRole) ? getDashboardRoute(userRole) : '/login';
     return <Navigate to={redirectPath} replace />;
   }
 

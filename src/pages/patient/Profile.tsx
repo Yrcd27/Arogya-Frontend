@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { AlertCircleIcon } from 'lucide-react';
 import { profileAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import type { CreatePatientProfileInput, PatientProfile } from '../../types/user';
 import { Header } from '../../components/patient/Header';
 import { Sidebar } from '../../components/patient/Sidebar';
 
 export function Profile() {
   const { user } = useAuth();
+  const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -29,11 +33,8 @@ export function Profile() {
   const [hasProfile, setHasProfile] = useState(false);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.id) return;
-
-      try {
-        const profile = await profileAPI.getPatient(user.id);
+    const profile = currentProfile as PatientProfile | null;
+    if (profile) {
         setFormData({
           id: profile.id,
           firstName: profile.firstName || '',
@@ -49,13 +50,12 @@ export function Profile() {
           emergencyContact: profile.emergencyContact || '',
         });
         setHasProfile(true);
-      } catch (error) {
-        console.log('No existing profile found');
+      } else if (profileStatus === 'not-found') {
+        setHasProfile(false);
+      } else if (profileStatus === 'error') {
+        setError(profileError || 'Failed to load profile information');
       }
-    };
-
-    fetchProfile();
-  }, [user]);
+  }, [currentProfile, profileError, profileStatus]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -65,8 +65,12 @@ export function Profile() {
     }));
   };
 
+  const savingRef = useRef(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setLoading(true);
     setError('');
     setSuccess('');
@@ -77,21 +81,31 @@ export function Profile() {
         return;
       }
 
-      const profileData = {
-        ...formData,
-        id: formData.id, // Include profile ID for updates
-        user: user
+      const profileData: CreatePatientProfileInput = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        dateOfBirth: formData.dateOfBirth,
+        phoneNumber: formData.phoneNumber,
+        nicNumber: formData.nicNumber,
+        address: formData.address,
+        gender: formData.gender,
+        bloodGroup: formData.bloodGroup,
+        allergies: formData.allergies,
+        chronicDiseases: formData.chronicDiseases,
+        emergencyContact: formData.emergencyContact,
+        user: { id: user.id },
       };
-      console.log('Profile updated:', profileData);
 
       if (hasProfile) {
-        // Update existing profile
-        await profileAPI.updatePatient(profileData);
+        const updated = await profileAPI.updatePatient({ ...profileData, id: formData.id });
+        setFormData(prev => ({ ...prev, id: updated.id }));
+        replaceProfile(updated);
         setSuccess('Profile updated successfully!');
-        
+
       } else {
-        // Create new profile
-        await profileAPI.createPatient(profileData);
+        const created = await profileAPI.createPatient(profileData);
+        setFormData(prev => ({ ...prev, id: created.id }));
+        replaceProfile(created);
         setSuccess('Profile created successfully!');
         setHasProfile(true);
       }
@@ -99,6 +113,7 @@ export function Profile() {
       console.error('Profile operation failed:', error);
       setError(error instanceof Error ? error.message : 'Failed to save profile. Please try again.');
     } finally {
+      savingRef.current = false;
       setLoading(false);
     }
   };
@@ -123,6 +138,16 @@ export function Profile() {
               {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
             </p>
           </div>
+
+          {!hasProfile && (
+            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+              <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
+                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             <form onSubmit={handleSubmit} className="space-y-6">

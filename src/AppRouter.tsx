@@ -20,6 +20,8 @@ import DoctorProfile from './pages/doctor/Profile';
 import { Queue as DoctorQueue } from './pages/doctor/Queue';
 import { CreateConsultation as DoctorCreateConsultation } from './pages/doctor/CreateConsultation';
 import Consultations from './pages/doctor/Consultations';
+import { NotFound } from './pages/NotFound';
+import { GlobalLanguageSelector } from './components/LanguageSelectors';
 
 export function AppRouter() {
   return (
@@ -54,6 +56,8 @@ export function AppRouter() {
         <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />
         <Route path="/technician/profile" element={<ProtectedRoute requiredRole="technician"><TechnicianProfile /></ProtectedRoute>} />
         <Route path="/technician/lab-tests" element={<ProtectedRoute requiredRole="technician"><TechnicianLabTests /></ProtectedRoute>} />
+
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );

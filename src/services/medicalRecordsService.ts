@@ -1,4 +1,16 @@
-const API_BASE_URL = '';
+// Medical Records Service API - routed through the API Gateway (see httpClient.ts)
+import { apiFetch, apiFetchBlob, toQueryString } from './httpClient';
+import { unwrapList, type Page } from '../types/api';
+
+export const MAX_TEST_RESULT_FILES = 5;
+
+export interface TestResultFile {
+  id: number;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
 
 export interface TestResult {
   id: number;
@@ -7,10 +19,7 @@ export interface TestResult {
   technicianId: number;
   testResultDescription: string;
   technicianNotes?: string;
-  filePath?: string;
-  fileName?: string;
-  fileType?: string;
-  fileSize?: number;
+  files: TestResultFile[];
   createdAt: string;
   updatedAt: string;
 }
@@ -21,92 +30,60 @@ export interface CreateTestResultRequest {
   technicianId: number;
   testResultDescription: string;
   technicianNotes?: string;
-  file?: File;
+  files?: File[];
+}
+
+export interface UpdateTestResultRequest {
+  testResultDescription?: string;
+  technicianNotes?: string;
+  files?: File[];
+  removeFileIds?: number[];
+}
+
+function toFormData(data: Partial<CreateTestResultRequest> & Partial<UpdateTestResultRequest>): FormData {
+  const formData = new FormData();
+  if (data.labTestId !== undefined) formData.append('labTestId', String(data.labTestId));
+  if (data.patientId !== undefined) formData.append('patientId', String(data.patientId));
+  if (data.technicianId !== undefined) formData.append('technicianId', String(data.technicianId));
+  if (data.testResultDescription !== undefined) formData.append('testResultDescription', data.testResultDescription || '');
+  if (data.technicianNotes !== undefined) formData.append('technicianNotes', data.technicianNotes || '');
+  (data.files || []).forEach(file => formData.append('files', file));
+  (data.removeFileIds || []).forEach(id => formData.append('removeFileIds', String(id)));
+  return formData;
 }
 
 export const medicalRecordsAPI = {
   async create(data: CreateTestResultRequest): Promise<TestResult> {
-    const formData = new FormData();
-    formData.append('labTestId', data.labTestId.toString());
-    formData.append('patientId', data.patientId.toString());
-    formData.append('technicianId', data.technicianId.toString());
-    formData.append('testResultDescription', data.testResultDescription);
-    if (data.technicianNotes) formData.append('technicianNotes', data.technicianNotes);
-    if (data.file) formData.append('file', data.file);
-
-    const res = await fetch(`${API_BASE_URL}/test-results`, {
-      method: 'POST',
-      body: formData
-    });
-    // Debug: log formData entries so developers can inspect what's being sent
-    try {
-      // Note: iterating FormData after sending is allowed in browsers
-      for (const pair of (formData as any).entries()) {
-        console.debug('test-results formData:', pair[0], pair[1]);
-      }
-    } catch (e) {
-      console.warn('Could not enumerate formData entries for debug', e);
-    }
-    if (!res.ok) {
-      let serverMessage = '';
-      try {
-        const text = await res.text();
-        if (text) {
-          try {
-            const json = JSON.parse(text);
-            const detail =
-              json?.message ||
-              json?.error ||
-              (Array.isArray(json?.errors) ? json.errors.map((e: any) => e?.defaultMessage || e?.message).filter(Boolean).join(', ') : '') ||
-              '';
-            serverMessage = detail || text;
-          } catch {
-            serverMessage = text;
-          }
-        }
-      } catch {
-        // Fallback to generic message below.
-      }
-      throw new Error(serverMessage ? `${serverMessage} (${res.status})` : `Failed to create test result (${res.status})`);
-    }
-    return await res.json();
+    return apiFetch<TestResult>('/test-results', { method: 'POST', body: toFormData(data) });
   },
 
-  async getById(id: number): Promise<TestResult> {
-    const res = await fetch(`${API_BASE_URL}/test-results/${id}`);
-    if (!res.ok) throw new Error(`Failed to get test result ${id} (${res.status})`);
-    return await res.json();
-  },
-
+  /** Throws a 404 ApiError if no result has been submitted yet — callers
+   *  treat that as "no result", it's expected, not an error state. */
   async getByLabTestId(labTestId: number): Promise<TestResult> {
-    const res = await fetch(`${API_BASE_URL}/test-results/lab-test/${labTestId}`);
-    if (!res.ok) throw new Error(`Failed to get test result for lab test ${labTestId} (${res.status})`);
-    return await res.json();
+    return apiFetch<TestResult>(`/test-results/lab-test/${labTestId}`);
   },
 
-  async getByPatientId(patientId: number): Promise<TestResult[]> {
-    const res = await fetch(`${API_BASE_URL}/test-results/patient/${patientId}`);
-    if (!res.ok) throw new Error(`Failed to get test results for patient ${patientId} (${res.status})`);
-    return await res.json();
+  async getByPatientIdPaged(patientId: number, params: { page?: number; size?: number } = {}): Promise<{ items: TestResult[]; total: number }> {
+    const body = await apiFetch<Page<TestResult>>(`/test-results/patient/${patientId}/paged${toQueryString(params)}`);
+    return unwrapList<TestResult>(body);
   },
 
-  async downloadFile(id: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/test-results/${id}/download`);
-    if (!res.ok) throw new Error(`Failed to download file (${res.status})`);
-    const blob = await res.blob();
-    const contentDisposition = res.headers.get('Content-Disposition');
-    let filename = 'test-result';
-    if (contentDisposition) {
-      // Match quoted filename: filename="example.png"
-      const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
-      if (quotedMatch) {
-        filename = quotedMatch[1];
-      } else {
-        // Match unquoted filename: filename=example.png
-        const unquotedMatch = contentDisposition.match(/filename=([^;\s]+)/);
-        if (unquotedMatch) filename = unquotedMatch[1];
-      }
-    }
+  async getByTechnicianId(technicianId: number): Promise<TestResult[]> {
+    return apiFetch<TestResult[]>(`/test-results/technician/${technicianId}`);
+  },
+
+  async getByTechnicianIdPaged(technicianId: number, params: { page?: number; size?: number } = {}): Promise<{ items: TestResult[]; total: number }> {
+    const body = await apiFetch<Page<TestResult>>(`/test-results/technician/${technicianId}/paged${toQueryString(params)}`);
+    return unwrapList<TestResult>(body);
+  },
+
+  async list(params: { page?: number; size?: number; sortBy?: string; sortDir?: string } = {}): Promise<{ items: TestResult[]; total: number }> {
+    const body = await apiFetch<Page<TestResult>>(`/test-results${toQueryString(params)}`);
+    return unwrapList<TestResult>(body);
+  },
+
+  async downloadFile(testResultId: number, fileId: number, fallbackName = 'test-result'): Promise<void> {
+    const { blob, filename } = await apiFetchBlob(`/test-results/${testResultId}/files/${fileId}/download`, fallbackName);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -117,29 +94,19 @@ export const medicalRecordsAPI = {
     document.body.removeChild(a);
   },
 
-  async update(id: number, data: Partial<CreateTestResultRequest>): Promise<TestResult> {
-    const formData = new FormData();
-    // Always send testResultDescription as it's required
-    formData.append('testResultDescription', data.testResultDescription || '');
-    // Send technicianNotes even if empty
-    formData.append('technicianNotes', data.technicianNotes || '');
-    if (data.file) formData.append('file', data.file);
+  async getFilePreviewUrl(testResultId: number, fileId: number, fallbackName = 'file'): Promise<{ url: string; blob: Blob }> {
+    const { blob } = await apiFetchBlob(`/test-results/${testResultId}/files/${fileId}/download`, fallbackName);
+    return { url: window.URL.createObjectURL(blob), blob };
+  },
 
-    const res = await fetch(`${API_BASE_URL}/test-results/${id}/update`, {
-      method: 'POST',
-      body: formData
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `Failed to update test result ${id} (${res.status})`);
-    }
-    return await res.json();
+  // The backend also exposes PUT /test-results/{id} and DELETE /test-results/{id},
+  // but the POST variants below were added specifically to avoid a multipart
+  // PUT/DELETE CORS-preflight issue, so the frontend uses those.
+  async update(id: number, data: UpdateTestResultRequest): Promise<TestResult> {
+    return apiFetch<TestResult>(`/test-results/${id}/update`, { method: 'POST', body: toFormData(data) });
   },
 
   async delete(id: number): Promise<void> {
-    const res = await fetch(`${API_BASE_URL}/test-results/${id}/delete`, {
-      method: 'POST'
-    });
-    if (!res.ok) throw new Error(`Failed to delete test result ${id} (${res.status})`);
-  }
+    await apiFetch(`/test-results/${id}/delete`, { method: 'POST' });
+  },
 };

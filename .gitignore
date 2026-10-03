@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+BACKEND_ISSUES.md
+PLAN.md

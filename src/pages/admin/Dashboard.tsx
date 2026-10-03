@@ -1,39 +1,37 @@
 import { useState } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, UserCheckIcon } from 'lucide-react';
+import { UsersIcon, CalendarIcon, UserCheckIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { stats, loading } = useDashboardData();
+  const { stats, failedFields, loading, error } = useDashboardData();
+
+  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const dashboardStats = [
     {
       label: 'Total Patients',
-      value: loading ? '...' : (stats?.totalPatients?.toLocaleString() || '0'),
-      change: loading ? '' : (stats?.totalPatients ? `+${Math.round((stats.totalPatients / 100) * 12)}` : ''),
+      value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
       icon: UsersIcon,
       color: '#38A3A5'
     },
     {
       label: 'Total Clinics',
-      value: loading ? '...' : (stats?.totalClinics?.toString() || '0'),
-      change: loading ? '' : (stats?.totalClinics ? `+${Math.round((stats.totalClinics / 10) * 8)}` : ''),
+      value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
       icon: CalendarIcon,
       color: '#38A3A5'
     },
     {
-      label: 'Active Doctors',
-      value: loading ? '...' : (stats?.activeDoctors?.toString() || '0'),
-      change: '',
+      label: 'Total Doctors',
+      value: loading ? '...' : fmt(stats.totalDoctors, failedFields.totalDoctors),
       icon: UserCheckIcon,
       color: '#38A3A5'
     },
     {
       label: 'Scheduled Clinics',
-      value: loading ? '...' : (stats?.scheduledClinics?.toString() || '0'),
-      change: '',
+      value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
       icon: CalendarIcon,
       color: '#38A3A5'
     }
@@ -56,6 +54,12 @@ export function Dashboard() {
               </h1>
             </div>
           </div>
+          {error && (
+            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             {dashboardStats.map(stat => (
               <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
@@ -68,11 +72,6 @@ export function Dashboard() {
                       <p className="text-2xl lg:text-4xl font-bold text-gray-900 mb-1">
                         {stat.value}
                       </p>
-                    )}
-                    {stat.change && (
-                      <span className="text-[#57CC99] text-sm font-medium">
-                        {stat.change}
-                      </span>
                     )}
                   </div>
                   <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-lg flex items-center justify-center" style={{

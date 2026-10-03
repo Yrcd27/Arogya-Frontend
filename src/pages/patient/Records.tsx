@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
-import { getCurrentUser } from '../../utils/auth';
+import { useAuth } from '../../hooks/useAuth';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -13,17 +13,19 @@ interface MedicalRecord extends Consultation {
 }
 
 export function Records() {
+  const { user: currentUser } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  const currentUser = getCurrentUser();
+  const [loadError, setLoadError] = useState('');
+  const loadRecordsRef = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    loadRecords();
-  }, []);
+    void loadRecordsRef.current();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -46,79 +48,77 @@ export function Records() {
     
     try {
       setLoading(true);
-      // Fetch consultations for current patient
-      const consultations = await consultationAPI.list({ patientId: currentUser.id });
-      
-      console.log('Raw consultations from API:', consultations);
-      
-      // Remove duplicates by consultation ID - keep only the first occurrence
-      const seenIds = new Set();
-      const uniqueConsultations = consultations.filter((consultation) => {
-        if (seenIds.has(consultation.id)) {
-          console.log('Duplicate found, skipping:', consultation.id);
-          return false;
-        }
-        seenIds.add(consultation.id);
-        return true;
-      });
-      
-      console.log('Unique consultations after deduplication:', uniqueConsultations);
-      
-      // Fetch doctor and clinic names
-      const enrichedRecords = await Promise.all(
-        uniqueConsultations.map(async (consultation) => {
-          let doctorName = 'Unknown Doctor';
-          let clinicName = 'Unknown Clinic';
-          
-          // Fetch doctor name (try profile first, then user as fallback)
-          try {
-            const doctorProfile = await profileAPI.getDoctor(consultation.doctorId);
-            const firstName = doctorProfile.firstName || '';
-            const lastName = doctorProfile.lastName || '';
-            doctorName = `Dr. ${firstName} ${lastName}`.trim();
-            if (doctorName === 'Dr.' || !firstName || !lastName) {
-              // Profile exists but no names, try user
-              const user = await userAPI.getUser(consultation.doctorId);
-              doctorName = `Dr. ${user?.username || consultation.doctorId}`;
-            }
-          } catch (docErr) {
-            // Profile doesn't exist, use user info as fallback
+      setLoadError('');
+      const pageSize = 200;
+      let page = 0;
+      let consultations: Consultation[] = [];
+      for (;;) {
+        const { items, total } = await consultationAPI.list({ patientId: currentUser.id, page, size: pageSize });
+        consultations = consultations.concat(items);
+        if (items.length === 0 || consultations.length >= total) break;
+        page += 1;
+      }
+
+      // Look up each unique doctor/clinic only once, instead of once per row.
+      // Caching the in-flight promise (not just the resolved value) avoids a
+      // race where two rows for the same doctor both miss the cache before
+      // the first lookup resolves.
+      const doctorNameCache = new Map<number, Promise<string>>();
+      const clinicNameCache = new Map<number, Promise<string>>();
+
+      const getDoctorName = (doctorId: number): Promise<string> => {
+        let promise = doctorNameCache.get(doctorId);
+        if (!promise) {
+          promise = (async () => {
             try {
-              const user = await userAPI.getUser(consultation.doctorId);
-              doctorName = `Dr. ${user?.username || consultation.doctorId}`;
-            } catch (userErr) {
-              console.error('Failed to fetch doctor info:', docErr, userErr);
-              doctorName = `Doctor #${consultation.doctorId}`;
+              const doctorProfile = await profileAPI.getDoctor(doctorId);
+              const fullName = `${doctorProfile.firstName || ''} ${doctorProfile.lastName || ''}`.trim();
+              return fullName ? `Dr. ${fullName}` : `Doctor #${doctorId}`;
+            } catch {
+              try {
+                const user = await userAPI.getUser(doctorId);
+                return `Dr. ${user?.username || doctorId}`;
+              } catch {
+                return `Doctor #${doctorId}`;
+              }
             }
-          }
-          
-          // Fetch clinic name
-          try {
-            const clinic = await clinicAPI.getClinic(consultation.clinicId);
-            clinicName = clinic?.clinicName || 'Unknown Clinic';
-          } catch (clinicErr) {
-            console.error('Failed to fetch clinic:', clinicErr);
-            clinicName = `Clinic #${consultation.clinicId}`;
-          }
-          
-          return {
-            ...consultation,
-            doctorName,
-            clinicName
-          };
-        })
+          })();
+          doctorNameCache.set(doctorId, promise);
+        }
+        return promise;
+      };
+
+      const getClinicName = (clinicId: number): Promise<string> => {
+        let promise = clinicNameCache.get(clinicId);
+        if (!promise) {
+          promise = clinicAPI
+            .getClinic(clinicId)
+            .then(clinic => clinic?.clinicName || `Clinic #${clinicId}`)
+            .catch(() => `Clinic #${clinicId}`);
+          clinicNameCache.set(clinicId, promise);
+        }
+        return promise;
+      };
+
+      const enrichedRecords = await Promise.all(
+        consultations.map(async (consultation) => ({
+          ...consultation,
+          doctorName: await getDoctorName(consultation.doctorId),
+          clinicName: await getClinicName(consultation.clinicId),
+        }))
       );
-      
-      console.log('Final enriched records:', enrichedRecords);
+
       setRecords(enrichedRecords);
       setFilteredRecords(enrichedRecords);
     } catch (error) {
       console.error('Failed to load prescriptions:', error);
-      alert('Failed to load prescriptions. Please try again.');
+      setLoadError(error instanceof Error ? error.message : 'Failed to load prescriptions. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  loadRecordsRef.current = loadRecords;
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
@@ -152,6 +152,12 @@ export function Records() {
               Prescriptions
             </h1>
           </div>
+
+          {loadError && (
+            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {loadError}
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-200">

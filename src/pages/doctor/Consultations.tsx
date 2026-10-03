@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from 'react-toastify';
-import { consultationAPI, Consultation, ConsultationUpdate } from "../../services/consultationService";
-import { labTestAPI } from "../../services/labTestService";
-import { LabTest } from "../../types/labTest";
+import { consultationAPI, Consultation, ConsultationUpdate, ConsultationWithTests } from "../../services/consultationService";
 import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
-import { FlaskConical, Pencil, Trash2 } from 'lucide-react';
+import { useAuth } from "../../hooks/useAuth";
+import { ApiError } from '../../services/httpClient';
+import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 
 type PatientInfo = {
   id: number;
@@ -22,26 +22,24 @@ type ClinicInfo = {
   clinicName: string;
 };
 
-// Simple in-memory caches (module-scoped so they survive component unmounts)
-const consultationsCache: { data?: Consultation[]; ts?: number } = {};
-const labTestsCache = new Map<number, { data: LabTest[]; ts: number }>();
-const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
-const usersCache: { data?: any[]; ts?: number } = {};
-const clinicsCache: { data?: any[]; ts?: number } = {};
+const isEmptyConsultationsResponse = (error: unknown) =>
+  error instanceof ApiError &&
+  error.status === 400;
 
 export default function Consultations() {
   const location = useLocation();
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [patients, setPatients] = useState<Record<number, PatientInfo>>({});
   const [clinics, setClinics] = useState<Record<number, ClinicInfo>>({});
-  const [selectedConsultation, setSelectedConsultation] = useState<Consultation | null>(null);
-  const [selectedConsultationLabTests, setSelectedConsultationLabTests] = useState<LabTest[]>([]);
+  const [selectedConsultation, setSelectedConsultation] = useState<ConsultationWithTests | Consultation | null>(null);
   const [loadingLabTests, setLoadingLabTests] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalElements, setTotalElements] = useState<number | null>(null);
   const [editingConsultation, setEditingConsultation] = useState<Consultation | null>(null);
   const [editForm, setEditForm] = useState<ConsultationUpdate>({});
   const [savingEdit, setSavingEdit] = useState(false);
@@ -49,6 +47,7 @@ export default function Consultations() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
+  const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
 
   const sortByNewestFirst = (list: Consultation[]) =>
     [...list].sort((a, b) => {
@@ -59,88 +58,64 @@ export default function Consultations() {
     });
 
   useEffect(() => {
-    loadConsultations();
-  }, []);
+    void loadConsultationsRef.current(1);
+  }, [user?.id]);
 
   useEffect(() => {
     // Reload when returning from consultation creation
     if (location.state?.consultationCreated) {
       setTimeout(() => {
-        loadConsultations();
+        void loadConsultationsRef.current(1);
       }, 500);
       // Clear the state
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
 
-  const loadConsultations = async () => {
+  const loadConsultations = async (displayPage: number, size: number = pageSize) => {
+    if (!user?.id) return;
     setLoading(true);
+    setError('');
     try {
-      const now = Date.now();
+      const [usersAll, clinicsAll] = await Promise.all([
+        userAPI.getAllUsers(),
+        clinicAPI.getAllClinics(),
+      ]);
 
-      // Use cache if fresh
-      if (consultationsCache.data && consultationsCache.ts && now - consultationsCache.ts < CACHE_TTL) {
-        setConsultations(sortByNewestFirst(consultationsCache.data));
-
-        // Check if we already have patient/clinic info for these consultations; if so skip additional fetch
-        const missingPatientIds = Array.from(new Set(consultationsCache.data.map((c: Consultation) => c.patientId))).filter(id => !patients[id]);
-        const missingClinicIds = Array.from(new Set(consultationsCache.data.map((c: Consultation) => c.clinicId))).filter(id => !clinics[id]);
-
-        if (missingPatientIds.length === 0 && missingClinicIds.length === 0) {
-          setLoading(false);
-          return;
-        }
+      let probedTotal: number;
+      try {
+        ({ total: probedTotal } = await consultationAPI.list({ doctorId: user.id, page: 0, size: 1 }));
+      } catch (error) {
+        if (!isEmptyConsultationsResponse(error)) throw error;
+        setConsultations([]);
+        setTotalElements(0);
+        setCurrentPage(1);
+        return;
       }
+      const totalBackendPages = Math.max(1, Math.ceil(probedTotal / size));
+      const safeDisplayPage = Math.min(Math.max(1, displayPage), totalBackendPages);
+      const backendPageIndex = totalBackendPages - safeDisplayPage;
 
-      // Fetch consultations, users and clinics in parallel (bulk) to reduce many small requests
-      const nowFetch = Date.now();
-
-      const useCachedUsers = usersCache.data && usersCache.ts && (Date.now() - usersCache.ts) < CACHE_TTL;
-      const useCachedClinics = clinicsCache.data && clinicsCache.ts && (Date.now() - clinicsCache.ts) < CACHE_TTL;
-
-      const [data, usersAll, clinicsAll] = await Promise.all([
-        consultationAPI.list({ page: 0, size: 100 }),
-        useCachedUsers ? Promise.resolve(usersCache.data) : userAPI.getAllUsers(),
-        useCachedClinics ? Promise.resolve(clinicsCache.data) : clinicAPI.getAllClinics(),
-      ] as const);
+      const { items: data, total } = await consultationAPI.list({
+        doctorId: user.id,
+        page: backendPageIndex,
+        size,
+      });
 
       setConsultations(sortByNewestFirst(data));
-      setCurrentPage(1);
-      // cache consultations
-      consultationsCache.data = data;
-      consultationsCache.ts = nowFetch;
+      setTotalElements(total);
+      setCurrentPage(safeDisplayPage);
 
-      // cache users/clinics when fetched from network
-      if (!useCachedUsers && usersAll) {
-        usersCache.data = usersAll as any[];
-        usersCache.ts = Date.now();
-      }
-      if (!useCachedClinics && clinicsAll) {
-        clinicsCache.data = clinicsAll as any[];
-        clinicsCache.ts = Date.now();
-      }
-
-      // Build maps from usersAll and clinicsAll
       const patientMap: Record<number, PatientInfo> = {};
-      try {
-        (usersAll || []).forEach((u: any) => {
-          const id = u.id ?? u.userId ?? u.personId;
-          if (typeof id === 'number') patientMap[id] = { id, name: u.name || u.username || `${u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : `User #${id}`}` };
-        });
-      } catch (e) {
-        // fallback handled below
-      }
+      (usersAll || []).forEach(u => {
+        patientMap[u.id] = { id: u.id, name: u.username || `User #${u.id}` };
+      });
       setPatients(patientMap);
 
       const clinicMap: Record<number, ClinicInfo> = {};
-      try {
-        (clinicsAll || []).forEach((c: any) => {
-          const id = c.id ?? c.clinicId;
-          if (typeof id === 'number') clinicMap[id] = { id, clinicName: c.clinicName || c.name || `Clinic #${id}` };
-        });
-      } catch (e) {
-        // fallback handled below
-      }
+      (clinicsAll || []).forEach(c => {
+        clinicMap[c.id] = { id: c.id, clinicName: c.clinicName || `Clinic #${c.id}` };
+      });
       setClinics(clinicMap);
     } catch (err) {
       setError("Failed to load consultations");
@@ -149,27 +124,25 @@ export default function Consultations() {
     }
   };
 
+  loadConsultationsRef.current = loadConsultations;
+
   const handleComplete = async (id: number) => {
     try {
-      await consultationAPI.complete(id);
-      setConsultations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: "COMPLETED", completedAt: new Date().toISOString() } : c))
-      );
+      const updated = await consultationAPI.complete(id);
+      setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success('Consultation marked as complete');
     } catch (err) {
-      toast.error('Failed to complete consultation');
+      toast.error(err instanceof Error ? err.message : 'Failed to complete consultation');
     }
   };
 
   const handleCancel = async (id: number) => {
     try {
-      await consultationAPI.cancel(id);
-      setConsultations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: "CANCELLED" } : c))
-      );
+      const updated = await consultationAPI.cancel(id);
+      setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success('Consultation cancelled');
     } catch (err) {
-      toast.error('Failed to cancel consultation');
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel consultation');
     }
   };
 
@@ -189,7 +162,6 @@ export default function Consultations() {
     try {
       const updated = await consultationAPI.update(editingConsultation.id, editForm);
       setConsultations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
-      consultationsCache.data = undefined;
       toast.success('Consultation updated');
       setEditingConsultation(null);
     } catch (err) {
@@ -207,8 +179,7 @@ export default function Consultations() {
     setDeletingId(id);
     try {
       await consultationAPI.remove(id);
-      setConsultations((prev) => prev.filter((c) => c.id !== id));
-      consultationsCache.data = undefined;
+      await loadConsultations(currentPage);
       toast.success('Consultation deleted');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete consultation');
@@ -252,9 +223,8 @@ export default function Consultations() {
     setBulkDeleting(true);
     try {
       await consultationAPI.removeMany(ids);
-      setConsultations((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-      consultationsCache.data = undefined;
       setSelectedIds(new Set());
+      await loadConsultations(currentPage);
       toast.success(`${ids.length} consultation${ids.length > 1 ? 's' : ''} deleted`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete selected consultations');
@@ -280,30 +250,17 @@ export default function Consultations() {
     }
   };
 
-  const loadLabTestsForConsultation = async (consultationId: number) => {
+  const handleConsultationClick = async (consultation: Consultation) => {
+    setSelectedConsultation(consultation);
     setLoadingLabTests(true);
     try {
-      const cached = labTestsCache.get(consultationId);
-      if (cached && Date.now() - cached.ts < CACHE_TTL) {
-        setSelectedConsultationLabTests(cached.data);
-        setLoadingLabTests(false);
-        return;
-      }
-
-      const tests = await labTestAPI.getByConsultation(consultationId);
-      setSelectedConsultationLabTests(tests);
-      labTestsCache.set(consultationId, { data: tests, ts: Date.now() });
+      const withTests = await consultationAPI.getWithTests(consultation.id);
+      setSelectedConsultation(withTests);
     } catch (err) {
-      console.error('Failed to load lab tests:', err);
-      setSelectedConsultationLabTests([]);
+      console.error('Failed to load consultation details:', err);
     } finally {
       setLoadingLabTests(false);
     }
-  };
-
-  const handleConsultationClick = (consultation: Consultation) => {
-    setSelectedConsultation(consultation);
-    loadLabTestsForConsultation(consultation.id);
   };
 
   const getLabTestStatusColor = (status: string) => {
@@ -321,10 +278,10 @@ export default function Consultations() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(consultations.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil((totalElements ?? 0) / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
-  const paginatedConsultations = consultations.slice(startIndex, startIndex + pageSize);
+  const paginatedConsultations = consultations;
 
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
@@ -357,9 +314,9 @@ export default function Consultations() {
               <p className="text-gray-600 text-sm mb-1">Dashboard / Consultations</p>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Consultations</h1>
-                {!loading && consultations.length > 0 && (
+                {!loading && (totalElements ?? 0) > 0 && (
                   <span className="px-2.5 py-1 rounded-full bg-[#38A3A5]/10 text-[#2d8284] text-xs font-semibold">
-                    {consultations.length}
+                    {totalElements}
                   </span>
                 )}
               </div>
@@ -386,7 +343,7 @@ export default function Consultations() {
                 </div>
               )}
               <button
-                onClick={loadConsultations}
+                onClick={() => loadConsultations(currentPage)}
                 disabled={loading}
                 className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50"
               >
@@ -485,6 +442,30 @@ export default function Consultations() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-end gap-2">
+                              {c.status === 'IN_PROGRESS' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleComplete(c.id);
+                                  }}
+                                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Mark as complete"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {(c.status === 'SCHEDULED' || c.status === 'IN_PROGRESS') && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancel(c.id);
+                                  }}
+                                  className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  title="Cancel consultation"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -518,16 +499,18 @@ export default function Consultations() {
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <span>
                     Showing <span className="font-medium text-gray-900">{startIndex + 1}</span>–
-                    <span className="font-medium text-gray-900">{Math.min(startIndex + pageSize, consultations.length)}</span> of{' '}
-                    <span className="font-medium text-gray-900">{consultations.length}</span>
+                    <span className="font-medium text-gray-900">{Math.min(startIndex + pageSize, totalElements ?? 0)}</span> of{' '}
+                    <span className="font-medium text-gray-900">{totalElements ?? 0}</span>
                   </span>
                   <select
                     value={pageSize}
                     onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
+                      const newSize = Number(e.target.value);
+                      setPageSize(newSize);
+                      loadConsultations(1, newSize);
                     }}
-                    className="ml-2 border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    disabled={loading}
+                    className="ml-2 border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
                   >
                     <option value={10}>10 / page</option>
                     <option value={25}>25 / page</option>
@@ -537,8 +520,8 @@ export default function Consultations() {
 
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage === 1}
+                    onClick={() => loadConsultations(Math.max(1, safePage - 1))}
+                    disabled={loading || safePage === 1}
                     className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Prev
@@ -551,8 +534,9 @@ export default function Consultations() {
                     ) : (
                       <button
                         key={p}
-                        onClick={() => setCurrentPage(p)}
-                        className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                        onClick={() => loadConsultations(p)}
+                        disabled={loading}
+                        className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors disabled:opacity-60 ${
                           p === safePage
                             ? 'bg-[#38A3A5] text-white'
                             : 'text-gray-600 hover:bg-gray-100 border border-gray-300'
@@ -563,8 +547,8 @@ export default function Consultations() {
                     )
                   )}
                   <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage === totalPages}
+                    onClick={() => loadConsultations(Math.min(totalPages, safePage + 1))}
+                    disabled={loading || safePage === totalPages}
                     className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
@@ -662,13 +646,13 @@ export default function Consultations() {
               
               {loadingLabTests ? (
                 <div className="text-center py-4 text-gray-600">Loading lab tests...</div>
-              ) : selectedConsultationLabTests.length === 0 ? (
+              ) : !selectedConsultation || !('labTests' in selectedConsultation) || selectedConsultation.labTests.length === 0 ? (
                 <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
                   No lab tests requested for this consultation
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {selectedConsultationLabTests.map((test) => (
+                  {selectedConsultation.labTests.map((test) => (
                     <div key={test.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
@@ -704,9 +688,31 @@ export default function Consultations() {
               )}
             </div>
             
-            <div className="mt-6 flex justify-end">
-              <button 
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors" 
+            <div className="mt-6 flex justify-end gap-3">
+              {selectedConsultation.status === 'IN_PROGRESS' && (
+                <button
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  onClick={async () => {
+                    await handleComplete(selectedConsultation.id);
+                    setSelectedConsultation(null);
+                  }}
+                >
+                  Mark Complete
+                </button>
+              )}
+              {(selectedConsultation.status === 'SCHEDULED' || selectedConsultation.status === 'IN_PROGRESS') && (
+                <button
+                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                  onClick={async () => {
+                    await handleCancel(selectedConsultation.id);
+                    setSelectedConsultation(null);
+                  }}
+                >
+                  Cancel Consultation
+                </button>
+              )}
+              <button
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 onClick={() => setSelectedConsultation(null)}
               >
                 Close

@@ -1,12 +1,10 @@
 import { LanguageSelector } from 'react-auto-google-translate';
 import { GlobeIcon } from 'lucide-react';
-import type { CSSObjectWithLabel, OptionProps } from 'react-select';
+import { useLocation } from 'react-router-dom';
+import { specificLanguages } from '../config/languages';
 
-const specificLanguages = [
-  { value: 'en', label: 'English', countryCode: 'gb' },
-  { value: 'si', label: 'Sinhala', countryCode: 'lk' },
-  { value: 'ta', label: 'Tamil', countryCode: 'lk' }
-];
+type StyleBase = Record<string, string | number | undefined>;
+type OptionState = { isSelected: boolean; isFocused: boolean };
 
 export function LandingLanguageSelector() {
   return (
@@ -18,7 +16,7 @@ export function LandingLanguageSelector() {
           componentScale={0.8}
         menuPlacement="top"
         customStyles={{
-          control: (base: CSSObjectWithLabel) => ({
+          menu: (base: StyleBase) => ({
             ...base,
             minHeight: '28px',
             border: 'none',
@@ -118,7 +116,7 @@ export function HeaderLanguageSelector() {
           componentScale={0.8} 
           menuPlacement="bottom"
           customStyles={{
-            control: (base: CSSObjectWithLabel) => ({
+            control: (base: StyleBase) => ({
               ...base,
               border: 'none',
               boxShadow: 'none',
@@ -126,25 +124,36 @@ export function HeaderLanguageSelector() {
               minHeight: '28px',
               cursor: 'pointer'
             }),
-            valueContainer: (base: CSSObjectWithLabel) => ({
+            valueContainer: (base: StyleBase) => ({
               ...base,
               padding: '0 3px',
             }),
-            singleValue: (base: CSSObjectWithLabel) => ({
+            singleValue: (base: StyleBase) => ({
               ...base,
               color: '#2d8284',
               fontWeight: 600,
               fontSize: '0.875rem'
             }),
-            dropdownIndicator: (base: CSSObjectWithLabel) => ({
-              ...base, color: '#2d8284', padding: '3px'
+            dropdownIndicator: (base: StyleBase) => ({
+              ...base,
+              color: '#9CA3AF', // gray-400
+              padding: '4px'
             }),
             indicatorSeparator: () => ({ display: 'none' }),
-            menu: (base: CSSObjectWithLabel) => ({
-              ...dashboardMenuStyles(base), marginTop: '8px'
+            menu: (base: StyleBase) => ({
+              ...base,
+              bottom: '100%',
+              top: 'auto',
+              marginBottom: '8px',
+              zIndex: 9999
             }),
-            menuList: dashboardMenuListStyles,
-            option: dashboardOptionStyles
+            option: (base: StyleBase, state: OptionState) => ({
+              ...base,
+              fontSize: '0.875rem',
+              color: state.isSelected ? '#ffffff' : '#374151',
+              backgroundColor: state.isSelected ? '#38a3a5' : state.isFocused ? '#f3f4f6' : 'transparent',
+              cursor: 'pointer'
+            })
           }}
         />
       </div>

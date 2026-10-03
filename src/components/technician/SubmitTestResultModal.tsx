@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
-import { medicalRecordsAPI } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, MAX_TEST_RESULT_FILES } from '../../services/medicalRecordsService';
 import { consultationAPI } from '../../services/consultationService';
 import { LabTest } from '../../types/labTest';
+import { ApiError } from '../../services/httpClient';
 
 interface SubmitTestResultModalProps {
   labTest: LabTest;
@@ -11,32 +12,47 @@ interface SubmitTestResultModalProps {
   onSuccess: () => void;
 }
 
+const VALID_FILE_TYPES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+
 export function SubmitTestResultModal({ labTest, technicianId, onClose, onSuccess }: SubmitTestResultModalProps) {
   const [testResultDescription, setTestResultDescription] = useState('');
   const [technicianNotes, setTechnicianNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
-      if (!validTypes.includes(selectedFile.type)) {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (selected.length === 0) return;
+
+    if (files.length + selected.length > MAX_TEST_RESULT_FILES) {
+      setError(`You can attach up to ${MAX_TEST_RESULT_FILES} files`);
+      return;
+    }
+
+    for (const file of selected) {
+      if (!VALID_FILE_TYPES.includes(file.type)) {
         setError('Invalid file type. Only PDF, DOC, DOCX, JPG, PNG allowed');
         return;
       }
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError('File size must be less than 10MB');
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Each file must be less than 10MB');
         return;
       }
-      setFile(selectedFile);
-      setError('');
     }
+
+    setFiles(prev => [...prev, ...selected]);
+    setError('');
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!testResultDescription.trim()) {
       setError('Test result description is required');
       return;
@@ -46,28 +62,21 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
     setError('');
 
     try {
-      // If a result already exists for this test, avoid duplicate create and trigger status refresh.
       try {
         const existing = await medicalRecordsAPI.getByLabTestId(labTest.id);
         if (existing?.id) {
-          onSuccess();
-          return;
+          throw new Error('A result already exists for this lab test. Refresh the worklist before editing it.');
         }
-      } catch (existingErr: any) {
-        // 404 means no existing result yet; continue with create.
-        const msg = existingErr?.message || '';
-        if (!msg.includes('(404)') && !msg.toLowerCase().includes('not found')) {
-          console.warn('Failed to pre-check existing test result; continuing with create', existingErr);
-        }
+      } catch (existingErr) {
+        if (!(existingErr instanceof ApiError && existingErr.status === 404)) throw existingErr;
       }
 
-      // Resolve the patient ID from consultation; do not submit with a guessed fallback.
       let patientId: number | undefined;
       try {
         const consultation = await consultationAPI.get(labTest.consultationId);
         patientId = consultation.patientId;
-      } catch (cErr) {
-        console.warn('Could not resolve consultation -> patientId', cErr);
+      } catch {
+        patientId = undefined;
       }
 
       if (!patientId) {
@@ -80,29 +89,22 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
         technicianId,
         testResultDescription: testResultDescription.trim(),
         technicianNotes: technicianNotes.trim(),
-        file: file || undefined
+        files
       });
       onSuccess();
-    } catch (err: any) {
-      const msg = err?.message || '';
-      if (msg.toLowerCase().includes('already exists')) {
-        // Another request or previous attempt already created it; refresh parent state to mark completed.
-        onSuccess();
-        return;
-      }
-      console.error('Failed to submit test result:', err);
-      setError(msg || 'Failed to submit test result');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit test result');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={loading ? undefined : onClose}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-900">Submit Test Result</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button onClick={onClose} disabled={loading} className="text-gray-500 hover:text-gray-700 disabled:opacity-40">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -148,37 +150,43 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload File (Optional)
+              Upload Files (Optional, up to {MAX_TEST_RESULT_FILES})
             </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-[#38A3A5] transition-colors">
+            <div className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${files.length >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
               <input
                 type="file"
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                multiple
+                disabled={files.length >= MAX_TEST_RESULT_FILES}
                 className="hidden"
                 id="file-upload"
               />
-              <label htmlFor="file-upload" className="cursor-pointer">
+              <label htmlFor="file-upload" className={files.length >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}>
                 <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600">
-                  {file ? file.name : 'Click to upload or drag and drop'}
+                  {files.length >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Click to upload or drag and drop'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  PDF, DOC, DOCX, JPG, PNG (max 10MB)
+                  PDF, DOC, DOCX, JPG, PNG (max 10MB each)
                 </p>
               </label>
             </div>
-            {file && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
-                <FileText className="w-4 h-4" />
-                <span>{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="text-red-600 hover:text-red-700 ml-auto"
-                >
-                  Remove
-                </button>
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {files.map((file, index) => (
+                  <div key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg">
+                    <FileText className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate flex-1">{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="text-red-600 hover:text-red-700 flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

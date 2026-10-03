@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
-import { getCurrentUser } from '../../utils/auth';
+import { useAuth } from '../../hooks/useAuth';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
   formatDate, 
@@ -15,12 +15,14 @@ import {
 } from '../../utils/clinic';
 
 export function Clinics() {
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const [clinicDoctors, setClinicDoctors] = useState<ClinicDoctor[]>([]);
+  const [clinicDoctorsError, setClinicDoctorsError] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [queueTokens, setQueueTokens] = useState<import('../../services/queueService').QueueTokenResponse[]>([]);
   const [nameById, setNameById] = useState<Record<string, string>>({});
@@ -33,6 +35,7 @@ export function Clinics() {
   const [patientName, setPatientName] = useState<string | null>(null);
   const [patientFetchError, setPatientFetchError] = useState<string | null>(null);
   const [nameHydrationFailed, setNameHydrationFailed] = useState(false);
+  const joinRequestRef = useRef(false);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,7 +53,6 @@ export function Clinics() {
   useEffect(() => {
     (async () => {
       try {
-        const user = getCurrentUser();
         if (!user) return;
         const profile = await profileAPI.getPatient(user.id);
         // Always use user.id as patientId (backend validates against user ID)
@@ -58,13 +60,12 @@ export function Clinics() {
         const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
         if (name) setPatientName(name);
       } catch (e) {
-        const user = getCurrentUser();
         setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
         // Fallback: still enable queue actions using the user's id
         if (user?.id) setPatientId(String(user.id));
       }
     })();
-  }, []);
+  }, [user]);
 
   const loadClinics = async () => {
     try {
@@ -87,9 +88,11 @@ export function Clinics() {
     try {
       const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
       setClinicDoctors(doctors || []);
+      setClinicDoctorsError(false);
     } catch (error) {
       console.error('Failed to load clinic doctors:', error);
       setClinicDoctors([]);
+      setClinicDoctorsError(true);
     }
   };
 
@@ -104,7 +107,6 @@ export function Clinics() {
     setJoinSuccess(null);
   };
 
-  // Quick Join button: open modal focused on queue actions and preload current queue
   const handleQuickJoinOpen = async (clinic: Clinic) => {
     setSelectedClinic(clinic);
     setIsDetailsModalOpen(true);
@@ -162,22 +164,37 @@ export function Clinics() {
   };
 
   const joinQueueForClinic = async (clinic: Clinic) => {
+    if (joinRequestRef.current) return;
     setJoinSuccess(null);
     setJoinError(null);
     if (!patientId) {
       setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
       return;
     }
+    joinRequestRef.current = true;
     try {
       setJoinLoading(true);
+      const currentQueue = await queueAPI.getClinicQueue(String(clinic.id));
+      const existingToken = currentQueue.find(
+        token => String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
+      );
+
+      setQueueTokens(currentQueue);
+      await hydratePatientNames(currentQueue);
+
+      if (existingToken) {
+        setJoinError(`You are already in this clinic queue. Your token is #${existingToken.tokenNumber}.`);
+        return;
+      }
+
       const res = await queueAPI.createToken({
         clinicId: String(clinic.id),
         patientId: patientId,
-        // Placeholder: use clinic id as consultation id until consultation linkage is available
-        consultationId: String(clinic.id),
+        // No consultation exists yet at this point — the doctor creates one
+        // when they call this patient in, and links it via queueTokenId.
+        consultationId: '',
       });
       setJoinSuccess(`Token #${res.tokenNumber} created. Position: ${res.position}`);
-      // Refresh queue for selected clinic if modal open on same clinic
       if (selectedClinic && selectedClinic.id === clinic.id) {
         await handleViewQueue();
       }
@@ -185,6 +202,7 @@ export function Clinics() {
       console.error('Failed to join queue:', error);
       setJoinError(error instanceof Error ? error.message : 'Failed to join queue');
     } finally {
+      joinRequestRef.current = false;
       setJoinLoading(false);
     }
   };
@@ -210,6 +228,10 @@ export function Clinics() {
     if (!selectedClinic) return;
     await joinQueueForClinic(selectedClinic);
   };
+
+  const activeQueueToken = queueTokens.find(
+    token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
+  );
 
   // Filter and sort clinics
   const filteredAndSortedClinics = sortClinics(
@@ -487,8 +509,10 @@ export function Clinics() {
                         </div>
                       ))}
                     </div>
+                  ) : clinicDoctorsError ? (
+                    <p className="text-red-500 italic">Couldn't load doctor information for this clinic. Please try again.</p>
                   ) : (
-                    <p className="text-gray-500 italic">Loading doctor information...</p>
+                    <p className="text-gray-500 italic">No doctors assigned to this clinic yet.</p>
                   )}
                 </div>
 
@@ -523,10 +547,10 @@ export function Clinics() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleJoinQueue}
-                      disabled={joinLoading || !!patientFetchError}
-                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
+                      disabled={joinLoading || !!patientFetchError || !!activeQueueToken}
+                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
                     >
-                      {joinLoading ? 'Joining...' : 'Join Queue'}
+                      {joinLoading ? 'Joining...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
                     </button>
                     <button
                       onClick={handleViewQueue}
