@@ -1,5 +1,7 @@
 import { AppRouter } from './AppRouter';
 import { AuthProvider } from './context/AuthContext';
+import { UserProfileProvider } from './context/UserProfileContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ChatBot } from './components/ChatBot/ChatBot';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -11,22 +13,26 @@ export function App() {
   return (
     <TranslationProvider originalLang="en">
       <AuthProvider>
-        <div className="w-full min-h-screen bg-gray-50">
-          <AppRouter />
-          <ChatBot />
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-          />
-        </div>
+        <UserProfileProvider>
+          <div className="w-full min-h-screen bg-gray-50">
+            <ErrorBoundary>
+              <AppRouter />
+            </ErrorBoundary>
+            <ChatBot />
+            <ToastContainer
+              position="top-right"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="light"
+            />
+          </div>
+        </UserProfileProvider>
       </AuthProvider>
     </TranslationProvider>
   );

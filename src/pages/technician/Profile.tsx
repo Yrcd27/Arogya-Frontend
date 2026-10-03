@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SaveIcon, AlertCircleIcon, CheckCircleIcon } from 'lucide-react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { profileAPI } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import type { CreateTechnicianProfileInput, TechnicianProfile as StoredTechnicianProfile } from '../../types/user';
 
 interface TechnicianProfile {
+  id?: number;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -20,6 +24,8 @@ interface TechnicianProfile {
 }
 
 const Profile: React.FC = () => {
+  const { user } = useAuth();
+  const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profile, setProfile] = useState<TechnicianProfile>({
     firstName: '',
@@ -35,49 +41,36 @@ const Profile: React.FC = () => {
       id: 0
     }
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isNewProfile, setIsNewProfile] = useState(false);
+  const loading = profileStatus === 'loading';
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const userData = JSON.parse(localStorage.getItem('user') || '{}');
-        if (userData.id) {
-          setProfile(prev => ({ ...prev, user: { id: userData.id } }));
-          
-          try {
-            const response = await profileAPI.getTechnician(userData.id);
-            setProfile(response);
-          } catch (error: unknown) {
-            if (error instanceof Error && (
-              error.message.includes('404') || 
-              error.message.includes('not found') || 
-              error.message.includes('Technician Profile not found')
-            )) {
-              // Profile doesn't exist yet
-              setIsNewProfile(true);
-              setProfile(prev => ({ 
-                ...prev, 
-                user: { id: userData.id }
-              }));
-            } else {
-              throw error;
-            }
-          }
-        }
-      } catch (error: unknown) {
-        console.error('Error fetching profile:', error);
-        setError('Failed to load profile information');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProfile();
-  }, []);
+    const storedProfile = currentProfile as StoredTechnicianProfile | null;
+    if (storedProfile) {
+      setProfile({
+        id: storedProfile.id,
+        firstName: storedProfile.firstName || '',
+        lastName: storedProfile.lastName || '',
+        dateOfBirth: storedProfile.dateOfBirth || '',
+        phoneNumber: storedProfile.phoneNumber || '',
+        nicNumber: storedProfile.nicNumber || '',
+        technicianField: storedProfile.technicianField || '',
+        licenseNumber: storedProfile.licenseNumber || '',
+        certification: storedProfile.certification || '',
+        assignedEquipment: storedProfile.assignedEquipment || '',
+        user: { id: storedProfile.user.id },
+      });
+      setIsNewProfile(false);
+    } else if (profileStatus === 'not-found' && user?.id) {
+      setProfile(prev => ({ ...prev, user: { id: user.id } }));
+      setIsNewProfile(true);
+    } else if (profileStatus === 'error') {
+      setError(profileError || 'Failed to load profile information');
+    }
+  }, [currentProfile, profileError, profileStatus, user?.id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -87,25 +80,48 @@ const Profile: React.FC = () => {
     }));
   };
 
+  const savingRef = useRef(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
 
+    const requestBody: CreateTechnicianProfileInput = {
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      dateOfBirth: profile.dateOfBirth,
+      phoneNumber: profile.phoneNumber,
+      nicNumber: profile.nicNumber,
+      technicianField: profile.technicianField,
+      licenseNumber: profile.licenseNumber,
+      certification: profile.certification,
+      assignedEquipment: profile.assignedEquipment,
+      user: { id: user?.id || profile.user.id },
+    };
+
     try {
       if (isNewProfile) {
-        await profileAPI.createTechnician(profile as unknown as Record<string, unknown>);
+        const created = await profileAPI.createTechnician(requestBody);
+        setProfile(prev => ({ ...prev, id: created.id }));
+        replaceProfile(created);
         setSuccess('Profile created successfully!');
         setIsNewProfile(false);
       } else {
-        await profileAPI.updateTechnician(profile.user.id, profile as unknown as Record<string, unknown>);
+        if (!profile.id) throw new Error('Profile ID is missing. Please refresh and try again.');
+        const updated = await profileAPI.updateTechnician({ ...requestBody, id: profile.id });
+        setProfile(prev => ({ ...prev, id: updated.id }));
+        replaceProfile(updated);
         setSuccess('Profile updated successfully!');
       }
     } catch (error: unknown) {
       console.error('Error saving profile:', error);
       setError(error instanceof Error ? error.message : 'Failed to save profile');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -135,8 +151,8 @@ const Profile: React.FC = () => {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className="lg:ml-64 flex flex-col">
-        <Header onToggleSidebar={() => setIsSidebarOpen(true)} />
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
           <div className="mb-4 sm:mb-6">
             <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
@@ -144,6 +160,16 @@ const Profile: React.FC = () => {
               {isNewProfile ? 'Complete Your Technician Profile' : 'Technician Profile'}
             </h1>
           </div>
+
+          {isNewProfile && (
+            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+              <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
+                <p className="text-sm text-amber-700">Fill in the details below to get the most out of Arogya.</p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm p-6">
             {error && (

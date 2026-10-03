@@ -121,7 +121,7 @@ export const validateClinicForm = (formData: {
   district: string;
   scheduledDate: string;
   scheduledTime: string;
-}, selectedDoctors: { doctorId: number; name: string; specialization: string }[]): string | null => {
+}, selectedDoctors: { doctorId: number; name: string; specialization: string }[], isEditMode = false): string | null => {
   if (!formData.clinicName.trim()) {
     return 'Clinic name is required';
   }
@@ -137,9 +137,10 @@ export const validateClinicForm = (formData: {
   if (!formData.scheduledTime) {
     return 'Scheduled time is required';
   }
-  
-  // Check if date is not in the past
-  if (isPastDate(formData.scheduledDate)) {
+
+  // New clinics must be scheduled going forward. An existing clinic can be
+  // edited (e.g. to mark it COMPLETED/CANCELLED) even after its date passes.
+  if (!isEditMode && isPastDate(formData.scheduledDate)) {
     return 'Scheduled date cannot be in the past';
   }
 

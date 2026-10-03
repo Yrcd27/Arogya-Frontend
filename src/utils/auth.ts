@@ -1,4 +1,6 @@
 // Authentication utility functions for User Service Backend
+import { userAPI } from '../services/userService';
+import type { User, UserRole } from '../types/user';
 
 export interface LoginCredentials {
   email: string;
@@ -24,7 +26,7 @@ export interface RegisterData {
   licenseNumber?: string;
   specialization?: string;
   qualification?: string;
-  experienceYears?: number; // Changed to number
+  experienceYears?: number;
   // Patient fields
   allergies?: string;
   chronicDiseases?: string;
@@ -35,51 +37,99 @@ export interface RegisterData {
   assignedEquipment?: string;
 }
 
-export interface UserRole {
-  id: number;
-  roleName: string;
-  roleDescription?: string;
-}
-
-export interface User {
-  id: number;
-  username: string;
-  email: string;
-  userRole: UserRole;
-}
+export type { User, UserRole };
 
 // Local storage keys
 export const AUTH_USER_KEY = 'user';
 export const AUTH_TOKEN_KEY = 'authToken';
 
-// Utility functions for user management
 export const getCurrentUser = (): User | null => {
-  const userStr = localStorage.getItem(AUTH_USER_KEY);
-  return userStr ? JSON.parse(userStr) : null;
-};
-
-export const setCurrentUser = (user: User): void => {
-  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  let userStr: string | null;
+  try {
+    userStr = localStorage.getItem(AUTH_USER_KEY);
+  } catch {
+    return null;
+  }
+  if (!userStr) return null;
+  try {
+    const value: unknown = JSON.parse(userStr);
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Partial<User>;
+    if (
+      typeof candidate.id !== 'number' ||
+      candidate.id <= 0 ||
+      typeof candidate.username !== 'string' ||
+      typeof candidate.email !== 'string' ||
+      !candidate.userRole ||
+      typeof candidate.userRole.id !== 'number' ||
+      !Number.isFinite(candidate.userRole.id) ||
+      typeof candidate.userRole.roleName !== 'string' ||
+      !candidate.userRole.roleName.trim()
+    ) {
+      return null;
+    }
+    return candidate as User;
+  } catch {
+    return null;
+  }
 };
 
 export const removeCurrentUser = (): void => {
-  localStorage.removeItem(AUTH_USER_KEY);
-  localStorage.removeItem(AUTH_TOKEN_KEY);
+  try {
+    localStorage.removeItem(AUTH_USER_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    return;
+  }
 };
 
 export const getToken = (): string | null => {
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    return token && token.trim() ? token : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Decodes a JWT's payload without verifying the signature (verification
+ *  happens server-side) — only used client-side to read the expiry. */
+export const decodeJwtPayload = (token: string): { exp?: number; sub?: string; role?: string } | null => {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+export const isTokenExpired = (token: string | null): boolean => {
+  if (!token) return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return true;
+  return Date.now() >= payload.exp * 1000;
 };
 
 export const isAuthenticated = (): boolean => {
-  return !!getCurrentUser();
+  return !!getCurrentUser() && !isTokenExpired(getToken());
 };
 
 // Authentication API calls
 export const loginAPI = async (credentials: LoginCredentials): Promise<User> => {
-  const { userAPI } = await import('../services/api');
   const response = await userAPI.login(credentials.email, credentials.password);
-  localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+  try {
+    localStorage.setItem(AUTH_TOKEN_KEY, response.token);
+  } catch {
+    throw new Error('Unable to persist the signed-in session.');
+  }
   return {
     id: response.id,
     username: response.username,
@@ -88,81 +138,11 @@ export const loginAPI = async (credentials: LoginCredentials): Promise<User> => 
   };
 };
 
-export const registerAPI = async (userData: RegisterData, roleId: number, roleName: string): Promise<{ success: boolean; message: string }> => {
-  try {
-    const { userAPI, profileAPI } = await import('../services/api');
-    
-    // Prepare user registration data
-    const userRegistrationData = {
-      username: userData.username,
-      email: userData.email,
-      password: userData.password,
-      userRole: { id: roleId, roleName: roleName },
-      ...(userData.secretKey && { secretKey: userData.secretKey }),
-    };
-
-    // Create user account
-    const newUser = await userAPI.register(userRegistrationData);
-
-    // Create role-specific profile
-    const profileData = {
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      dateOfBirth: userData.dateOfBirth,
-      phoneNumber: userData.phoneNumber,
-      nicNumber: userData.nicNumber,
-      user: { id: newUser.id || newUser.userId },
-    };
-
-    // Add role-specific fields and create profile
-    switch (roleName.toLowerCase()) {
-      case 'patient':
-        await profileAPI.createPatient({
-          ...profileData,
-          address: userData.address || '',
-          gender: userData.gender || '',
-          bloodGroup: userData.bloodGroup || '',
-          allergies: userData.allergies || '',
-          chronicDiseases: userData.chronicDiseases || '',
-          emergencyContact: userData.emergencyContact || '',
-        });
-        break;
-      case 'doctor':
-        await profileAPI.createDoctor({
-          ...profileData,
-          licenseNumber: userData.licenseNumber || '',
-          specialization: userData.specialization || '',
-          qualification: userData.qualification || '',
-          experienceYears: userData.experienceYears || 0,
-        });
-        break;
-      case 'admin':
-        await profileAPI.createAdmin(profileData);
-        break;
-      case 'technician':
-        await profileAPI.createTechnician({
-          ...profileData,
-          technicianField: userData.technicianField || '',
-          licenseNumber: userData.licenseNumber || '',
-          certification: userData.certification || '',
-          assignedEquipment: userData.assignedEquipment || '',
-        });
-        break;
-    }
-
-    return { success: true, message: 'Registration successful!' };
-  } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Registration failed');
-  }
-};
-
-export const logoutAPI = async (): Promise<void> => {
-  removeCurrentUser();
-};
-
 // Role-based route helpers
-export const getDashboardRoute = (roleName: string): string => {
-  const roleNameLower = roleName.toLowerCase();
+const KNOWN_DASHBOARD_ROLES = ['admin', 'doctor', 'technician', 'patient'] as const;
+
+export const getDashboardRoute = (roleName: string | undefined | null): string => {
+  const roleNameLower = (roleName || '').toLowerCase();
   switch (roleNameLower) {
     case 'admin':
       return '/admin/dashboard';
@@ -171,7 +151,12 @@ export const getDashboardRoute = (roleName: string): string => {
     case 'technician':
       return '/technician/dashboard';
     case 'patient':
-    default:
       return '/patient/dashboard';
+    default:
+      return '/login';
   }
+};
+
+export const isKnownDashboardRole = (roleName: string | undefined | null): boolean => {
+  return KNOWN_DASHBOARD_ROLES.includes((roleName || '').toLowerCase() as (typeof KNOWN_DASHBOARD_ROLES)[number]);
 };

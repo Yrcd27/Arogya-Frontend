@@ -43,6 +43,8 @@ export interface CreateClinicRequest {
   scheduledDate: string;
   scheduledTime: string;
   status: string;
+  /** Doctor **profile** ids (not user ids) assigned to this clinic. */
+  doctorIds?: number[];
 }
 
 export interface UpdateClinicRequest extends CreateClinicRequest {

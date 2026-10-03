@@ -1,12 +1,10 @@
 import { LanguageSelector } from 'react-auto-google-translate';
 import { GlobeIcon } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { specificLanguages } from '../config/languages';
 
-export const specificLanguages = [
-  { value: 'en', label: 'English', countryCode: 'gb' },
-  { value: 'si', label: 'Sinhala', countryCode: 'lk' },
-  { value: 'ta', label: 'Tamil', countryCode: 'lk' }
-];
+type StyleBase = Record<string, string | number | undefined>;
+type OptionState = { isSelected: boolean; isFocused: boolean };
 
 export function GlobalLanguageSelector() {
   const location = useLocation();
@@ -22,7 +20,7 @@ export function GlobalLanguageSelector() {
         componentScale={0.8} 
         menuPlacement="top"
         customStyles={{
-          menu: (base: any) => ({
+          menu: (base: StyleBase) => ({
             ...base,
             bottom: '100%',
             top: 'auto',
@@ -44,7 +42,7 @@ export function SidebarLanguageSelector() {
           componentScale={0.8} 
           menuPlacement="top"
           customStyles={{
-            control: (base: any) => ({
+            control: (base: StyleBase) => ({
               ...base,
               border: 'none',
               boxShadow: 'none',
@@ -52,30 +50,30 @@ export function SidebarLanguageSelector() {
               minHeight: 'auto',
               cursor: 'pointer'
             }),
-            valueContainer: (base: any) => ({
+            valueContainer: (base: StyleBase) => ({
               ...base,
               padding: '0 8px',
             }),
-            singleValue: (base: any) => ({
+            singleValue: (base: StyleBase) => ({
               ...base,
               color: '#374151',
               fontWeight: 500,
               fontSize: '0.875rem' // text-sm
             }),
-            dropdownIndicator: (base: any) => ({
+            dropdownIndicator: (base: StyleBase) => ({
               ...base,
               color: '#9CA3AF', // gray-400
               padding: '4px'
             }),
             indicatorSeparator: () => ({ display: 'none' }),
-            menu: (base: any) => ({
+            menu: (base: StyleBase) => ({
               ...base,
               bottom: '100%',
               top: 'auto',
               marginBottom: '8px',
               zIndex: 9999
             }),
-            option: (base: any, state: any) => ({
+            option: (base: StyleBase, state: OptionState) => ({
               ...base,
               fontSize: '0.875rem',
               color: state.isSelected ? '#ffffff' : '#374151',

@@ -1,25 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, User, Mail, Phone, MapPin, Calendar, Activity } from 'lucide-react';
 import { profileAPI } from '../../services/api';
-
-interface PatientProfile {
-  id: number;
-  userId: number;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  gender: string;
-  phoneNumber: string;
-  address: string;
-  emergencyContact: string;
-  bloodGroup?: string;
-  allergies?: string;
-  chronicConditions?: string;
-  chronicDiseases?: string;
-  user?: {
-    email: string;
-  };
-}
+import type { PatientProfile } from '../../types/user';
 
 interface PatientProfileModalProps {
   patientId: number;
@@ -31,16 +13,11 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPatientProfile();
-  }, [patientId]);
-
-  const loadPatientProfile = async () => {
+  const loadPatientProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await profileAPI.getPatient(patientId);
-      console.log('Patient profile data:', data);
       setProfile(data);
     } catch (err) {
       console.error('Failed to load patient profile:', err);
@@ -48,7 +25,11 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
     } finally {
       setLoading(false);
     }
-  };
+  }, [patientId]);
+
+  useEffect(() => {
+    void loadPatientProfile();
+  }, [loadPatientProfile]);
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();
@@ -171,7 +152,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
             </div>
 
             {/* Medical Information */}
-            {(profile.allergies || profile.chronicConditions || profile.chronicDiseases) && (
+            {(profile.allergies || profile.chronicDiseases) && (
               <div className="border-t pt-4">
                 <h5 className="text-lg font-semibold text-gray-900 mb-3">Medical Information</h5>
                 <div className="space-y-4">
@@ -184,11 +165,11 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                     </div>
                   )}
 
-                  {(profile.chronicConditions || profile.chronicDiseases) && (
+                  {profile.chronicDiseases && (
                     <div>
                       <label className="text-sm font-medium text-gray-500">Chronic Conditions</label>
                       <p className="text-gray-900 whitespace-pre-wrap bg-yellow-50 p-3 rounded-lg border border-yellow-200 mt-1">
-                        {profile.chronicConditions || profile.chronicDiseases}
+                        {profile.chronicDiseases}
                       </p>
                     </div>
                   )}

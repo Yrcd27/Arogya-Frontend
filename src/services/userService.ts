@@ -1,64 +1,32 @@
-// User Service API - Backend Integration
-const isDevelopment = import.meta.env.DEV;
-const API_BASE_URL = isDevelopment ? '' : 'http://localhost:8081';
+// User Service API - routed through the API Gateway (see httpClient.ts)
+import { apiFetch } from './httpClient';
+import type {
+  User,
+  AuthResponse,
+  PatientProfile,
+  DoctorProfile,
+  AdminProfile,
+  TechnicianProfile,
+  DoctorSearchResult,
+  CreatePatientProfileInput,
+  UpdatePatientProfileInput,
+  CreateDoctorProfileInput,
+  UpdateDoctorProfileInput,
+  CreateAdminProfileInput,
+  UpdateAdminProfileInput,
+  CreateTechnicianProfileInput,
+  UpdateTechnicianProfileInput,
+} from '../types/user';
 
-// Generic API call helper for user service
-const apiCall = async (endpoint: string, options: RequestInit = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  try {
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      let errorMessage = `HTTP error! status: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorMessage;
-      } catch (e) {
-        try {
-          const errorText = await response.text();
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        } catch (textError) {
-          // Silent fallback
-        }
-      }
-      throw new Error(errorMessage);
-    }
-
-    return await response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      if (isDevelopment) {
-        throw new Error('Unable to connect to the user service. Please make sure the backend is running on http://localhost:8081 and the proxy is configured correctly.');
-      } else {
-        throw new Error('Unable to connect to the server. Please make sure the backend is running on http://localhost:8081');
-      }
-    }
-    throw error;
-  }
-};
-
-// User APIs
 export const userAPI = {
-  // Login user
-  login: async (email: string, password: string) => {
-    return apiCall('/users/login', {
+  login: async (email: string, password: string): Promise<AuthResponse> => {
+    return apiFetch<AuthResponse>('/users/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: { email, password },
+      skipAuth: true,
     });
   },
 
-  // Register new user
   register: async (userData: {
     username: string;
     email: string;
@@ -66,151 +34,82 @@ export const userAPI = {
     secretKey?: string;
     userRole: { id: number; roleName: string };
   }) => {
-    return apiCall('/users/addUser', {
+    return apiFetch('/users/addUser', {
       method: 'POST',
-      body: JSON.stringify(userData),
+      body: userData,
+      skipAuth: true,
     });
   },
 
-  // Get all users
-  getAllUsers: async () => {
-    return apiCall('/users/getAllUsers');
+  getAllUsers: async (): Promise<User[]> => {
+    return apiFetch<User[]>('/users/getAllUsers');
   },
 
-  // Get user by ID
-  getUser: async (id: number) => {
-    return apiCall(`/users/getUser/${id}`);
+  getUser: async (id: number): Promise<User> => {
+    return apiFetch<User>(`/users/getUser/${id}`);
   },
 
-  // Get user by email
-  getUserByEmail: async (email: string) => {
-    return apiCall(`/users/getUserByEmail/${email}`);
-  },
-};
-
-// Role APIs
-export const roleAPI = {
-  // Get all roles
-  getAllRoles: async () => {
-    return apiCall('/roles/getAllUserRoles');
-  },
-
-  // Get role by ID
-  getRole: async (id: number) => {
-    return apiCall(`/roles/getUserRole/${id}`);
-  },
-
-  // Get role by name
-  getRoleByName: async (roleName: string) => {
-    return apiCall(`/roles/getUserRoleByName/${roleName}`);
-  },
 };
 
 // Profile APIs
 export const profileAPI = {
-  // Patient Profile APIs
-  createPatient: async (profileData: Record<string, unknown>) => {
-    return apiCall('/patient_profile/createPatientProfile', {
-      method: 'POST',
-      body: JSON.stringify(profileData),
-    });
+  // Patient
+  createPatient: async (profileData: CreatePatientProfileInput): Promise<PatientProfile> => {
+    return apiFetch<PatientProfile>('/patient_profile/createPatientProfile', { method: 'POST', body: profileData });
+  },
+  getPatient: async (userId: number): Promise<PatientProfile> => {
+    return apiFetch<PatientProfile>(`/patient_profile/getPatientProfileByUserId/${userId}`);
+  },
+  updatePatient: async (profileData: UpdatePatientProfileInput): Promise<PatientProfile> => {
+    return apiFetch<PatientProfile>('/patient_profile/updatePatientProfile', { method: 'PUT', body: profileData });
   },
 
-  getPatient: async (userId: number) => {
-    return apiCall(`/patient_profile/getPatientProfileByUserId/${userId}`);
+  // Doctor
+  createDoctor: async (profileData: CreateDoctorProfileInput): Promise<DoctorProfile> => {
+    return apiFetch<DoctorProfile>('/doctor_profile/createDoctorProfile', { method: 'POST', body: profileData });
+  },
+  getDoctor: async (userId: number): Promise<DoctorProfile> => {
+    return apiFetch<DoctorProfile>(`/doctor_profile/getDoctorProfileByUserId/${userId}`);
+  },
+  updateDoctor: async (profileData: UpdateDoctorProfileInput): Promise<DoctorProfile> => {
+    return apiFetch<DoctorProfile>('/doctor_profile/updateDoctorProfile', { method: 'PUT', body: profileData });
   },
 
-  updatePatient: async (profileData: Record<string, unknown>) => {
-    return apiCall('/patient_profile/updatePatientProfile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
+  // Admin
+  createAdmin: async (profileData: CreateAdminProfileInput): Promise<AdminProfile> => {
+    return apiFetch<AdminProfile>('/admin_profile/createAdminProfile', { method: 'POST', body: profileData });
+  },
+  getAdmin: async (userId: number): Promise<AdminProfile> => {
+    return apiFetch<AdminProfile>(`/admin_profile/getAdminProfileByUserId/${userId}`);
+  },
+  updateAdmin: async (profileData: UpdateAdminProfileInput): Promise<AdminProfile> => {
+    return apiFetch<AdminProfile>('/admin_profile/updateAdminProfile', { method: 'PUT', body: profileData });
   },
 
-  // Doctor Profile APIs
-  createDoctor: async (profileData: Record<string, unknown>) => {
-    return apiCall('/doctor_profile/createDoctorProfile', {
-      method: 'POST',
-      body: JSON.stringify(profileData),
-    });
+  // Technician
+  createTechnician: async (profileData: CreateTechnicianProfileInput): Promise<TechnicianProfile> => {
+    return apiFetch<TechnicianProfile>('/technician_profile/createTechnicianProfile', { method: 'POST', body: profileData });
+  },
+  getTechnician: async (userId: number): Promise<TechnicianProfile> => {
+    return apiFetch<TechnicianProfile>(`/technician_profile/getTechnicianProfileByUserId/${userId}`);
+  },
+  updateTechnician: async (profileData: UpdateTechnicianProfileInput): Promise<TechnicianProfile> => {
+    return apiFetch<TechnicianProfile>('/technician_profile/updateTechnicianProfile', { method: 'PUT', body: profileData });
   },
 
-  getDoctor: async (userId: number) => {
-    return apiCall(`/doctor_profile/getDoctorProfileByUserId/${userId}`);
-  },
-
-  updateDoctor: async (_userId: number, profileData: Record<string, unknown>) => {
-    return apiCall('/doctor_profile/updateDoctorProfile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  },
-
-  // Admin Profile APIs
-  createAdmin: async (profileData: Record<string, unknown>) => {
-    return apiCall('/admin_profile/createAdminProfile', {
-      method: 'POST',
-      body: JSON.stringify(profileData),
-    });
-  },
-
-  getAdmin: async (userId: number) => {
-    return apiCall(`/admin_profile/getAdminProfileByUserId/${userId}`);
-  },
-
-  updateAdmin: async (_userId: number, profileData: Record<string, unknown>) => {
-    return apiCall('/admin_profile/updateAdminProfile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  },
-
-  // Technician Profile APIs
-  createTechnician: async (profileData: Record<string, unknown>) => {
-    return apiCall('/technician_profile/createTechnicianProfile', {
-      method: 'POST',
-      body: JSON.stringify(profileData),
-    });
-  },
-
-  getTechnician: async (userId: number) => {
-    return apiCall(`/technician_profile/getTechnicianProfileByUserId/${userId}`);
-  },
-
-  updateTechnician: async (_userId: number, profileData: Record<string, unknown>) => {
-    return apiCall('/technician_profile/updateTechnicianProfile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  },
-
-  // Get all profiles by type for dashboard stats
-  getAllPatients: async () => {
-    return apiCall('/patient_profile/getAllPatientProfiles');
-  },
-
-  getAllDoctors: async () => {
-    return apiCall('/doctor_profile/getAllDoctorProfiles');
-  },
-
-  getAllAdmins: async () => {
-    return apiCall('/admin_profile/getAllAdminProfiles');
-  },
-
-  getAllTechnicians: async () => {
-    return apiCall('/technician_profile/getAllTechnicianProfiles');
-  },
+  // Lists, for dashboards / doctor search
+  getAllPatients: async (): Promise<PatientProfile[]> => apiFetch<PatientProfile[]>('/patient_profile/getAllPatientProfiles'),
+  getAllDoctors: async (): Promise<DoctorProfile[]> => apiFetch<DoctorProfile[]>('/doctor_profile/getAllDoctorProfiles'),
+  getAllAdmins: async (): Promise<AdminProfile[]> => apiFetch<AdminProfile[]>('/admin_profile/getAllAdminProfiles'),
+  getAllTechnicians: async (): Promise<TechnicianProfile[]> => apiFetch<TechnicianProfile[]>('/technician_profile/getAllTechnicianProfiles'),
 };
 
-// Doctor search API
+// Doctor search/lookup, shaped for the clinic-scheduling UI
 export const doctorAPI = {
-  // Get all doctors for search
-  getAllDoctors: async () => {
+  getAllDoctors: async (): Promise<DoctorSearchResult[]> => {
     try {
-      const response = await apiCall('/doctor_profile/getAllDoctorProfiles');
-      
-      // Transform the response to match the expected format for the clinic system
-      return response.map((profile: { id: number; firstName: string; lastName: string; specialization: string; user: { email: string; id: number }; licenseNumber: string; qualification: string; experienceYears: number; phoneNumber: string }) => ({
+      const profiles = await profileAPI.getAllDoctors();
+      return profiles.map(profile => ({
         doctorId: profile.id,
         name: `Dr. ${profile.firstName} ${profile.lastName}`,
         specialization: profile.specialization,
@@ -219,7 +118,7 @@ export const doctorAPI = {
         qualification: profile.qualification,
         experienceYears: profile.experienceYears,
         phoneNumber: profile.phoneNumber,
-        userId: profile.user.id
+        userId: profile.user.id,
       }));
     } catch (error) {
       console.error('Failed to fetch doctor profiles:', error);
