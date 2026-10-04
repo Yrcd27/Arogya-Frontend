@@ -1,4 +1,4 @@
-// Chatbot Service — calls the Arogya Chatbot backend
+import { apiFetch } from './httpClient';
 
 const isDevelopment = import.meta.env.DEV;
 const CHATBOT_BASE_URL = isDevelopment ? '' : 'http://localhost:8091';
@@ -20,30 +20,16 @@ export interface ChatResponse {
 
 export const chatbotAPI = {
   sendMessage: async (request: ChatRequest): Promise<ChatResponse> => {
-    const url = `${CHATBOT_BASE_URL}/chat`;
-    const response = await fetch(url, {
+    return apiFetch<ChatResponse>(`${CHATBOT_BASE_URL}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
+      body: request,
     });
-
-    if (!response.ok) {
-      let errorMessage = `Chatbot error: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorMessage;
-      } catch { /* ignore */ }
-      throw new Error(errorMessage);
-    }
-
-    return response.json();
   },
 
   healthCheck: async (): Promise<boolean> => {
     try {
-      const url = `${CHATBOT_BASE_URL}/health`;
-      const response = await fetch(url);
-      return response.ok;
+      await apiFetch(`${CHATBOT_BASE_URL}/health`);
+      return true;
     } catch {
       return false;
     }
