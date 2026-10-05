@@ -57,6 +57,13 @@ export function ChatBot() {
       inputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Clear chat history when user changes to prevent privacy risk across logins
+  useEffect(() => {
+    setMessages([]);
+    setError(null);
+    setIsOpen(false);
+  }, [user?.id]);
   
   // Don't render for technicians or unauthenticated users (check AFTER all hooks)
   const role = user?.userRole?.roleName?.toLowerCase();
