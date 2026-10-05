@@ -23,7 +23,7 @@ export const chatbotAPI = {
     return apiFetch<ChatResponse>(`${CHATBOT_BASE_URL}/chat`, {
       method: 'POST',
       body: request,
-      timeoutMs: 60000,
+      timeoutMs: 300000,
     });
   },
 
