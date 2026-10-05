@@ -1,7 +1,7 @@
 import { apiFetch } from './httpClient';
 
 const isDevelopment = import.meta.env.DEV;
-const CHATBOT_BASE_URL = isDevelopment ? '' : 'http://localhost:8091';
+const CHATBOT_BASE_URL = isDevelopment ? 'http://localhost:8091' : '';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -23,6 +23,7 @@ export const chatbotAPI = {
     return apiFetch<ChatResponse>(`${CHATBOT_BASE_URL}/chat`, {
       method: 'POST',
       body: request,
+      timeoutMs: 60000,
     });
   },
 
