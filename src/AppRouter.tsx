@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { RoleSelection } from './pages/RoleSelection';
 import { RegisterForm } from './pages/RegisterFormNew';
 import { Dashboard as PatientDashboard } from './pages/patient/Dashboard';
@@ -31,6 +32,7 @@ export function AppRouter() {
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/role-selection" element={<RoleSelection />} />
         <Route path="/register/:role" element={<RegisterForm />} />
         
