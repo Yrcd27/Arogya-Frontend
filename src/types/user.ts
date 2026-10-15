@@ -112,3 +112,19 @@ export interface DoctorSearchResult {
   phoneNumber?: string;
   userId: number;
 }
+
+export interface ForgotPasswordResponse {
+  message: string;
+  success: boolean;
+}
+
+export interface VerifyOtpResponse {
+  message: string;
+  resetToken: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+  success: boolean;
+}
+

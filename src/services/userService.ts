@@ -16,6 +16,9 @@ import type {
   UpdateAdminProfileInput,
   CreateTechnicianProfileInput,
   UpdateTechnicianProfileInput,
+  ForgotPasswordResponse,
+  VerifyOtpResponse,
+  ResetPasswordResponse,
 } from '../types/user';
 
 export const userAPI = {
@@ -49,6 +52,33 @@ export const userAPI = {
     return apiFetch<User>(`/users/getUser/${id}`);
   },
 
+  forgotPassword: async (email: string): Promise<ForgotPasswordResponse> => {
+    return apiFetch<ForgotPasswordResponse>('/users/forgot-password', {
+      method: 'POST',
+      body: { email },
+      skipAuth: true,
+    });
+  },
+
+  verifyOtp: async (email: string, otp: string): Promise<VerifyOtpResponse> => {
+    return apiFetch<VerifyOtpResponse>('/users/verify-otp', {
+      method: 'POST',
+      body: { email, otp },
+      skipAuth: true,
+    });
+  },
+
+  resetPassword: async (
+    email: string,
+    resetToken: string,
+    newPassword: string
+  ): Promise<ResetPasswordResponse> => {
+    return apiFetch<ResetPasswordResponse>('/users/reset-password', {
+      method: 'POST',
+      body: { email, resetToken, newPassword },
+      skipAuth: true,
+    });
+  },
 };
 
 // Profile APIs
