@@ -1,28 +1,33 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarIcon, ClipboardListIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react';
+import { CalendarIcon, FlaskConicalIcon, FileTextIcon, AlertCircleIcon } from 'lucide-react';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { useAuth } from '../../hooks/useAuth';
 
 export function SummaryCards() {
   const navigate = useNavigate();
-  const { stats, failedFields, loading, error } = useDashboardData();
+  const { user } = useAuth();
+  const { stats, failedFields, loading, error } = useDashboardData({ role: 'patient', patientId: user?.id });
 
   const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const cards = [{
+    icon: FileTextIcon,
+    label: 'My Prescriptions',
+    value: loading ? '...' : fmt(stats.totalConsultations, failedFields.totalConsultations),
+    color: '#38a3a5',
+    path: '/patient/records'
+  }, {
     icon: CalendarIcon,
     label: 'Scheduled Clinics',
     value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
-    color: '#38a3a5'
+    color: '#38a3a5',
+    path: '/patient/clinics'
   }, {
-    icon: ClipboardListIcon,
-    label: 'Available Doctors',
-    value: loading ? '...' : fmt(stats.totalDoctors, failedFields.totalDoctors),
-    color: '#38a3a5'
-  }, {
-    icon: FileTextIcon,
-    label: 'Total Clinics',
-    value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
-    color: '#38a3a5'
+    icon: FlaskConicalIcon,
+    label: 'Lab Tests',
+    value: loading ? '...' : fmt(stats.totalLabTests, failedFields.totalLabTests),
+    color: '#38a3a5',
+    path: '/patient/lab-results'
   }];
 
   return (
@@ -38,7 +43,7 @@ export function SummaryCards() {
         <button
           key={card.label}
           type="button"
-          onClick={() => navigate('/patient/clinics')}
+          onClick={() => navigate(card.path)}
           className="text-left bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
         >
           <div className="flex items-center justify-between">
