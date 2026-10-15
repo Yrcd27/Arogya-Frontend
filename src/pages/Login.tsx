@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { HomeIcon } from 'lucide-react';
+import { HomeIcon, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { loginAPI, getDashboardRoute } from '../utils/auth';
 
@@ -11,6 +11,10 @@ export function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState(location.state?.email || '');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Check for success message from registration
@@ -36,10 +40,34 @@ export function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+
+    let isValid = true;
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail) {
+      setEmailError('Please enter your email address.');
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setEmailError('Please enter a valid email address.');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+
+    if (!password) {
+      setPasswordError('Please enter your password.');
+      isValid = false;
+    } else {
+      setPasswordError('');
+    }
+
+    if (!isValid) return;
+
     setLoading(true);
 
     try {
-      const user = await loginAPI({ email, password });
+      const user = await loginAPI({ email: cleanEmail, password });
       login(user);
 
       toast.success('Login successful!', {
@@ -56,7 +84,9 @@ export function Login() {
       }, 500);
 
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Login failed. Please check your credentials.', {
+      const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
+      setFormError(msg);
+      toast.error(msg, {
         position: "top-right",
         autoClose: 4000,
       });
@@ -95,7 +125,13 @@ export function Login() {
         <p className="text-gray-600">Sign in to access your account</p>
       </div>
       <div className="bg-white rounded-xl shadow-sm p-8">
-        <form onSubmit={handleLogin} className="space-y-6">
+        {formError && (
+          <div className="mb-6 flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
+            <span>{formError}</span>
+          </div>
+        )}
+        <form onSubmit={handleLogin} noValidate className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
               Email
@@ -104,12 +140,25 @@ export function Login() {
               type="email"
               autoComplete="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={e => {
+                setEmail(e.target.value);
+                if (emailError) setEmailError('');
+                if (formError) setFormError('');
+              }}
               placeholder="Enter your email"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-              required
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                emailError
+                  ? 'border-red-400 focus:ring-red-400 bg-red-50/20'
+                  : 'border-gray-300 focus:ring-[#38A3A5]'
+              }`}
               disabled={loading}
             />
+            {emailError && (
+              <p className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>{emailError}</span>
+              </p>
+            )}
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -124,16 +173,39 @@ export function Login() {
                 Forgot password?
               </button>
             </div>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
-              required
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={e => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError('');
+                  if (formError) setFormError('');
+                }}
+                placeholder="Enter your password"
+                className={`w-full pl-4 pr-11 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                  passwordError
+                    ? 'border-red-400 focus:ring-red-400 bg-red-50/20'
+                    : 'border-gray-300 focus:ring-[#38A3A5]'
+                }`}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {passwordError && (
+              <p className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>{passwordError}</span>
+              </p>
+            )}
           </div>
           <button
             type="submit"
