@@ -32,8 +32,18 @@ export function LandingFooter() {
           </div>
           <div>
             <h3 className="text-xl font-bold mb-4">Contact</h3>
-            <p className="text-gray-400">Phone: +94 11 269 1111</p>
-            <p className="text-gray-400">Email: info@health.gov.lk</p>
+            <p className="text-gray-400">
+              Phone:{' '}
+              <a href="tel:+94112694033" className="hover:text-white transition-colors">
+                +94 11 269 4033
+              </a>
+            </p>
+            <p className="text-gray-400">
+              Email:{' '}
+              <a href="mailto:info@health.gov.lk" className="hover:text-white transition-colors">
+                info@health.gov.lk
+              </a>
+            </p>
             <p className="text-gray-400">Emergency: 1990</p>
           </div>
         </div>
