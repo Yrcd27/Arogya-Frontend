@@ -41,6 +41,8 @@ export function LabTests() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const loadLabTestsRef = useRef<() => Promise<void>>(async () => undefined);
+  const consultationCacheRef = useRef<Map<number, Promise<{ patientId: number; name: string }>>>(new Map());
+  const checkedResultsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     void loadLabTestsRef.current();
@@ -61,7 +63,6 @@ export function LabTests() {
       }
       setLabTests(data);
       void hydratePatientDetails(data);
-      void hydrateResultPresence(data);
     } catch (err) {
       setError('Failed to load lab tests');
       console.error(err);
@@ -74,11 +75,12 @@ export function LabTests() {
 
   const hydratePatientDetails = async (tests: LabTest[]) => {
     const consultationIds = Array.from(new Set(tests.map(t => t.consultationId)));
-    const missing = consultationIds.filter(id => !patientByConsultation[id]);
+    const missing = consultationIds.filter(id => !patientByConsultation[id] && !consultationCacheRef.current.has(id));
     if (missing.length === 0) return;
 
-    const results = await Promise.all(
-      missing.map(async (consultationId) => {
+    // Use promise cache to eliminate redundant consultation and patient lookups (N+1 defense)
+    const promises = missing.map((consultationId) => {
+      const promise = (async () => {
         try {
           const consultation = await consultationAPI.get(consultationId);
           const patientId = consultation.patientId;
@@ -101,9 +103,12 @@ export function LabTests() {
         } catch {
           return { consultationId, patientId: 0, name: '-' };
         }
-      })
-    );
+      })();
+      consultationCacheRef.current.set(consultationId, promise);
+      return promise;
+    });
 
+    const results = await Promise.all(promises);
     const next: Record<number, { patientId: number; name: string }> = {};
     results.forEach((r) => {
       next[r.consultationId] = { patientId: r.patientId, name: r.name };
@@ -112,10 +117,13 @@ export function LabTests() {
   };
 
   const hydrateResultPresence = async (tests: LabTest[]) => {
+    // Only check results for tests that haven't been verified yet
     const candidateIds = tests
-      .filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS')
+      .filter(t => (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && !checkedResultsRef.current.has(t.id))
       .map(t => t.id);
     if (candidateIds.length === 0) return;
+
+    candidateIds.forEach(id => checkedResultsRef.current.add(id));
 
     setResultAvailabilityByLabTest(previous => ({
       ...previous,
@@ -127,30 +135,35 @@ export function LabTests() {
       return next;
     });
 
-    const checks = await Promise.all(
-      candidateIds.map(async (labTestId) => {
-        try {
-          const result = await medicalRecordsAPI.getByLabTestId(labTestId);
-          return { labTestId, availability: result?.id ? 'present' as const : 'error' as const };
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 404) return { labTestId, availability: 'absent' as const };
-          return {
-            labTestId,
-            availability: 'error' as const,
-            message: err instanceof Error ? err.message : 'Unable to verify whether a result already exists.',
-          };
-        }
-      })
-    );
+    // Check with small batches of 3 to avoid query spikes
+    const batchSize = 3;
+    for (let i = 0; i < candidateIds.length; i += batchSize) {
+      const batch = candidateIds.slice(i, i + batchSize);
+      const checks = await Promise.all(
+        batch.map(async (labTestId) => {
+          try {
+            const result = await medicalRecordsAPI.getByLabTestId(labTestId);
+            return { labTestId, availability: result?.id ? 'present' as const : 'error' as const };
+          } catch (err) {
+            if (err instanceof ApiError && err.status === 404) return { labTestId, availability: 'absent' as const };
+            return {
+              labTestId,
+              availability: 'error' as const,
+              message: err instanceof Error ? err.message : 'Unable to verify whether a result already exists.',
+            };
+          }
+        })
+      );
 
-    const next: Record<number, ResultAvailability> = {};
-    const nextErrors: Record<number, string> = {};
-    checks.forEach(({ labTestId, availability, ...result }) => {
-      next[labTestId] = availability;
-      if ('message' in result && result.message) nextErrors[labTestId] = result.message;
-    });
-    setResultAvailabilityByLabTest(prev => ({ ...prev, ...next }));
-    setResultAvailabilityErrors(prev => ({ ...prev, ...nextErrors }));
+      const next: Record<number, ResultAvailability> = {};
+      const nextErrors: Record<number, string> = {};
+      checks.forEach(({ labTestId, availability, ...result }) => {
+        next[labTestId] = availability;
+        if ('message' in result && result.message) nextErrors[labTestId] = result.message;
+      });
+      setResultAvailabilityByLabTest(prev => ({ ...prev, ...next }));
+      setResultAvailabilityErrors(prev => ({ ...prev, ...nextErrors }));
+    }
   };
 
   const filteredTests = useMemo(() => {
@@ -185,6 +198,12 @@ export function LabTests() {
   const totalPages = Math.max(1, Math.ceil(filteredTests.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const paginatedTests = filteredTests.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    if (paginatedTests.length > 0) {
+      void hydrateResultPresence(paginatedTests);
+    }
+  }, [paginatedTests]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
