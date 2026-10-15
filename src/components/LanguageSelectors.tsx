@@ -26,7 +26,7 @@ function LanguageFlag({ countryCode }: { countryCode: string }) {
 }
 
 function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
-  const { language, status, error, changeLanguage } = useLanguage();
+  const { language, status, error, changeLanguage, preloadGoogleWidget } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [failedLanguage, setFailedLanguage] = useState<LanguageCode | null>(null);
@@ -46,10 +46,11 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
   }, []);
 
   const openMenu = useCallback(() => {
+    preloadGoogleWidget?.();
     const selectedIndex = specificLanguages.findIndex(option => option.value === language);
     setActiveIndex(Math.max(0, selectedIndex));
     setIsOpen(true);
-  }, [language]);
+  }, [language, preloadGoogleWidget]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -115,6 +116,8 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
         aria-busy={isBusy}
+        onMouseEnter={() => preloadGoogleWidget?.()}
+        onFocus={() => preloadGoogleWidget?.()}
         onClick={() => isOpen ? closeMenu() : openMenu()}
         onKeyDown={event => {
           if (!isOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {

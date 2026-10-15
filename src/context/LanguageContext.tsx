@@ -189,6 +189,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      loadGoogleWidget();
       const select = await waitForGoogleLanguageSelect(nextLanguage);
       if (!mountedRef.current || operationId !== operationRef.current) return false;
 
@@ -241,7 +242,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     };
   }, [applyLanguage]);
 
-  useEffect(() => loadGoogleWidget(), []);
+  useEffect(() => {
+    // Only pre-load Google Translate script on boot if non-English translation is active.
+    // For default English users, defer script injection until they interact with the language switcher (D-18).
+    if (languageRef.current !== DEFAULT_LANGUAGE || Boolean(readCookieLanguage())) {
+      return loadGoogleWidget();
+    }
+  }, []);
 
   useEffect(() => {
     if (initialRouteRef.current) {
@@ -276,7 +283,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <LanguageContext.Provider value={{ language, status, error, changeLanguage }}>
+    <LanguageContext.Provider value={{ language, status, error, changeLanguage, preloadGoogleWidget: loadGoogleWidget }}>
       {children}
       <div id="google_translate_element" className="google-translate-host" aria-hidden="true" />
     </LanguageContext.Provider>

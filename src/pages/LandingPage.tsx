@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, ClipboardListIcon, FileTextIcon, UserIcon, BarChartIcon, HeartHandshakeIcon, ArrowRightCircleIcon, MailIcon, PhoneIcon, MapPinIcon } from 'lucide-react';
 import { LandingHeader } from '../components/landing/LandingHeader';
@@ -11,6 +12,32 @@ const OFFICE_MAP_VIEW_URL = `https://www.google.com/maps/search/?api=1&query=${O
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoadMap, setShouldLoadMap] = useState(false);
+
+  useEffect(() => {
+    if (shouldLoadMap) return;
+    const element = mapContainerRef.current;
+    if (!element) return;
+
+    if (!('IntersectionObserver' in window)) {
+      setShouldLoadMap(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setShouldLoadMap(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [shouldLoadMap]);
   const services = [{
     icon: ClipboardListIcon,
     title: 'Queue Management',
@@ -187,14 +214,29 @@ export function LandingPage() {
             </div>
 
             {/* Location map */}
-            <div className="rounded-2xl overflow-hidden h-[260px] md:h-[340px]">
-              <iframe
-                title="Ministry of Health Sri Lanka location"
-                src={OFFICE_MAP_EMBED_URL}
-                className="w-full h-full border-0"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
+            <div ref={mapContainerRef} className="rounded-2xl overflow-hidden h-[260px] md:h-[340px] bg-slate-100 flex items-center justify-center relative border border-gray-200">
+              {shouldLoadMap ? (
+                <iframe
+                  title="Ministry of Health Sri Lanka location"
+                  src={OFFICE_MAP_EMBED_URL}
+                  className="w-full h-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center text-gray-500">
+                  <MapPinIcon className="w-8 h-8 text-[#38A3A5] mb-2" />
+                  <p className="text-sm font-medium text-gray-700">Ministry of Health Sri Lanka</p>
+                  <p className="text-xs text-gray-500 mb-3">Colombo 10, Sri Lanka</p>
+                  <button
+                    type="button"
+                    onClick={() => setShouldLoadMap(true)}
+                    className="px-4 py-1.5 text-xs font-semibold text-[#38A3A5] bg-white border border-[#38A3A5] rounded-lg hover:bg-[#38A3A5] hover:text-white transition-colors shadow-sm"
+                  >
+                    Load Interactive Map
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
+import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import { 
@@ -62,6 +63,13 @@ export function Clinics() {
         const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
         if (name) setPatientName(name);
       } catch (e) {
+        if (e instanceof ApiError && e.status === 404) {
+          // Empty profile state: fallback to user account info gracefully without showing error banner (D-19)
+          if (user?.id) setPatientId(String(user.id));
+          if (user?.username) setPatientName(user.username);
+          setPatientFetchError(null);
+          return;
+        }
         setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
         // Fallback: still enable queue actions using the user's id
         if (user?.id) setPatientId(String(user.id));
