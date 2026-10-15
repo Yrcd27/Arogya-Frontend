@@ -64,7 +64,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <span className="text-white text-2xl font-bold">A</span>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-gray-900 leading-tight">Arogya</h1>
+              <span className="text-xl font-bold text-gray-900 leading-tight">Arogya</span>
               <p className="text-xs text-gray-600 leading-tight">Mobile Clinics</p>
             </div>
           </div>

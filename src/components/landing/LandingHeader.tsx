@@ -70,14 +70,14 @@ export function LandingHeader() {
             <span className="text-white font-bold text-xl">A</span>
           </div>
           <div>
-            <h1
-              className={`text-xl font-bold tracking-tight leading-none transition-colors duration-[220ms] ease ${
+            <span
+              className={`text-xl font-bold tracking-tight leading-none block transition-colors duration-[220ms] ease ${
                 isLight ? 'text-[#111827]' : 'text-white'
               }`}
               style={isLight ? undefined : { textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}
             >
               Arogya
-            </h1>
+            </span>
             <p
               className={`text-[11px] tracking-wide uppercase mt-1 transition-colors duration-[220ms] ease ${
                 isLight ? 'text-[#5F6B7A]' : 'text-white/80'
