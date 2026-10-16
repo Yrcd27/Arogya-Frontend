@@ -8,6 +8,7 @@ export interface LanguageContextType {
   status: TranslationStatus;
   error: string | null;
   changeLanguage: (language: LanguageCode) => Promise<boolean>;
+  preloadGoogleWidget?: () => void;
 }
 
 export const LanguageContext = createContext<LanguageContextType | undefined>(undefined);

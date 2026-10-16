@@ -71,7 +71,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <UserProfileContext.Provider value={{ profile, status, error, refreshProfile, replaceProfile }}>
+    <UserProfileContext.Provider value={{ profile, status, error, refreshProfile, refetchProfile: refreshProfile, replaceProfile }}>
       {children}
     </UserProfileContext.Provider>
   );

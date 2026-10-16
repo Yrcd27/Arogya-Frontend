@@ -8,19 +8,14 @@ import { useAuth } from '../../hooks/useAuth';
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const { user } = useAuth();
-  const { stats, failedFields, loading, error } = useDashboardData({ doctorId: user?.id });
+  const { stats, failedFields, loading, error } = useDashboardData({ role: 'doctor', doctorId: user?.id });
 
   const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
 
   const doctorStats = [{
-    label: 'Total Patients',
-    value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
-    icon: UsersIcon,
-    color: '#38A3A5'
-  }, {
-    label: 'Total Clinics',
-    value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
-    icon: ClipboardListIcon,
+    label: 'My Consultations',
+    value: loading ? '...' : fmt(stats.totalConsultations, failedFields.totalConsultations),
+    icon: FileTextIcon,
     color: '#38A3A5'
   }, {
     label: 'Scheduled Clinics',
@@ -28,9 +23,14 @@ export function Dashboard() {
     icon: CalendarIcon,
     color: '#38A3A5'
   }, {
-    label: 'My Consultations',
-    value: loading ? '...' : fmt(stats.totalConsultations, failedFields.totalConsultations),
-    icon: FileTextIcon,
+    label: 'Total Clinics',
+    value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
+    icon: ClipboardListIcon,
+    color: '#38A3A5'
+  }, {
+    label: 'Completed Clinics',
+    value: loading ? '...' : fmt(stats.completedClinics, failedFields.completedClinics),
+    icon: UsersIcon,
     color: '#38A3A5'
   }];
 

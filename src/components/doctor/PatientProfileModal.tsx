@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, User, Mail, Phone, MapPin, Calendar, Activity } from 'lucide-react';
 import { profileAPI } from '../../services/api';
+import { ApiError } from '../../services/httpClient';
 import type { PatientProfile } from '../../types/user';
 
 interface PatientProfileModalProps {
@@ -20,8 +21,13 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
       const data = await profileAPI.getPatient(patientId);
       setProfile(data);
     } catch (err) {
-      console.error('Failed to load patient profile:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load patient profile');
+      if (err instanceof ApiError && err.status === 404) {
+        setProfile(null);
+        setError('Patient has not completed their detailed profile yet.');
+      } else {
+        console.error('Failed to load patient profile:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load patient profile');
+      }
     } finally {
       setLoading(false);
     }

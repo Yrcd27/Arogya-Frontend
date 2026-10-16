@@ -1,5 +1,5 @@
 // User Service API - routed through the API Gateway (see httpClient.ts)
-import { apiFetch } from './httpClient';
+import { apiFetch, ApiError } from './httpClient';
 import type {
   User,
   AuthResponse,
@@ -151,6 +151,9 @@ export const doctorAPI = {
         userId: profile.user.id,
       }));
     } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
       console.error('Failed to fetch doctor profiles:', error);
       return [];
     }

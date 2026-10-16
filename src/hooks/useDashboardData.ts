@@ -44,8 +44,8 @@ const EMPTY_FAILED: Record<keyof DashboardStats, boolean> = {
   totalTestResults: false,
 };
 
-export const useDashboardData = (options: { doctorId?: number; includeTestResults?: boolean } = {}) => {
-  const { doctorId, includeTestResults = false } = options;
+export const useDashboardData = (options: { role?: string; doctorId?: number; patientId?: number; includeTestResults?: boolean } = {}) => {
+  const { role = 'admin', doctorId, patientId, includeTestResults = false } = options;
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
   const [failedFields, setFailedFields] = useState<Record<keyof DashboardStats, boolean>>(EMPTY_FAILED);
   const [loading, setLoading] = useState(true);
@@ -60,13 +60,25 @@ export const useDashboardData = (options: { doctorId?: number; includeTestResult
       const withTimeout = <T,>(promise: Promise<T>) =>
         Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))]);
 
+      // Only administrators require system-wide profile enumeration
+      const fetchPatients = role === 'admin' ? withTimeout(profileAPI.getAllPatients()) : Promise.resolve([]);
+      const fetchDoctors = role === 'admin' ? withTimeout(profileAPI.getAllDoctors()) : Promise.resolve([]);
+      const fetchAdmins = role === 'admin' ? withTimeout(profileAPI.getAllAdmins()) : Promise.resolve([]);
+      const fetchTechnicians = role === 'admin' ? withTimeout(profileAPI.getAllTechnicians()) : Promise.resolve([]);
+
+      const consultationQuery = doctorId
+        ? { doctorId, size: 1 }
+        : patientId
+        ? { patientId, size: 1 }
+        : { size: 1 };
+
       const [patients, doctors, admins, technicians, clinics, consultations, labTests, testResults] = await Promise.allSettled([
-        withTimeout(profileAPI.getAllPatients()),
-        withTimeout(profileAPI.getAllDoctors()),
-        withTimeout(profileAPI.getAllAdmins()),
-        withTimeout(profileAPI.getAllTechnicians()),
+        fetchPatients,
+        fetchDoctors,
+        fetchAdmins,
+        fetchTechnicians,
         withTimeout(clinicAPI.getAllClinics()),
-        withTimeout(consultationAPI.list(doctorId ? { doctorId, size: 1 } : { size: 1 })),
+        withTimeout(consultationAPI.list(consultationQuery)),
         withTimeout(labTestAPI.list({ size: 1 })),
         includeTestResults ? withTimeout(medicalRecordsAPI.list({ size: 1 })) : Promise.resolve({ items: [], total: 0 }),
       ]);
@@ -109,7 +121,7 @@ export const useDashboardData = (options: { doctorId?: number; includeTestResult
     } finally {
       setLoading(false);
     }
-  }, [doctorId, includeTestResults]);
+  }, [role, doctorId, patientId, includeTestResults]);
 
   useEffect(() => {
     fetchDashboardData();

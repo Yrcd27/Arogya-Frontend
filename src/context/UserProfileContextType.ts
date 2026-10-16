@@ -8,6 +8,7 @@ export interface UserProfileContextType {
   status: ProfileStatus;
   error: string | null;
   refreshProfile: () => Promise<void>;
+  refetchProfile: () => Promise<void>;
   replaceProfile: (profile: RoleProfile) => void;
 }
 

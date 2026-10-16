@@ -297,6 +297,7 @@ export function RegisterForm() {
                   <input 
                     type="text" 
                     name="username"
+                    autoComplete="username"
                     value={formData.username}
                     onChange={handleInputChange}
                     placeholder="Choose a username" 
@@ -312,6 +313,7 @@ export function RegisterForm() {
                   <input 
                     type="email" 
                     name="email"
+                    autoComplete="email"
                     value={formData.email}
                     onChange={handleInputChange}
                     placeholder="Enter your email" 
@@ -330,6 +332,7 @@ export function RegisterForm() {
                   <input 
                     type="password" 
                     name="password"
+                    autoComplete="new-password"
                     value={formData.password}
                     onChange={handleInputChange}
                     placeholder="Create a password" 
@@ -345,6 +348,7 @@ export function RegisterForm() {
                   <input 
                     type="password" 
                     name="confirmPassword"
+                    autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     placeholder="Confirm your password" 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
@@ -21,6 +21,7 @@ export function Clinics() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [doctorCounts, setDoctorCounts] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -71,11 +72,39 @@ export function Clinics() {
     }
   }, [doctorSearchTerm, doctors]);
 
+  // Batch doctor count fetching with concurrency control to prevent triggering API Gateway rate limiting (HTTP 429)
+  const loadDoctorCountsInBatches = async (clinicList: Clinic[]) => {
+    const batchSize = 2;
+    for (let i = 0; i < clinicList.length; i += batchSize) {
+      const batch = clinicList.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async (c) => {
+          try {
+            const assigned = await clinicDoctorAPI.getClinicDoctorsByClinicId(c.id);
+            return { id: c.id, count: assigned?.length || 0 };
+          } catch {
+            return { id: c.id, count: 0 };
+          }
+        })
+      );
+      setDoctorCounts(prev => {
+        const next = { ...prev };
+        batchResults.forEach(r => { next[r.id] = r.count; });
+        return next;
+      });
+      if (i + batchSize < clinicList.length) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+  };
+
   const loadClinics = async () => {
     try {
       setIsLoading(true);
       const data = await clinicAPI.getAllClinics();
-      setClinics(data || []);
+      const list = data || [];
+      setClinics(list);
+      void loadDoctorCountsInBatches(list);
     } catch (error) {
       console.error('Failed to load clinics:', error);
       setError(error instanceof Error ? error.message : 'Failed to load clinics');
@@ -353,6 +382,7 @@ export function Clinics() {
               <ClinicCard 
                 key={`${clinic.id}-${refreshTrigger}`}
                 clinic={clinic} 
+                doctorCount={doctorCounts[clinic.id] ?? 0}
                 onEdit={handleEdit}
                 onDelete={(clinic) => setClinicToDelete(clinic)}
               />
@@ -663,28 +693,15 @@ export function Clinics() {
 // Clinic Card Component
 function ClinicCard({ 
   clinic, 
+  doctorCount,
   onEdit, 
   onDelete 
 }: { 
   clinic: Clinic; 
+  doctorCount: number;
   onEdit: (clinic: Clinic) => void;
   onDelete: (clinic: Clinic) => void;
 }) {
-  const [doctorCount, setDoctorCount] = useState<number>(0);
-
-  const loadDoctorCount = useCallback(async () => {
-    try {
-      const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
-      setDoctorCount(doctors?.length || 0);
-    } catch (error) {
-      console.error('Failed to load doctor count:', error);
-    }
-  }, [clinic.id]);
-
-  useEffect(() => {
-    loadDoctorCount();
-  }, [loadDoctorCount]);
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'SCHEDULED':

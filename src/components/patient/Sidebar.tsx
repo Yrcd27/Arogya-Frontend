@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { HomeIcon, FileTextIcon, FlaskConicalIcon, UserIcon, LogOutIcon, HospitalIcon, XIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
@@ -36,11 +36,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     path: '/patient/clinics'
   }];
 
-  const handleNavigation = (path: string) => {
-    navigate(path);
-    if (window.matchMedia('(max-width: 767px)').matches) onClose?.();
-  };
-
   return (
     <>
       {/* Mobile overlay */}
@@ -63,7 +58,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               <span className="text-white text-2xl font-bold">A</span>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold text-gray-900 leading-tight">Arogya</h1>
+              <span className="text-xl font-bold text-gray-900 leading-tight">Arogya</span>
               <p className="text-xs text-gray-600 leading-tight">Mobile Clinics</p>
             </div>
           </div>
@@ -77,9 +72,12 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </div>
         <nav className="flex-1 min-h-0 px-3 sm:px-4 space-y-1 sm:space-y-2 overflow-y-auto mt-6">
           {navItems.map(item => (
-            <button
+            <Link
               key={item.label}
-              onClick={() => handleNavigation(item.path)}
+              to={item.path}
+              onClick={() => {
+                if (window.matchMedia('(max-width: 767px)').matches) onClose?.();
+              }}
               aria-current={location.pathname === item.path ? 'page' : undefined}
               className={`
                 w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg
@@ -89,7 +87,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             >
               <item.icon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <span className="font-medium truncate">{item.label}</span>
-            </button>
+            </Link>
           ))}
         </nav>
         <div className="p-3 sm:p-4 border-t border-gray-200">

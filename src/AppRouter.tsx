@@ -23,10 +23,12 @@ import { CreateConsultation as DoctorCreateConsultation } from './pages/doctor/C
 import Consultations from './pages/doctor/Consultations';
 import { NotFound } from './pages/NotFound';
 import { LanguageProvider } from './context/LanguageContext';
+import { PageTitleUpdater } from './components/PageTitleUpdater';
 
 export function AppRouter() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <PageTitleUpdater />
       <LanguageProvider>
         <Routes>
         {/* Public Routes */}
