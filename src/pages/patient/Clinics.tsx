@@ -7,14 +7,17 @@ import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import type { QueueTokenResponse } from '../../services/queueService';
-import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
+import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS, type ClinicFilters } from '../../types/clinic';
+import { localDateString } from '../../utils/profileValidation';
 import { 
   formatDate, 
   formatTime, 
   getDaysUntilClinic,
   getAvailableClinics,
   filterClinics,
-  sortClinics
+  sortClinics,
+  validateClinicFilters,
+  getDistrictOptions
 } from '../../utils/clinic';
 
 const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
@@ -341,18 +344,34 @@ export function Clinics() {
     token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
   );
 
-  // Filter and sort clinics
-  const filteredAndSortedClinics = sortClinics(
-    filterClinics(clinics, {
-      searchTerm,
-      province: selectedProvince,
-      district: selectedDistrict,
-      dateRange,
-      status: 'SCHEDULED', // Patients only see scheduled clinics
-      sortBy
-    }),
+  const clinicFilters: ClinicFilters = {
+    searchTerm,
+    province: selectedProvince,
+    district: selectedDistrict,
+    dateRange,
+    status: 'SCHEDULED', // Patients only see scheduled clinics
     sortBy
-  );
+  };
+  const filterErrors = validateClinicFilters(clinicFilters);
+  const filtersValid = Object.keys(filterErrors).length === 0;
+  const filteredAndSortedClinics = filtersValid ? sortClinics(filterClinics(clinics, clinicFilters), sortBy) : [];
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedProvince('');
+    setSelectedDistrict('');
+    setDateRange({ start: '', end: '' });
+    setSortBy('date');
+  };
+
+  const filterProps = (field: keyof typeof filterErrors) => ({
+    id: `clinic-filter-${field}`,
+    'aria-invalid': !!filterErrors[field],
+    'aria-describedby': filterErrors[field] ? `clinic-filter-${field}-error` : undefined,
+  });
+
+  const filterError = (field: keyof typeof filterErrors) => filterErrors[field]
+    ? <p id={`clinic-filter-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{filterErrors[field]}</p> : null;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -411,6 +430,7 @@ export function Clinics() {
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
+                  aria-label="Search clinics"
                   placeholder="Search clinics..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -419,68 +439,88 @@ export function Clinics() {
               </div>
 
               {/* Province Filter */}
+              <div>
+              <label htmlFor="clinic-filter-province" className="sr-only">Filter by province</label>
               <select
+                {...filterProps('province')}
                 value={selectedProvince}
                 onChange={(e) => {
                   setSelectedProvince(e.target.value);
                   setSelectedDistrict(''); // Reset district when province changes
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
                 <option value="">All Provinces</option>
                 {Object.keys(PROVINCES_DISTRICTS).map(province => (
                   <option key={province} value={province}>{province}</option>
                 ))}
               </select>
+              {filterError('province')}
+              </div>
 
               {/* District Filter */}
+              <div>
+              <label htmlFor="clinic-filter-district" className="sr-only">Filter by district</label>
               <select
+                {...filterProps('district')}
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 disabled={!selectedProvince}
               >
                 <option value="">All Districts</option>
-                {selectedProvince && (PROVINCES_DISTRICTS[selectedProvince as keyof typeof PROVINCES_DISTRICTS] || []).map(district => (
+                {getDistrictOptions(selectedProvince).map(district => (
                   <option key={district} value={district}>{district}</option>
                 ))}
               </select>
+              {filterError('district')}
+              </div>
 
               {/* Sort */}
+              <div>
+              <label htmlFor="clinic-filter-sortBy" className="sr-only">Sort clinics</label>
               <select
+                {...filterProps('sortBy')}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'province')}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
                 <option value="date">Sort by Date</option>
                 <option value="name">Sort by Name</option>
                 <option value="province">Sort by Province</option>
               </select>
+              {filterError('sortBy')}
+              </div>
             </div>
 
             {/* Date Range Filter */}
             <div className="flex flex-col sm:flex-row gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <label htmlFor="clinic-filter-start" className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
                 <input
+                  {...filterProps('start')}
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={localDateString()}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 />
+                {filterError('start')}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <label htmlFor="clinic-filter-end" className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
                 <input
+                  {...filterProps('end')}
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  min={dateRange.start || new Date().toISOString().split('T')[0]}
+                  min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 />
+                {filterError('end')}
               </div>
             </div>
+            {!filtersValid && <p className="mt-3 text-sm text-gray-700">Correct the filters to display clinics, or <button type="button" onClick={clearFilters} className="text-[#2d8284] underline">clear filters</button>.</p>}
           </div>
 
           {/* Loading State */}
@@ -499,7 +539,7 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          {!isLoading && !error && (
+          {!isLoading && !error && filtersValid && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredAndSortedClinics.map(clinic => (
                 <ClinicCard 
@@ -515,7 +555,7 @@ export function Clinics() {
           )}
 
           {/* Empty State */}
-          {!isLoading && !error && filteredAndSortedClinics.length === 0 && (
+          {!isLoading && !error && filtersValid && filteredAndSortedClinics.length === 0 && (
             <div className="text-center py-12">
               <HospitalIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -529,12 +569,7 @@ export function Clinics() {
               </p>
               {searchTerm || selectedProvince || selectedDistrict || dateRange.start || dateRange.end ? (
                 <button 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedProvince('');
-                    setSelectedDistrict('');
-                    setDateRange({ start: '', end: '' });
-                  }}
+                  onClick={clearFilters}
                   className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
                 >
                   Clear Filters
