@@ -162,18 +162,9 @@ export function Login() {
             )}
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label htmlFor="login-password" className="block text-sm font-medium text-gray-900">
-                Password
-              </label>
-              <button
-                type="button"
-                onClick={() => navigate('/forgot-password')}
-                className="text-sm font-medium text-[#38A3A5] hover:text-[#2d8284] hover:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-900 mb-2">
+              Password
+            </label>
             <div className="relative">
               <input
                 id="login-password"
@@ -205,6 +196,15 @@ export function Login() {
                 className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => navigate('/forgot-password')}
+                className="text-sm font-medium text-[#38A3A5] hover:text-[#2d8284] hover:underline"
+              >
+                Forgot password?
               </button>
             </div>
             {passwordError && (
