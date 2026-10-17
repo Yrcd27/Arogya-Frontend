@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { HomeIcon } from 'lucide-react';
 import { userAPI } from '../services/api';
 import { ApiError } from '../services/httpClient';
+import { PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError, getPasswordPolicyError, normalizeEmail, type FieldErrors } from '../utils/formValidation';
+
+type RegisterField = 'username' | 'email' | 'password' | 'confirmPassword' | 'secretKey';
 
 export function RegisterForm() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { role } = useParams<{ role: string }>();
-  
-  // Get role data from navigation state
-  const { roleData } = location.state || {};
   
   const [formData, setFormData] = useState({
     // Basic user info only
@@ -24,6 +23,8 @@ export function RegisterForm() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<RegisterField>>({});
+  const submittingRef = useRef(false);
   const [roleInfo, setRoleInfo] = useState<{
     id: number;
     roleName: string;
@@ -31,19 +32,17 @@ export function RegisterForm() {
   } | null>(null);
 
   useEffect(() => {
-    // Use role data from navigation state instead of API call
-    if (roleData) {
-      setRoleInfo(roleData);
-    } else if (role) {
-      // If no roleData but we have role param, create role info based on param
+    if (role) {
       const roleMap = {
-        'patient': { id: 2, roleName: 'PATIENT', roleDescription: 'Patient role' },
-        'doctor': { id: 1, roleName: 'DOCTOR', roleDescription: 'Doctor role' },
-        'admin': { id: 4, roleName: 'ADMIN', roleDescription: 'Administrator role' },
-        'technician': { id: 5, roleName: 'TECHNICIAN', roleDescription: 'Technician role' }
+        'patient': { id: 2, roleName: 'Patient', roleDescription: 'Patient role' },
+        'doctor': { id: 1, roleName: 'Doctor', roleDescription: 'Doctor role' },
+        'admin': { id: 4, roleName: 'Admin', roleDescription: 'Administrator role' },
+        'technician': { id: 5, roleName: 'Technician', roleDescription: 'Technician role' }
       };
       
-      const roleInfo = roleMap[role.toLowerCase() as keyof typeof roleMap];
+      const roleKey = role.toLowerCase();
+      const roleInfo = Object.prototype.hasOwnProperty.call(roleMap, roleKey)
+        ? roleMap[roleKey as keyof typeof roleMap] : undefined;
       if (roleInfo) {
         setRoleInfo(roleInfo);
       } else {
@@ -52,44 +51,70 @@ export function RegisterForm() {
     } else {
       navigate('/role-selection');
     }
-  }, [role, roleData, navigate]);
+    setFieldErrors({});
+    setError('');
+  }, [role, navigate]);
+
+  const getFieldError = (name: RegisterField, value: string, values = formData): string | undefined => {
+    switch (name) {
+      case 'username': return value.trim() ? undefined : 'Please enter a username.';
+      case 'email': return getEmailError(value);
+      case 'password': return getPasswordPolicyError(value, 'Please enter a password.');
+      case 'confirmPassword': return getConfirmationError(values.password, value);
+      case 'secretKey': return roleInfo?.roleName !== 'Patient' && !value.trim() ? 'Please enter the secret key for this role.' : undefined;
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
+    const field = name as RegisterField;
+    const next = { ...formData, [field]: value };
+    setFormData(next);
+    setError('');
+    setFieldErrors(previous => ({
+      ...previous,
+      [field]: previous[field] ? getFieldError(field, value, next) : undefined,
+      ...(field === 'password' && formData.confirmPassword
+        ? { confirmPassword: getConfirmationError(value, formData.confirmPassword) }
+        : {}),
     }));
+  };
+
+  const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+    const field = event.target.name as RegisterField;
+    const value = field === 'email' ? normalizeEmail(event.target.value)
+      : field === 'username' ? event.target.value.trim() : event.target.value;
+    setFormData(previous => ({ ...previous, [field]: value }));
+    setFieldErrors(previous => ({ ...previous, [field]: getFieldError(field, value) ?? previous[field] }));
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (submittingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
     setError('');
+    if (!roleInfo) {
+      setError('Role information is missing. Please select your role again.');
+      return;
+    }
+    const nextErrors: FieldErrors<RegisterField> = {};
+    const fields: RegisterField[] = ['username', 'email', 'password', 'confirmPassword', 'secretKey'];
+    fields.forEach(field => {
+      const message = getFieldError(field, formData[field]);
+      if (message) nextErrors[field] = message;
+    });
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      focusFirstInvalidField(form);
+      return;
+    }
+    const username = formData.username.trim();
+    const email = normalizeEmail(formData.email);
+    setFormData(previous => ({ ...previous, username, email }));
+    submittingRef.current = true;
+    setLoading(true);
 
     try {
-      // Validation
-      if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
-        return;
-      }
-
-      if (!formData.username || !formData.email || !formData.password) {
-        setError('Please fill in all required fields');
-        return;
-      }
-
-      if (!roleInfo) {
-        setError('Role information is missing. Please try again.');
-        return;
-      }
-
-      // Check secret key for protected roles
-      if ((roleInfo.roleName === 'DOCTOR' || roleInfo.roleName === 'ADMIN' || roleInfo.roleName === 'TECHNICIAN') && 
-          (!formData.secretKey || formData.secretKey.trim() === '')) {
-        setError('Secret key is required for this role');
-        return;
-      }
 
       // Step 1: Create user account
       const userRegistrationData: {
@@ -102,8 +127,8 @@ export function RegisterForm() {
         };
         secretKey?: string;
       } = {
-        username: formData.username,
-        email: formData.email,
+        username,
+        email,
         password: formData.password,
         userRole: {
           id: roleInfo.id,
@@ -112,14 +137,14 @@ export function RegisterForm() {
       };
 
       // Add secret key if needed
-      if (roleInfo.roleName !== 'PATIENT' && formData.secretKey) {
-        userRegistrationData.secretKey = formData.secretKey;
+      if (roleInfo.roleName !== 'Patient' && formData.secretKey.trim()) {
+        userRegistrationData.secretKey = formData.secretKey.trim();
       }
 
       await userAPI.register(userRegistrationData);
 
       // Success - redirect to login (no profile creation during registration)
-      toast.success(`Registration successful! Welcome, ${formData.username}!`, {
+      toast.success(`Registration successful! Welcome, ${username}!`, {
         position: "top-right",
         autoClose: 3000,
       });
@@ -133,29 +158,38 @@ export function RegisterForm() {
        
       navigate('/login', { 
         state: { 
-          email: formData.email 
+          email
         } 
       });
 
     } catch (error) {
-      console.error('Registration error:', error);
-
+      const serverErrors = getApiFieldErrors(error, ['username', 'email', 'password', 'confirmPassword', 'secretKey'] as const);
+      if (Object.keys(serverErrors).length) {
+        setFieldErrors(serverErrors);
+        focusFirstInvalidField(form);
+        return;
+      }
       let errorMessage = 'Registration failed. Please try again.';
 
       if (error instanceof ApiError) {
         switch (error.status) {
           case 0:
-            errorMessage = 'Unable to connect to the server. Please make sure the backend is running.';
+            errorMessage = 'Unable to connect to the server. Please check your connection and try again.';
             break;
           case 400:
             errorMessage = error.message || 'Invalid registration data. Please check your information.';
             break;
           case 409:
-            errorMessage = 'An account with this email already exists.';
+            errorMessage = 'Registration could not be completed. The username or email may already be in use. Please try different details.';
             break;
           case 401:
           case 403:
-            errorMessage = 'Invalid secret key. Please check your credentials.';
+            errorMessage = 'Registration was not permitted. Please check your role credentials or contact your administrator.';
+            break;
+          case 500:
+            errorMessage = roleInfo.roleName !== 'Patient'
+              ? 'Registration failed. Please check that your secret key is correct and try again. If the problem continues, contact your administrator.'
+              : 'Registration failed due to a server error. Please try again later.';
             break;
           default:
             errorMessage = error.message || errorMessage;
@@ -166,6 +200,7 @@ export function RegisterForm() {
 
       setError(errorMessage);
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -236,10 +271,10 @@ export function RegisterForm() {
         </div>
 
         <div className="bg-white shadow-lg rounded-lg p-8">
-          <form onSubmit={handleRegister} className="space-y-6">
+          <form onSubmit={handleRegister} noValidate className="space-y-6">
             {/* Error Display */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -254,7 +289,7 @@ export function RegisterForm() {
             )}
 
             {/* Secret Key Field (for protected roles) */}
-            {roleInfo.roleName !== 'PATIENT' && (
+            {roleInfo.roleName !== 'Patient' && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
@@ -267,19 +302,24 @@ export function RegisterForm() {
                       This role requires a secret key for registration. Please contact your administrator to obtain the key.
                     </p>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label htmlFor="register-secretKey" className="block text-sm font-medium text-gray-900 mb-2">
                         Secret Key *
                       </label>
                       <input 
                         type="password" 
                         name="secretKey"
+                        id="register-secretKey"
+                        aria-invalid={!!fieldErrors.secretKey}
+                        aria-describedby={fieldErrors.secretKey ? 'register-secretKey-error' : undefined}
                         value={formData.secretKey}
                         onChange={handleInputChange}
+                        onBlur={handleBlur}
                         placeholder="Enter secret key"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                         required
                         disabled={loading}
                       />
+                      {fieldErrors.secretKey && <p id="register-secretKey-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.secretKey}</p>}
                     </div>
                   </div>
                 </div>
@@ -291,71 +331,92 @@ export function RegisterForm() {
               <h3 className="text-lg font-medium text-gray-900 mb-4">Account Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label htmlFor="register-username" className="block text-sm font-medium text-gray-900 mb-2">
                     Username *
                   </label>
                   <input 
                     type="text" 
                     name="username"
+                    id="register-username"
+                    aria-invalid={!!fieldErrors.username}
+                    aria-describedby={fieldErrors.username ? 'register-username-error' : undefined}
                     autoComplete="username"
                     value={formData.username}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
                     placeholder="Choose a username" 
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                     required
                     disabled={loading}
                   />
+                  {fieldErrors.username && <p id="register-username-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.username}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label htmlFor="register-email" className="block text-sm font-medium text-gray-900 mb-2">
                     Email *
                   </label>
                   <input 
                     type="email" 
                     name="email"
+                    id="register-email"
+                    aria-invalid={!!fieldErrors.email}
+                    aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
                     autoComplete="email"
                     value={formData.email}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
                     placeholder="Enter your email" 
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                     required
                     disabled={loading}
                   />
+                  {fieldErrors.email && <p id="register-email-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.email}</p>}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label htmlFor="register-password" className="block text-sm font-medium text-gray-900 mb-2">
                     Password *
                   </label>
                   <input 
                     type="password" 
                     name="password"
+                    id="register-password"
+                    aria-invalid={!!fieldErrors.password}
+                    aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
                     autoComplete="new-password"
                     value={formData.password}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
                     placeholder="Create a password" 
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                     required
                     disabled={loading}
                   />
+                  <p className="mt-1.5 text-xs text-gray-500">{PASSWORD_REQUIREMENTS}</p>
+                  {fieldErrors.password && <p id="register-password-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.password}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label htmlFor="register-confirmPassword" className="block text-sm font-medium text-gray-900 mb-2">
                     Confirm Password *
                   </label>
                   <input 
                     type="password" 
                     name="confirmPassword"
+                    id="register-confirmPassword"
+                    aria-invalid={!!fieldErrors.confirmPassword}
+                    aria-describedby={fieldErrors.confirmPassword ? 'register-confirmPassword-error' : undefined}
                     autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
                     placeholder="Confirm your password" 
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                     required
                     disabled={loading}
                   />
+                  {fieldErrors.confirmPassword && <p id="register-confirmPassword-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.confirmPassword}</p>}
                 </div>
               </div>
             </div>
