@@ -32,7 +32,7 @@ export function DashboardPanel({ title, description, action, loading, error, onR
     <section aria-labelledby={titleId} aria-busy={loading} className={`min-w-0 rounded-xl border border-gray-100 bg-white shadow-sm ${className}`}>
       <div className="flex items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         <div className="min-w-0">
-          <h2 id={titleId} className="text-base font-semibold text-gray-900">{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold text-gray-900">{title}</h2>
           {description && <p className="mt-1 text-sm leading-5 text-gray-500">{description}</p>}
         </div>
         {onRetry && <button type="button" onClick={onRetry} disabled={loading} aria-label={`Refresh ${title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50 hover:text-[#2d8284] disabled:opacity-40"><RefreshCw aria-hidden="true" className="h-4 w-4" /></button>}

@@ -69,7 +69,7 @@ export function ConfirmDialog({
       title={title}
       description={message}
       role="alertdialog"
-      size="sm"
+      size="md"
       variant="confirmation"
       busy={busy}
       onClose={cancel}

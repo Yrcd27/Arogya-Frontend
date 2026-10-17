@@ -2,7 +2,7 @@ import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -23,6 +23,7 @@ import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../
 import { localDateString } from '../../utils/profileValidation';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { useAuth } from '../../hooks/useAuth';
+import { ClinicCard } from '../../components/clinic/ClinicCard';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -516,16 +517,42 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredClinics.map(clinic => (
-              <ClinicCard 
-                key={`${clinic.id}-${refreshTrigger}`}
-                clinic={clinic} 
-                doctorCount={doctorCounts[clinic.id] ?? 0}
-                onEdit={handleEdit}
-                onDelete={(clinic) => setClinicToDelete(clinic)}
-              />
-            ))}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {filteredClinics.map(clinic => {
+              const doctorCount = doctorCounts[clinic.id] ?? 0;
+              return (
+                <ClinicCard
+                  key={`${clinic.id}-${refreshTrigger}`}
+                  clinic={clinic}
+                  additionalInfo={
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <UsersIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span>{doctorCount} {doctorCount === 1 ? 'doctor assigned' : 'doctors assigned'}</span>
+                    </div>
+                  }
+                  footer={
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(clinic)}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#38A3A5] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d8284]"
+                      >
+                        <EditIcon aria-hidden="true" className="h-4 w-4" />
+                        Edit Clinic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClinicToDelete(clinic)}
+                        aria-label={`Delete ${clinic.clinicName}`}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <TrashIcon aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    </div>
+                  }
+                />
+              );
+            })}
           </div>
 
           {/* Empty State */}
@@ -861,107 +888,3 @@ export function Clinics() {
   );
 }
 
-// Clinic Card Component
-function ClinicCard({ 
-  clinic, 
-  doctorCount,
-  onEdit, 
-  onDelete 
-}: { 
-  clinic: Clinic; 
-  doctorCount: number;
-  onEdit: (clinic: Clinic) => void;
-  onDelete: (clinic: Clinic) => void;
-}) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'SCHEDULED':
-        return 'bg-blue-100 text-blue-600';
-      case 'IN_PROGRESS':
-        return 'bg-[#38A3A5] bg-opacity-20 text-[#38A3A5]';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-600';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-600';
-      default:
-        return 'bg-gray-200 text-gray-600';
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (timeStr: string) => {
-    return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900 mb-1">
-            {clinic.clinicName}
-          </h3>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <MapPinIcon className="w-4 h-4" />
-            <span>{clinic.district}</span>
-            {clinic.province && <span>• {clinic.province}</span>}
-          </div>
-          {clinic.location && (
-            <p className="text-sm text-gray-500 mt-1">{clinic.location}</p>
-          )}
-        </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(clinic.status)}`}>
-          {clinic.status}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-gray-400" />
-          <div>
-            <p className="text-xs text-gray-600">Date & Time</p>
-            <p className="text-sm font-medium text-gray-900">
-              {formatDate(clinic.scheduledDate)}
-            </p>
-            <p className="text-xs text-gray-600">{formatTime(clinic.scheduledTime)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <UsersIcon className="w-4 h-4 text-gray-400" />
-          <div>
-            <p className="text-xs text-gray-600">Assigned Doctors</p>
-            <p className="text-sm font-medium text-gray-900">
-              {doctorCount} {doctorCount === 1 ? 'Doctor' : 'Doctors'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <button 
-          onClick={() => onEdit(clinic)}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border-2 border-[#38A3A5] text-[#38A3A5] rounded-lg font-medium hover:bg-[#38A3A5] hover:text-white transition-colors"
-        >
-          <EditIcon className="w-4 h-4" />
-          Edit
-        </button>
-        <button 
-          onClick={() => onDelete(clinic)}
-          className="px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-500 hover:text-white transition-colors"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
