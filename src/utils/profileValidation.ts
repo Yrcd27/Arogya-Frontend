@@ -76,6 +76,13 @@ export function getDateOfBirthError(value: string, required = false, today = loc
   return text > today ? 'Date of birth cannot be in the future.' : undefined;
 }
 
+export function getAge(dateOfBirth: string | null | undefined, today = localDateString()): number | undefined {
+  if (!dateOfBirth?.trim() || getDateOfBirthError(dateOfBirth, true, today)) return undefined;
+  const [year, month, day] = dateOfBirth.trim().split('-').map(Number);
+  const [currentYear, currentMonth, currentDay] = today.split('-').map(Number);
+  return currentYear - year - (currentMonth < month || currentMonth === month && currentDay < day ? 1 : 0);
+}
+
 export function normalizeProfileField(field: ProfileField, value: string | number): string {
   const text = String(value).trim();
   if (field === 'nicNumber') return text.toUpperCase();

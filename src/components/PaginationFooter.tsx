@@ -49,6 +49,7 @@ export function PaginationFooter({
         </span>
         {onPageSizeChange && (
           <select
+            aria-label="Rows per page"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             disabled={loading}
@@ -77,6 +78,8 @@ export function PaginationFooter({
           ) : (
             <button
               key={p}
+              aria-label={`Page ${p}`}
+              aria-current={p === safePage ? 'page' : undefined}
               onClick={() => onPageChange(p)}
               disabled={loading}
               className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors disabled:opacity-60 ${

@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, User, Mail, Phone, MapPin, Calendar, Activity } from 'lucide-react';
 import { profileAPI } from '../../services/api';
 import { ApiError } from '../../services/httpClient';
 import type { PatientProfile } from '../../types/user';
+import { useAuth } from '../../hooks/useAuth';
+import { isPositiveId } from '../../utils/clinicalValidation';
+import { getAge } from '../../utils/profileValidation';
 
 interface PatientProfileModalProps {
   patientId: number;
@@ -10,17 +13,29 @@ interface PatientProfileModalProps {
 }
 
 export function PatientProfileModal({ patientId, onClose }: PatientProfileModalProps) {
+  const { sessionKey } = useAuth();
+  const contextKey = `${sessionKey}:${patientId}`;
+  const currentContextRef = useRef(contextKey);
+  currentContextRef.current = contextKey;
+  const requestRef = useRef(0);
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadPatientProfile = useCallback(async () => {
+    const requestId = ++requestRef.current;
+    const isCurrent = () => requestId === requestRef.current && currentContextRef.current === contextKey;
     try {
       setLoading(true);
       setError(null);
+      setProfile(null);
+      if (!isPositiveId(patientId)) throw new Error('The selected patient could not be verified. Reopen the profile from the queue.');
       const data = await profileAPI.getPatient(patientId);
+      if (!isCurrent()) return;
+      if (data.user?.id !== patientId) throw new Error('The returned profile does not match the selected patient. Try again.');
       setProfile(data);
     } catch (err) {
+      if (!isCurrent()) return;
       if (err instanceof ApiError && err.status === 404) {
         setProfile(null);
         setError('Patient has not completed their detailed profile yet.');
@@ -29,31 +44,24 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
         setError(err instanceof Error ? err.message : 'Failed to load patient profile');
       }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, contextKey]);
 
   useEffect(() => {
+    currentContextRef.current = contextKey;
     void loadPatientProfile();
-  }, [loadPatientProfile]);
+    return () => { requestRef.current += 1; currentContextRef.current = ''; };
+  }, [loadPatientProfile, contextKey]);
 
-  const calculateAge = (dateOfBirth: string) => {
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
+  const age = getAge(profile?.dateOfBirth);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
           <h3 className="text-xl font-semibold text-gray-900">Patient Profile</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button onClick={onClose} aria-label="Close patient profile" className="text-gray-500 hover:text-gray-700">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -66,6 +74,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
         ) : error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-700">{error}</p>
+            <button type="button" onClick={() => void loadPatientProfile()} className="mt-2 text-sm text-red-800 underline">Try again</button>
           </div>
         ) : profile ? (
           <div className="space-y-6">
@@ -90,10 +99,8 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                 <div>
                   <label className="text-sm font-medium text-gray-500">Date of Birth</label>
                   <p className="text-gray-900">
-                    {new Date(profile.dateOfBirth).toLocaleDateString()}
-                    <span className="text-gray-600 text-sm ml-2">
-                      ({calculateAge(profile.dateOfBirth)} years old)
-                    </span>
+                    {age === undefined ? 'Not provided' : profile.dateOfBirth.trim()}
+                    {age !== undefined && <span className="text-gray-600 text-sm ml-2">({age} years old)</span>}
                   </p>
                 </div>
               </div>

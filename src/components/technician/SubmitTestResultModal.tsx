@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
-import { medicalRecordsAPI, MAX_TEST_RESULT_FILES } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, MAX_TEST_RESULT_FILES, validateTestResultUpload } from '../../services/medicalRecordsService';
 import { consultationAPI } from '../../services/consultationService';
 import { LabTest } from '../../types/labTest';
 import { ApiError } from '../../services/httpClient';
@@ -8,7 +8,7 @@ import { labTestAPI } from '../../services/labTestService';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { getTestResultFileError, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
+import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
 
 interface SubmitTestResultModalProps {
   labTest: LabTest;
@@ -45,7 +45,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
     if (field === 'testResultDescription') setTestResultDescription(value);
     else setTechnicianNotes(value);
     setError('');
-    setFieldErrors(previous => ({ ...previous, [field]: previous[field] && field === 'testResultDescription' && !value.trim() ? 'Test result description is required.' : undefined }));
+    setFieldErrors(previous => ({ ...previous, [field]: previous[field] ? getTestResultTextError(field, value) : undefined }));
   };
 
   const fieldProps = (field: TestResultField) => ({
@@ -88,7 +88,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
       setError('The technician or lab test could not be verified. Reopen the test from the worklist.');
       return;
     }
-    const errors = validateTestResult(testResultDescription, files);
+    const errors = validateTestResult(testResultDescription, files, 0, technicianNotes);
     if (selectionError) errors.files = selectionError;
     setFieldErrors(errors);
     if (Object.keys(errors).length) { focusFirstInvalidField(form); return; }
@@ -117,15 +117,18 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
       const consultation = await consultationAPI.get(labTest.consultationId);
       if (!isCurrent()) return;
       if (consultation.id !== labTest.consultationId || !isPositiveId(consultation.patientId)) throw new Error('Unable to verify the patient for this lab test. Refresh the worklist before submitting.');
-      writePending = true;
-      const created = await medicalRecordsAPI.create({
+      const payload = {
         labTestId: labTest.id,
         patientId: consultation.patientId,
         technicianId,
         testResultDescription: testResultDescription.trim(),
         technicianNotes: technicianNotes.trim(),
         files
-      });
+      };
+      await validateTestResultUpload(payload);
+      if (!isCurrent()) return;
+      writePending = true;
+      const created = await medicalRecordsAPI.create(payload);
       if (!isPositiveId(created?.id) || created.labTestId !== labTest.id || created.patientId !== consultation.patientId) throw new Error('The result service did not confirm the saved result for this test and patient.');
       writePending = false;
       if (isCurrent()) onSuccess();
@@ -176,13 +179,14 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
               {...fieldProps('testResultDescription')}
               value={testResultDescription}
               onChange={e => changeText('testResultDescription', e.target.value)}
-              onBlur={() => setFieldErrors(previous => ({ ...previous, testResultDescription: !testResultDescription.trim() ? 'Test result description is required.' : previous.testResultDescription }))}
+              onBlur={() => setFieldErrors(previous => ({ ...previous, testResultDescription: getTestResultTextError('testResultDescription', testResultDescription) }))}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               placeholder="Enter detailed test results..."
               required
             />
             {fieldError('testResultDescription')}
+            <p className="mt-1 text-xs text-gray-500">{testResultDescription.trim().length} / {MAX_TEST_RESULT_TEXT_LENGTH} characters</p>
           </div>
 
           <div>
@@ -193,11 +197,13 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
               {...fieldProps('technicianNotes')}
               value={technicianNotes}
               onChange={e => changeText('technicianNotes', e.target.value)}
+              onBlur={() => setFieldErrors(previous => ({ ...previous, technicianNotes: getTestResultTextError('technicianNotes', technicianNotes) }))}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               placeholder="Additional notes..."
             />
             {fieldError('technicianNotes')}
+            <p className="mt-1 text-xs text-gray-500">{technicianNotes.trim().length} / {MAX_TEST_RESULT_TEXT_LENGTH} characters</p>
           </div>
 
           <div>
@@ -220,7 +226,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
                   {files.length >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Choose files to upload'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  PDF, DOC, DOCX, JPG, PNG (up to 10 MiB each)
+                  PDF, DOC, DOCX, JPG, PNG. Complete upload: 10 MiB including text and metadata.
                 </p>
               </label>
             </div>

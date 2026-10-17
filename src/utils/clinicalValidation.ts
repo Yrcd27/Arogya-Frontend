@@ -4,6 +4,7 @@ import type { FieldErrors } from './formValidation';
 export const CONSULTATION_FIELDS = ['chiefComplaint', 'presentIllness', 'pastMedicalHistory', 'recommendations'] as const;
 export type ConsultationField = (typeof CONSULTATION_FIELDS)[number];
 export type ConsultationErrors = FieldErrors<ConsultationField | 'sessionNumber'>;
+export const MAX_SESSION_NUMBER = 2147483647;
 
 export function isPositiveId(value: unknown): boolean {
   return (typeof value === 'number' || typeof value === 'string' && /^[0-9]+$/.test(value))
@@ -11,8 +12,8 @@ export function isPositiveId(value: unknown): boolean {
 }
 
 export function getSessionNumberError(value: string): string | undefined {
-  return /^[0-9]+$/.test(value.trim()) && isPositiveId(value.trim())
-    ? undefined : 'Enter a positive whole number for the session number.';
+  return /^[0-9]+$/.test(value.trim()) && isPositiveId(value.trim()) && Number(value.trim()) <= MAX_SESSION_NUMBER
+    ? undefined : `Enter a whole session number from 1 to ${MAX_SESSION_NUMBER}.`;
 }
 
 export function validateConsultation(values: Partial<Record<ConsultationField, string>>, sessionNumber?: string): ConsultationErrors {

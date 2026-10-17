@@ -13,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { CONSULTATION_FIELDS, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
+import { CONSULTATION_FIELDS, MAX_SESSION_NUMBER, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
 export function CreateConsultation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
@@ -413,6 +413,7 @@ export function CreateConsultation() {
                     type="number"
                     id="consultation-sessionNumber"
                     min={1}
+                    max={MAX_SESSION_NUMBER}
                     step={1}
                     disabled={partiallySaved}
                     aria-invalid={!!formErrors.sessionNumber}
@@ -452,8 +453,6 @@ export function CreateConsultation() {
                       setRequestLabTests(e.target.checked);
                       if (e.target.checked && labTests.length === 0) {
                         addLabTest();
-                      } else if (!e.target.checked) {
-                        setLabTests([]);
                       }
                     }}
                     className="sr-only peer"

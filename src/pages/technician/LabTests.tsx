@@ -211,8 +211,9 @@ export function LabTests() {
   const filteredTests = useMemo(() => {
     let filtered = labTests;
 
-    if (assignedToMeOnly && profile?.id) {
-      filtered = filtered.filter(test => test.assignedTechnicianId === profile.id);
+    if (assignedToMeOnly) {
+      filtered = profileStatus === 'ready' && isPositiveId(profile?.id)
+        ? filtered.filter(test => test.assignedTechnicianId === profile?.id) : [];
     }
 
     if (statusFilter !== 'ALL') {
@@ -231,7 +232,7 @@ export function LabTests() {
     }
 
     return filtered;
-  }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, searchTerm, statusFilter]);
+  }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, profileStatus, searchTerm, statusFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -420,6 +421,7 @@ export function LabTests() {
               {Object.entries(statusCounts).map(([status, count]) => (
                 <button
                   key={status}
+                  aria-pressed={statusFilter === status}
                   onClick={() => setStatusFilter(status)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${statusFilter === status
                     ? 'bg-[#38A3A5] text-white'
@@ -439,6 +441,7 @@ export function LabTests() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
+                  aria-label="Search lab tests"
                   placeholder="Search by test name, patient, ID, or consultation ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -449,12 +452,14 @@ export function LabTests() {
                 <input
                   type="checkbox"
                   checked={assignedToMeOnly}
+                  disabled={!assignedToMeOnly && (profileStatus !== 'ready' || !isPositiveId(profile?.id))}
                   onChange={(e) => setAssignedToMeOnly(e.target.checked)}
                   className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
                 />
                 Assigned to me
               </label>
             </div>
+            {(profileStatus !== 'ready' || !isPositiveId(profile?.id)) && <p className="mt-2 text-sm text-gray-600" role="status">{profileStatus === 'loading' ? 'Verifying your technician profile before filtering assignments…' : 'Your technician profile could not be verified. Assignment filtering is unavailable; you can still view all tests.'}</p>}
           </div>
 
           {error && (
@@ -467,7 +472,7 @@ export function LabTests() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading lab tests...</div>
             </div>
-          ) : filteredTests.length === 0 ? (
+          ) : error || assignedToMeOnly && (profileStatus !== 'ready' || !isPositiveId(profile?.id)) ? null : filteredTests.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm">
               <EmptyState title="No lab tests found" description="Try adjusting your search or filters." />
             </div>

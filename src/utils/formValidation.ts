@@ -70,7 +70,7 @@ export function getApiFieldErrors<Field extends string>(
   aliases: Record<string, Field> = {},
 ): FieldErrors<Field> {
   const result: FieldErrors<Field> = {};
-  if (!(error instanceof ApiError) || (error.status !== 400 && error.status !== 422) || !error.errors) return result;
+  if (!(error instanceof ApiError) || ![400, 413, 422].includes(error.status) || !error.errors) return result;
   for (const [key, message] of Object.entries(error.errors)) {
     const field = fields.find(candidate => candidate === key)
       ?? (Object.prototype.hasOwnProperty.call(aliases, key) ? aliases[key] : undefined);

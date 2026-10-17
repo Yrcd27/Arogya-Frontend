@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
-import { medicalRecordsAPI, MAX_TEST_RESULT_FILES, type TestResult } from '../../services/medicalRecordsService';
+import { medicalRecordsAPI, MAX_TEST_RESULT_FILES, validateTestResultUpload, type TestResult } from '../../services/medicalRecordsService';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { ApiError } from '../../services/httpClient';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { getTestResultFileError, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
+import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
 
 interface EditTestResultModalProps {
   testResult: TestResult;
@@ -44,7 +44,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
     if (field === 'testResultDescription') setTestResultDescription(value);
     else setTechnicianNotes(value);
     setError('');
-    setFieldErrors(previous => ({ ...previous, [field]: previous[field] && field === 'testResultDescription' && !value.trim() ? 'Test result description is required.' : undefined }));
+    setFieldErrors(previous => ({ ...previous, [field]: previous[field] ? getTestResultTextError(field, value) : undefined }));
   };
 
   const fieldProps = (field: TestResultField) => ({
@@ -94,7 +94,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
       setError('The result or signed-in user could not be verified. Reopen the result before editing.');
       return;
     }
-    const errors = validateTestResult(testResultDescription, newFiles, keptFileIds.length);
+    const errors = validateTestResult(testResultDescription, newFiles, keptFileIds.length, technicianNotes);
     if (testResult.files.some(file => !isPositiveId(file.id)) || keptFileIds.some(id => !isPositiveId(id) || !testResult.files.some(file => file.id === id)) || new Set(keptFileIds).size !== keptFileIds.length) errors.files = 'The existing attachments could not be verified. Reopen the result before saving.';
     if (selectionError) errors.files = selectionError;
     setFieldErrors(errors);
@@ -117,13 +117,16 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
         focusFirstInvalidField(form);
         return;
       }
-      writePending = true;
-      const updated = await medicalRecordsAPI.update(testResult.id, {
+      const payload = {
         testResultDescription: testResultDescription.trim(),
         technicianNotes: technicianNotes.trim(),
         files: newFiles,
         removeFileIds
-      });
+      };
+      await validateTestResultUpload(payload);
+      if (!isCurrent()) return;
+      writePending = true;
+      const updated = await medicalRecordsAPI.update(testResult.id, payload);
       if (updated?.id !== testResult.id || updated.labTestId !== testResult.labTestId || updated.patientId !== testResult.patientId) throw new Error('The result service did not confirm the saved update for this test and patient.');
       writePending = false;
       if (isCurrent()) onSuccess();
@@ -171,13 +174,14 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
               {...fieldProps('testResultDescription')}
               value={testResultDescription}
               onChange={e => changeText('testResultDescription', e.target.value)}
-              onBlur={() => setFieldErrors(previous => ({ ...previous, testResultDescription: !testResultDescription.trim() ? 'Test result description is required.' : previous.testResultDescription }))}
+              onBlur={() => setFieldErrors(previous => ({ ...previous, testResultDescription: getTestResultTextError('testResultDescription', testResultDescription) }))}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               placeholder="Enter detailed test results..."
               required
             />
             {fieldError('testResultDescription')}
+            <p className="mt-1 text-xs text-gray-500">{testResultDescription.trim().length} / {MAX_TEST_RESULT_TEXT_LENGTH} characters</p>
           </div>
 
           <div>
@@ -188,11 +192,13 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
               {...fieldProps('technicianNotes')}
               value={technicianNotes}
               onChange={e => changeText('technicianNotes', e.target.value)}
+              onBlur={() => setFieldErrors(previous => ({ ...previous, technicianNotes: getTestResultTextError('technicianNotes', technicianNotes) }))}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               placeholder="Additional notes..."
             />
             {fieldError('technicianNotes')}
+            <p className="mt-1 text-xs text-gray-500">{technicianNotes.trim().length} / {MAX_TEST_RESULT_TEXT_LENGTH} characters</p>
           </div>
 
           <div>
@@ -235,7 +241,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
                   {totalFileCount >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Click to add more files'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  PDF, DOC, DOCX, JPG, PNG (up to 10 MiB each)
+                  PDF, DOC, DOCX, JPG, PNG. Complete upload: 10 MiB including new files, text, and metadata.
                 </p>
               </label>
             </div>
