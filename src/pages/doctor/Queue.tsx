@@ -11,6 +11,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { useAuth } from '../../hooks/useAuth';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { ApiError } from '../../services/httpClient';
+import { isPositiveId } from '../../utils/clinicalValidation';
 
 const servingTokenStorageKey = (doctorId: number, clinicId: number) => `doctorQueue:servingTokenId:${doctorId}:${clinicId}`;
 const legacyServingTokenStorageKey = (clinicId: number) => `doctorQueue:servingTokenId:${clinicId}`;
@@ -19,7 +20,12 @@ const getStoredServingTokenId = (doctorId: number, clinicId: number): number | n
   try {
     sessionStorage.removeItem(legacyServingTokenStorageKey(clinicId));
     const raw = sessionStorage.getItem(servingTokenStorageKey(doctorId, clinicId));
-    return raw ? Number(raw) : null;
+    if (raw === null) return null;
+    if (!isPositiveId(raw)) {
+      sessionStorage.removeItem(servingTokenStorageKey(doctorId, clinicId));
+      return null;
+    }
+    return Number(raw);
   } catch {
     return null;
   }
@@ -45,14 +51,14 @@ export function Queue() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, status: profileStatus } = useUserProfile();
-  const { user } = useAuth();
+  const { user, sessionKey } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
   const [clinics, setClinics] = useState<Array<{ id: number; clinicName: string }>>([]);
   const [clinicsLoading, setClinicsLoading] = useState(true);
   const clinicIdParam = searchParams.get('clinicId');
-  const selectedClinicId = clinicIdParam ? Number(clinicIdParam) : null;
+  const selectedClinicId = isPositiveId(clinicIdParam) ? Number(clinicIdParam) : null;
 
   const [queueTokens, setQueueTokens] = useState<QueueTokenResponse[]>([]);
   const [servingToken, setServingToken] = useState<QueueTokenResponse | null>(null);
@@ -69,9 +75,16 @@ export function Queue() {
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const loadQueueRef = useRef<(clinicId: number) => Promise<void>>(async () => undefined);
   const queueRequestRef = useRef(0);
+  const actionRef = useRef(false);
+  const contextKey = `${sessionKey}:${selectedClinicId}`;
+  const currentContextRef = useRef(contextKey);
+  currentContextRef.current = contextKey;
+  const verifiedContextRef = useRef<string | null>(null);
+  const validClinic = !clinicsLoading && profileStatus === 'ready' && clinics.some(clinic => clinic.id === selectedClinicId);
 
   // Only clinics this doctor is actually assigned to.
   useEffect(() => {
+    let cancelled = false;
     if (profileStatus === 'loading') {
       setClinicsLoading(true);
       return;
@@ -96,24 +109,34 @@ export function Queue() {
           allClinicDoctors.filter(cd => cd.doctorRefId === profile.id).map(cd => cd.clinic?.id).filter((id): id is number => typeof id === 'number')
         );
         const mine = allClinics.filter(c => myClinicIds.has(c.id)).map(c => ({ id: c.id, clinicName: c.clinicName }));
-        setClinics(mine);
+        if (!cancelled) setClinics(mine);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load your clinics');
+        if (!cancelled) {
+          setClinics([]);
+          setError(e instanceof Error ? e.message : 'Failed to load your clinics');
+        }
       } finally {
-        setClinicsLoading(false);
+        if (!cancelled) setClinicsLoading(false);
       }
     })();
-  }, [profile?.id, profileStatus]);
+    return () => { cancelled = true; };
+  }, [profile?.id, profileStatus, sessionKey]);
 
   // Restore the queue for the clinic in the URL once the clinic list is known.
   useEffect(() => {
-    if (selectedClinicId && clinics.some(c => c.id === selectedClinicId)) {
+    queueRequestRef.current += 1;
+    setQueueTokens([]);
+    setRecentlyDone([]);
+    setNameById({});
+    setLoading(false);
+    if (selectedClinicId && validClinic) {
       void loadQueueRef.current(selectedClinicId);
     }
-  }, [selectedClinicId, clinics]);
+    return () => { queueRequestRef.current += 1; };
+  }, [selectedClinicId, validClinic, sessionKey]);
 
   useEffect(() => {
-    if (location.state?.consultationCreated && servingToken) {
+    if (location.state?.consultationCreated && servingToken && location.state.tokenId === servingToken.id && Number(servingToken.clinicId) === selectedClinicId) {
       setRecentlyDone(prev => [{ ...servingToken, status: 'COMPLETED' }, ...prev]);
       setServingToken(null);
       setServingState('none');
@@ -123,7 +146,9 @@ export function Queue() {
   }, [location.state, selectedClinicId, servingToken, user?.id]);
 
   useEffect(() => {
-    if (!selectedClinicId || !user?.id) {
+    verifiedContextRef.current = null;
+    setServingToken(null);
+    if (!selectedClinicId || !user?.id || !validClinic) {
       setServingToken(null);
       setServingState('none');
       setServingVerificationError(null);
@@ -134,6 +159,7 @@ export function Queue() {
       setServingToken(null);
       setServingState('none');
       setServingVerificationError(null);
+      verifiedContextRef.current = contextKey;
       return;
     }
     let cancelled = false;
@@ -143,9 +169,13 @@ export function Queue() {
       try {
         const existing = await queueAPI.getToken(storedId);
         if (cancelled) return;
+        if (existing.id !== storedId || Number(existing.clinicId) !== selectedClinicId || !isPositiveId(existing.patientId)) {
+          throw new Error('The saved queue token does not match this clinic. Verify the queue before continuing.');
+        }
         if (existing.status === 'SERVING') {
           setServingToken(existing);
           setServingState('serving');
+          verifiedContextRef.current = contextKey;
           void (async () => {
             const patientId = Number(existing.patientId);
             const profile = await profileAPI.getPatient(patientId).catch(() => null);
@@ -162,6 +192,7 @@ export function Queue() {
           clearStoredServingTokenId(user.id, selectedClinicId);
           setServingToken(null);
           setServingState('none');
+          verifiedContextRef.current = contextKey;
         }
       } catch (error) {
         if (cancelled) return;
@@ -169,6 +200,7 @@ export function Queue() {
           clearStoredServingTokenId(user.id, selectedClinicId);
           setServingToken(null);
           setServingState('none');
+          verifiedContextRef.current = contextKey;
           return;
         }
         setServingState('error');
@@ -178,29 +210,31 @@ export function Queue() {
     return () => {
       cancelled = true;
     };
-  }, [selectedClinicId, servingRetryKey, user?.id]);
+  }, [selectedClinicId, servingRetryKey, user?.id, validClinic, contextKey]);
 
   const loadQueue = async (clinicId: number) => {
+    if (!isPositiveId(clinicId) || !validClinic || selectedClinicId !== clinicId) return;
     const requestId = ++queueRequestRef.current;
+    const requestContext = currentContextRef.current;
     try {
       setLoading(true);
       setError(null);
       const tokens = await queueAPI.getClinicQueue(String(clinicId));
-      if (requestId !== queueRequestRef.current) return;
+      if (requestId !== queueRequestRef.current || currentContextRef.current !== requestContext) return;
       setQueueTokens(tokens || []);
-      await hydratePatientNames(tokens || []);
+      await hydratePatientNames(tokens || [], requestContext);
     } catch (e) {
-      if (requestId !== queueRequestRef.current) return;
+      if (requestId !== queueRequestRef.current || currentContextRef.current !== requestContext) return;
       setError(e instanceof Error ? e.message : 'Failed to load queue');
       setQueueTokens([]);
     } finally {
-      if (requestId === queueRequestRef.current) setLoading(false);
+      if (requestId === queueRequestRef.current && currentContextRef.current === requestContext) setLoading(false);
     }
   };
 
   loadQueueRef.current = loadQueue;
 
-  const hydratePatientNames = async (tokens: QueueTokenResponse[]) => {
+  const hydratePatientNames = async (tokens: QueueTokenResponse[], requestContext: string) => {
     const ids = Array.from(new Set(tokens.map(t => String(t.patientId)).filter(Boolean)));
     const missing = ids.filter(id => !nameById[id]);
     if (missing.length === 0) return;
@@ -223,10 +257,18 @@ export function Queue() {
     );
     const map: Record<string, string> = {};
     results.forEach(r => { map[r.id] = r.name; });
-    setNameById(prev => ({ ...prev, ...map }));
+    if (currentContextRef.current === requestContext) setNameById(prev => ({ ...prev, ...map }));
   };
 
   const selectClinic = (id: number | null) => {
+    if (actionRef.current) return;
+    if (id !== null && (!isPositiveId(id) || !clinics.some(clinic => clinic.id === id))) {
+      setError('Select one of your assigned clinics.');
+      return;
+    }
+    verifiedContextRef.current = null;
+    setServingToken(null);
+    setServingState('checking');
     queueRequestRef.current += 1;
     setQueueTokens([]);
     setRecentlyDone([]);
@@ -237,26 +279,61 @@ export function Queue() {
   // once a token moves to SERVING/CANCELLED it's tracked locally instead of
   // relying on a refetch to still include it.
   const callNext = async (token: QueueTokenResponse) => {
-    if (servingState !== 'none' || actionLoadingId !== null || !selectedClinicId) return;
+    if (actionRef.current || servingState !== 'none' || !selectedClinicId || !user?.id || !validClinic
+      || verifiedContextRef.current !== contextKey) return;
+    if (!isPositiveId(token.id) || !isPositiveId(token.patientId) || Number(token.clinicId) !== selectedClinicId
+      || token.status !== 'PENDING' || !queueTokens.some(item => item.id === token.id)) {
+      toast.error('This token is not waiting in the selected clinic. Reload the queue.');
+      return;
+    }
+    const requestContext = contextKey;
+    const doctorId = user.id;
+    actionRef.current = true;
     setActionLoadingId(token.id);
+    setStoredServingTokenId(doctorId, selectedClinicId, token.id);
     try {
+      const current = await queueAPI.getToken(token.id);
+      if (currentContextRef.current !== requestContext) return;
+      if (current.id !== token.id || current.status !== 'PENDING' || Number(current.clinicId) !== selectedClinicId || String(current.patientId) !== String(token.patientId)) {
+        throw new Error('This patient is no longer waiting in the selected clinic. Retry verification and reload the queue.');
+      }
       const updated = await queueAPI.updateStatus(token.id, 'SERVING');
+      if (updated.id !== token.id || Number(updated.clinicId) !== selectedClinicId || String(updated.patientId) !== String(token.patientId) || updated.status !== 'SERVING') {
+        throw new Error('The server did not confirm this patient as serving. Retry verification before calling another patient.');
+      }
+      if (currentContextRef.current !== requestContext) return;
       setQueueTokens(prev => prev.filter(t => t.id !== token.id));
       setServingToken(updated);
       setServingState('serving');
       if (user?.id) setStoredServingTokenId(user.id, selectedClinicId, updated.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to call patient');
+      if (currentContextRef.current !== requestContext) return;
+      verifiedContextRef.current = null;
+      setServingState('error');
+      const message = e instanceof ApiError && e.status === 403 ? 'You do not have permission to call this patient. Verify your clinic assignment with an administrator.' : e instanceof Error ? e.message : 'Failed to call patient';
+      setServingVerificationError(message);
+      toast.error(message);
     } finally {
+      actionRef.current = false;
       setActionLoadingId(null);
     }
   };
 
   const cancelToken = async (token: QueueTokenResponse) => {
-    if (actionLoadingId !== null) return;
+    if (actionRef.current || !selectedClinicId || !validClinic || !isPositiveId(token.id)
+      || Number(token.clinicId) !== selectedClinicId || token.status !== 'PENDING'
+      || !queueTokens.some(item => item.id === token.id)) return;
+    const requestContext = contextKey;
+    actionRef.current = true;
     setActionLoadingId(token.id);
     try {
+      const current = await queueAPI.getToken(token.id);
+      if (currentContextRef.current !== requestContext) return;
+      if (current.id !== token.id || current.status !== 'PENDING' || Number(current.clinicId) !== selectedClinicId || String(current.patientId) !== String(token.patientId)) {
+        throw new Error('This token is no longer waiting in the selected clinic. Reload the queue before cancelling.');
+      }
       await queueAPI.updateStatus(token.id, 'CANCELLED');
+      if (currentContextRef.current !== requestContext) return;
       setQueueTokens(prev => prev.filter(t => t.id !== token.id));
       if (servingToken?.id === token.id) {
         setServingToken(null);
@@ -265,13 +342,17 @@ export function Queue() {
       }
       toast.success(`Token #${token.tokenNumber} cancelled`);
     } catch (e) {
+      if (currentContextRef.current !== requestContext) return;
       toast.error(e instanceof Error ? e.message : 'Failed to cancel token');
     } finally {
+      actionRef.current = false;
       setActionLoadingId(null);
     }
   };
 
   const goToConsultation = (token: QueueTokenResponse) => {
+    if (actionRef.current || !validClinic || servingState !== 'serving' || verifiedContextRef.current !== contextKey
+      || servingToken?.id !== token.id || Number(token.clinicId) !== selectedClinicId) return;
     navigate('/doctor/queue/create-consultation', {
       state: {
         token,
@@ -303,11 +384,12 @@ export function Queue() {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Clinic</label>
+                <label htmlFor="doctor-queue-clinic" className="block text-sm font-medium text-gray-700 mb-2">Select Clinic</label>
                 <select
+                  id="doctor-queue-clinic"
                   value={selectedClinicId ?? ''}
                   onChange={(e) => selectClinic(e.target.value ? Number(e.target.value) : null)}
-                  disabled={clinicsLoading || clinics.length === 0}
+                  disabled={clinicsLoading || clinics.length === 0 || actionLoadingId !== null}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
                 >
                   <option value="">
@@ -371,6 +453,7 @@ export function Queue() {
               </div>
               <button
                 className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors"
+                disabled={servingState !== 'serving' || !validClinic || actionLoadingId !== null}
                 onClick={() => goToConsultation(servingToken)}
               >
                 Start Consultation
@@ -431,7 +514,7 @@ export function Queue() {
                           <button
                             className="flex items-center gap-1.5 px-3 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
                             onClick={() => callNext(t)}
-                            disabled={actionLoadingId !== null || servingState !== 'none'}
+                            disabled={actionLoadingId !== null || servingState !== 'none' || !validClinic}
                             title={servingState === 'error' || servingState === 'checking' ? 'Verify the current patient before calling another patient' : servingToken ? 'Finish the current consultation first' : 'Call this patient'}
                           >
                             <PhoneCallIcon className="w-3.5 h-3.5" />
@@ -440,7 +523,8 @@ export function Queue() {
                           <button
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
                             onClick={() => cancelToken(t)}
-                            disabled={actionLoadingId !== null}
+                            disabled={actionLoadingId !== null || !validClinic}
+                            aria-label={`Cancel token ${t.tokenNumber}`}
                             title="Cancel this token"
                           >
                             <XIcon className="w-4 h-4" />

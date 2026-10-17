@@ -11,25 +11,40 @@ import { ApiError } from '../../services/httpClient';
 import { LabTestFormData } from '../../types/labTest';
 import { useAuth } from '../../hooks/useAuth';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
+import type { QueueTokenResponse } from '../../services/queueService';
+import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
+import { CONSULTATION_FIELDS, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
 export function CreateConsultation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user: currentUser } = useAuth();
-  const { token, patientName, clinicId } = location.state || {};
+  const { user: currentUser, sessionKey } = useAuth();
+  const { token, patientName, clinicId } = (location.state || {}) as { token?: QueueTokenResponse; patientName?: string; clinicId?: number };
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
+  const consultationContext = `${sessionKey}:${token?.id}:${token?.patientId}:${token?.clinicId}`;
+  const initialContextRef = useRef(consultationContext);
+  const currentContextRef = useRef(consultationContext);
+  currentContextRef.current = consultationContext;
   
   const [chief, setChief] = useState<string>('');
   const [present, setPresent] = useState<string>('');
   const [past, setPast] = useState<string>('');
   const [recom, setRecom] = useState<string>('');
-  const [sessionNumber, setSessionNumber] = useState<number>(1);
+  const [sessionNumber, setSessionNumber] = useState('1');
   const [saving, setSaving] = useState(false);
   const [partiallySaved, setPartiallySaved] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ diagnosis?: string; notes?: string }>({});
+  const [formErrors, setFormErrors] = useState<ConsultationErrors>({});
+  const [labErrors, setLabErrors] = useState<FieldErrors<keyof LabTestFormData>[]>([]);
+  const [saveError, setSaveError] = useState('');
+  const [unconfirmedWrite, setUnconfirmedWrite] = useState(false);
+  const unconfirmedWriteRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const savingRef = useRef(false);
   const createdConsultationIdRef = useRef<number | null>(null);
   const createdConsultationPayloadRef = useRef<ConsultationCreate | null>(null);
+  const progressRef = useRef({ started: false, completed: false, queueCompleted: false, labOrders: new Set<number>() });
 
   // Lab test states
   const [requestLabTests, setRequestLabTests] = useState(false);
@@ -42,105 +57,180 @@ export function CreateConsultation() {
   }, [token, navigate]);
 
   const addLabTest = () => {
-    setLabTests([...labTests, { testName: '', testDescription: '', testInstructions: '' }]);
+    if (savingRef.current || createdConsultationIdRef.current !== null) return;
+    setLabTests(previous => [...previous, { testName: '', testDescription: '', testInstructions: '' }]);
   };
 
   const removeLabTest = (index: number) => {
+    if (savingRef.current || createdConsultationIdRef.current !== null) return;
     setLabTests(labTests.filter((_, i) => i !== index));
+    setLabErrors(previous => previous.filter((_, i) => i !== index));
   };
 
   const updateLabTest = (index: number, field: keyof LabTestFormData, value: string) => {
-    const updated = [...labTests];
-    updated[index][field] = value;
-    setLabTests(updated);
+    if (savingRef.current || progressRef.current.labOrders.has(index)) return;
+    setLabTests(previous => previous.map((test, i) => i === index ? { ...test, [field]: value } : test));
+    setLabErrors(previous => previous.map((errors, i) => i === index ? { ...errors, [field]: field === 'testName' && !value.trim() ? 'Test name is required. Complete or remove this order.' : undefined } : errors));
+    setSaveError('');
   };
 
+  const changeClinicalField = (field: ConsultationField, value: string) => {
+    if (savingRef.current || createdConsultationIdRef.current !== null) return;
+    const setters = { chiefComplaint: setChief, presentIllness: setPresent, pastMedicalHistory: setPast, recommendations: setRecom };
+    setters[field](value);
+    setFormErrors(previous => ({ ...previous, [field]: previous[field] ? validateConsultation({ chiefComplaint: chief, recommendations: recom, [field]: value })[field] : undefined }));
+    setSaveError('');
+  };
+
+  const clinicalProps = (field: ConsultationField) => ({
+    id: `consultation-${field}`,
+    disabled: partiallySaved,
+    'aria-invalid': !!formErrors[field],
+    'aria-describedby': formErrors[field] ? `consultation-${field}-error` : undefined,
+    onBlur: () => {
+      const values = { chiefComplaint: chief, presentIllness: present, pastMedicalHistory: past, recommendations: recom };
+      const message = validateConsultation(values)[field];
+      setFormErrors(previous => ({ ...previous, [field]: message ?? previous[field] }));
+    },
+  });
+
+  const fieldError = (field: ConsultationField | 'sessionNumber') => formErrors[field]
+    ? <p id={`consultation-${field}-error`} role="alert" className="text-red-500 text-xs mt-1.5">{formErrors[field]}</p> : null;
+
   const save = async () => {
-    if (!token) return;
-    if (savingRef.current) return;
-
-    const errors: { diagnosis?: string; notes?: string } = {};
-    if (!chief.trim()) {
-      errors.diagnosis = 'Chief complaint is required';
-    }
-    if (!recom.trim()) {
-      errors.notes = 'Recommendations are required';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
+    if (savingRef.current || unconfirmedWriteRef.current) return;
+    setSaveError('');
+    if (initialContextRef.current !== consultationContext) {
+      setSaveError('The patient or signed-in session changed. Return to the queue and reopen this consultation.');
       return;
     }
-
+    if (!token || !isPositiveId(token.id) || !isPositiveId(token.patientId) || !isPositiveId(token.clinicId)
+      || !isPositiveId(currentUser?.id) || clinicId !== undefined && Number(clinicId) !== Number(token.clinicId)) {
+      setSaveError('The patient, clinic, or signed-in doctor could not be verified. Return to the queue and select the patient again.');
+      return;
+    }
+    const errors = validateConsultation({ chiefComplaint: chief, presentIllness: present, pastMedicalHistory: past, recommendations: recom }, sessionNumber);
+    const orderErrors = validateLabOrders(requestLabTests, labTests);
+    setFormErrors(errors);
+    setLabErrors(orderErrors);
+    if (Object.keys(errors).length || orderErrors.some(error => Object.keys(error).length) || requestLabTests && labTests.length === 0) {
+      if (requestLabTests && labTests.length === 0) setSaveError('Add at least one lab test or turn off Request tests.');
+      if (formRef.current) focusFirstInvalidField(formRef.current);
+      return;
+    }
+    const submittedSession = sessionKey;
+    const assertCurrentSession = () => {
+      if (currentSessionRef.current !== submittedSession || currentContextRef.current !== consultationContext) throw new Error('The patient or signed-in session changed. Reopen this consultation from the queue.');
+    };
     savingRef.current = true;
     setSaving(true);
+    let stage: 'consultation' | 'start' | 'complete' | 'queue' | 'lab' = 'consultation';
+    let labIndex = -1;
+    let pendingWrite: 'consultation' | 'lab' | null = null;
     try {
       let consultationId = createdConsultationIdRef.current;
       if (consultationId === null) {
+        const currentToken = await queueAPI.getToken(token.id);
+        assertCurrentSession();
+        if (currentToken.id !== token.id || Number(currentToken.clinicId) !== Number(token.clinicId)
+          || Number(currentToken.patientId) !== Number(token.patientId) || currentToken.status !== 'SERVING') {
+          throw new Error('This patient is no longer being served in the selected clinic. Return to the queue and verify their token.');
+        }
         createdConsultationPayloadRef.current = {
           patientId: Number(token.patientId),
-          doctorId: Number(currentUser?.id || 0),
-          clinicId: Number(clinicId || token.clinicId || 0),
+          doctorId: Number(currentUser?.id),
+          clinicId: Number(token.clinicId),
           queueTokenId: token.id,
-          chiefComplaint: chief,
-          presentIllness: present,
-          pastMedicalHistory: past,
-          recommendations: recom,
-          sessionNumber: sessionNumber || 1,
+          ...normalizeConsultation({ chiefComplaint: chief, presentIllness: present, pastMedicalHistory: past, recommendations: recom }),
+          sessionNumber: Number(sessionNumber),
           bookedAt: new Date().toISOString(),
         };
+        pendingWrite = 'consultation';
         const consultation = await consultationAPI.create(createdConsultationPayloadRef.current);
+        assertCurrentSession();
+        if (!isPositiveId(consultation.id)) throw new Error('The server did not return a valid consultation ID. Check the consultation history before trying again.');
         consultationId = consultation.id;
         createdConsultationIdRef.current = consultationId;
+        pendingWrite = null;
       }
-
-      try {
-        await consultationAPI.update(consultationId, { status: 'IN_PROGRESS' });
-      } catch (err) {
-        if (!(err instanceof ApiError && err.status === 409)) throw err;
-      }
-      try {
-        await consultationAPI.complete(consultationId);
-      } catch (err) {
-        if (!(err instanceof ApiError && err.status === 409)) throw err;
-      }
-
-      try {
-        await queueAPI.updateStatus(token.id, 'COMPLETED');
-      } catch (queueError) {
-        console.error('Failed to update queue token status:', queueError);
-        toast.warn('Consultation saved, but the queue token could not be marked as served.');
-      }
-
-      if (requestLabTests && labTests.length > 0) {
+      stage = 'start';
+      if (!progressRef.current.started) {
         try {
-          const labTestPromises = labTests
-            .filter(test => test.testName.trim())
-            .map(test =>
-              labTestAPI.create({
-                consultationId: consultationId as number,
-                testName: test.testName,
-                testDescription: test.testDescription || undefined,
-                testInstructions: test.testInstructions || undefined,
-              })
-            );
-
-          await Promise.all(labTestPromises);
-        } catch (labError) {
-          console.error('Failed to create lab tests:', labError);
-          toast.warn('Consultation saved, but one or more lab tests could not be created.');
+          await consultationAPI.update(consultationId, { status: 'IN_PROGRESS' });
+        } catch (err) {
+          if (!(err instanceof ApiError && err.status === 409)) throw err;
+          const existing = await consultationAPI.get(consultationId);
+          if (existing.status !== 'IN_PROGRESS' && existing.status !== 'COMPLETED') throw err;
+          progressRef.current.completed = existing.status === 'COMPLETED';
+        }
+        assertCurrentSession();
+        progressRef.current.started = true;
+      }
+      stage = 'complete';
+      if (!progressRef.current.completed) {
+        try {
+          await consultationAPI.complete(consultationId);
+        } catch (err) {
+          if (!(err instanceof ApiError && err.status === 409)) throw err;
+          const existing = await consultationAPI.get(consultationId);
+          if (existing.status !== 'COMPLETED') throw err;
+        }
+        assertCurrentSession();
+        progressRef.current.completed = true;
+      }
+      stage = 'queue';
+      if (!progressRef.current.queueCompleted) {
+        const existing = await queueAPI.getToken(token.id);
+        assertCurrentSession();
+        if (existing.id !== token.id || Number(existing.clinicId) !== Number(token.clinicId) || Number(existing.patientId) !== Number(token.patientId)) {
+          throw new Error('The queue token no longer matches this patient and clinic. Verify the queue before continuing.');
+        }
+        if (existing.status !== 'COMPLETED') {
+          if (existing.status !== 'SERVING') throw new Error('The queue token is no longer being served. Verify the queue before continuing.');
+          await queueAPI.updateStatus(token.id, 'COMPLETED');
+          assertCurrentSession();
+        }
+        progressRef.current.queueCompleted = true;
+      }
+      stage = 'lab';
+      if (requestLabTests) {
+        for (const [index, test] of labTests.entries()) {
+          if (progressRef.current.labOrders.has(index)) continue;
+          labIndex = index;
+          pendingWrite = 'lab';
+          await labTestAPI.create({
+            consultationId,
+            testName: test.testName.trim(),
+            testDescription: test.testDescription.trim() || undefined,
+            testInstructions: test.testInstructions.trim() || undefined,
+          });
+          assertCurrentSession();
+          progressRef.current.labOrders.add(index);
+          pendingWrite = null;
         }
       }
-
       toast.success('Consultation saved');
       navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId } });
     } catch (err) {
+      if (currentSessionRef.current !== submittedSession || currentContextRef.current !== consultationContext) return;
+      if (stage === 'consultation') setFormErrors(getApiFieldErrors(err, [...CONSULTATION_FIELDS, 'sessionNumber']));
+      if (stage === 'lab' && labIndex >= 0) {
+        const errors = getApiFieldErrors(err, ['testName', 'testDescription', 'testInstructions'] as const);
+        setLabErrors(previous => previous.map((value, index) => index === labIndex ? errors : value));
+      }
       if (createdConsultationIdRef.current !== null) {
         setPartiallySaved(true);
-        toast.error('The consultation record was created but could not be finalized. Click Save Consultation again to retry finishing it.');
+        const step = stage === 'lab' ? `Lab test ${labIndex + 1} was not confirmed saved.` : stage === 'queue' ? 'The queue update was not confirmed.' : 'The consultation could not be finalized.';
+        setSaveError(`Consultation #${createdConsultationIdRef.current} was created. ${step} ${err instanceof Error ? err.message : 'Please try again.'} Retry with Finish Saving; confirmed steps will not be repeated.`);
       } else {
-        toast.error(err instanceof Error ? err.message : 'Failed to create consultation');
+        setSaveError(err instanceof Error ? err.message : 'Failed to create consultation');
       }
+      if (pendingWrite !== null && (!(err instanceof ApiError) || err.status === 0 || err.status >= 500 || err.status === 409)) {
+        unconfirmedWriteRef.current = true;
+        setUnconfirmedWrite(true);
+        setSaveError(`${pendingWrite === 'lab' ? `Consultation #${createdConsultationIdRef.current} exists, but lab test ${labIndex + 1}` : 'The consultation'} has an unconfirmed save outcome. Do not submit it again until you have checked the consultation history and lab orders with clinic staff. Return to the queue to review; automatic resubmission is blocked to avoid duplicates.`);
+      }
+      if (formRef.current) focusFirstInvalidField(formRef.current);
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -148,7 +238,8 @@ export function CreateConsultation() {
   };
 
   const cancel = () => {
-    if (partiallySaved) {
+    if (savingRef.current) return;
+    if (partiallySaved && !unconfirmedWriteRef.current) {
       toast.warn('This consultation was already created. Finish saving it before returning to the queue.');
       return;
     }
@@ -179,7 +270,11 @@ export function CreateConsultation() {
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         onClick={saving || partiallySaved ? undefined : cancel}
       >
-        <div
+        <form
+          ref={formRef}
+          noValidate
+          aria-busy={saving}
+          onSubmit={event => { event.preventDefault(); void save(); }}
           className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
@@ -199,6 +294,7 @@ export function CreateConsultation() {
               </div>
             </div>
             <button
+              type="button"
               onClick={cancel}
               disabled={saving}
               className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
@@ -212,10 +308,11 @@ export function CreateConsultation() {
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-          <fieldset disabled={saving || partiallySaved} className="p-6 space-y-6">
-            {partiallySaved && (
+          <fieldset disabled={saving || unconfirmedWrite} className="p-6 space-y-6">
+            {saveError && <div role="alert" className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{saveError}</div>}
+            {partiallySaved && !unconfirmedWrite && (
               <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                The consultation record was saved but not finalized. Click Save Consultation again to finish.
+                The consultation record exists. Saved clinical details are locked; correct any unsaved test errors, then use Finish Saving to retry the remaining steps.
               </div>
             )}
             {/* Clinical Assessment */}
@@ -231,51 +328,49 @@ export function CreateConsultation() {
               </div>
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="consultation-chiefComplaint" className="block text-sm font-medium text-gray-700 mb-2">
                     Chief Complaint <span className="text-red-500">*</span>
                   </label>
                   <input
+                    {...clinicalProps('chiefComplaint')}
                     value={chief}
-                    onChange={e => {
-                      setChief(e.target.value);
-                      if (formErrors.diagnosis) {
-                        setFormErrors(prev => ({ ...prev, diagnosis: undefined }));
-                      }
-                    }}
+                    onChange={e => changeClinicalField('chiefComplaint', e.target.value)}
                     className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent transition-colors ${
-                      formErrors.diagnosis ? 'border-red-300' : 'border-gray-300'
+                      formErrors.chiefComplaint ? 'border-red-300' : 'border-gray-300'
                     }`}
                     placeholder="What is the patient's main concern today?"
                   />
-                  {formErrors.diagnosis && (
-                    <p className="text-red-500 text-xs mt-1.5">{formErrors.diagnosis}</p>
-                  )}
+                  {fieldError('chiefComplaint')}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="consultation-presentIllness" className="block text-sm font-medium text-gray-700 mb-2">
                       Present Illness
                     </label>
                     <textarea
+                      {...clinicalProps('presentIllness')}
                       value={present}
-                      onChange={e => setPresent(e.target.value)}
+                      onChange={e => changeClinicalField('presentIllness', e.target.value)}
                       rows={4}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                       placeholder="Describe the current illness in detail..."
                     />
+                    {fieldError('presentIllness')}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="consultation-pastMedicalHistory" className="block text-sm font-medium text-gray-700 mb-2">
                       Past Medical History
                     </label>
                     <textarea
+                      {...clinicalProps('pastMedicalHistory')}
                       value={past}
-                      onChange={e => setPast(e.target.value)}
+                      onChange={e => changeClinicalField('pastMedicalHistory', e.target.value)}
                       rows={4}
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                       placeholder="Relevant medical history, allergies, etc..."
                     />
+                    {fieldError('pastMedicalHistory')}
                   </div>
                 </div>
               </div>
@@ -294,39 +389,43 @@ export function CreateConsultation() {
               </div>
               <div className="p-6 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="consultation-recommendations" className="block text-sm font-medium text-gray-700 mb-2">
                     Recommendations <span className="text-red-500">*</span>
                   </label>
                   <textarea
+                    {...clinicalProps('recommendations')}
                     value={recom}
-                    onChange={e => {
-                      setRecom(e.target.value);
-                      if (formErrors.notes) {
-                        setFormErrors(prev => ({ ...prev, notes: undefined }));
-                      }
-                    }}
+                    onChange={e => changeClinicalField('recommendations', e.target.value)}
                     rows={4}
                     className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors ${
-                      formErrors.notes ? 'border-red-300' : 'border-gray-300'
+                      formErrors.recommendations ? 'border-red-300' : 'border-gray-300'
                     }`}
                     placeholder="Treatment plan, prescriptions, follow-up advice..."
                   />
-                  {formErrors.notes && (
-                    <p className="text-red-500 text-xs mt-1.5">{formErrors.notes}</p>
-                  )}
+                  {fieldError('recommendations')}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="consultation-sessionNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     Session Number
                   </label>
                   <input
                     type="number"
+                    id="consultation-sessionNumber"
                     min={1}
+                    step={1}
+                    disabled={partiallySaved}
+                    aria-invalid={!!formErrors.sessionNumber}
+                    aria-describedby={formErrors.sessionNumber ? 'consultation-sessionNumber-error' : undefined}
                     value={sessionNumber}
-                    onChange={e => setSessionNumber(Number(e.target.value || 1))}
+                    onChange={e => {
+                      setSessionNumber(e.target.value);
+                      setFormErrors(previous => ({ ...previous, sessionNumber: previous.sessionNumber ? getSessionNumberError(e.target.value) : undefined }));
+                    }}
+                    onBlur={() => setFormErrors(previous => ({ ...previous, sessionNumber: getSessionNumberError(sessionNumber) ?? previous.sessionNumber }))}
                     className="w-32 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent transition-colors"
                   />
+                  {fieldError('sessionNumber')}
                 </div>
               </div>
             </div>
@@ -347,6 +446,7 @@ export function CreateConsultation() {
                   <input
                     type="checkbox"
                     id="requestLabTests"
+                    disabled={partiallySaved}
                     checked={requestLabTests}
                     onChange={(e) => {
                       setRequestLabTests(e.target.checked);
@@ -374,9 +474,11 @@ export function CreateConsultation() {
                         </span>
                         <button
                           type="button"
+                          disabled={partiallySaved}
                           onClick={() => removeLabTest(index)}
                           className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
                           title="Remove test"
+                          aria-label={`Remove test ${index + 1}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -384,43 +486,58 @@ export function CreateConsultation() {
 
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor={`consultation-test-${index}-testName`} className="block text-sm font-medium text-gray-700 mb-1">
                             Test Name <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
+                            id={`consultation-test-${index}-testName`}
+                            disabled={progressRef.current.labOrders.has(index)}
+                            aria-invalid={!!labErrors[index]?.testName}
+                            aria-describedby={labErrors[index]?.testName ? `consultation-test-${index}-testName-error` : undefined}
                             value={test.testName}
                             onChange={(e) => updateLabTest(index, 'testName', e.target.value)}
                             placeholder="e.g., Complete Blood Count, Blood Sugar Test"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent text-sm transition-colors"
                           />
+                          {labErrors[index]?.testName && <p id={`consultation-test-${index}-testName-error`} role="alert" className="text-red-500 text-xs mt-1.5">{labErrors[index].testName}</p>}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor={`consultation-test-${index}-testDescription`} className="block text-sm font-medium text-gray-700 mb-1">
                               Test Description
                             </label>
                             <textarea
+                              id={`consultation-test-${index}-testDescription`}
+                              disabled={progressRef.current.labOrders.has(index)}
+                              aria-invalid={!!labErrors[index]?.testDescription}
+                              aria-describedby={labErrors[index]?.testDescription ? `consultation-test-${index}-testDescription-error` : undefined}
                               value={test.testDescription}
                               onChange={(e) => updateLabTest(index, 'testDescription', e.target.value)}
                               rows={2}
                               placeholder="What does this test check for?"
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none text-sm transition-colors"
                             />
+                            {labErrors[index]?.testDescription && <p id={`consultation-test-${index}-testDescription-error`} role="alert" className="text-red-500 text-xs mt-1.5">{labErrors[index].testDescription}</p>}
                           </div>
 
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label htmlFor={`consultation-test-${index}-testInstructions`} className="block text-sm font-medium text-gray-700 mb-1">
                               Instructions for Technician
                             </label>
                             <textarea
+                              id={`consultation-test-${index}-testInstructions`}
+                              disabled={progressRef.current.labOrders.has(index)}
+                              aria-invalid={!!labErrors[index]?.testInstructions}
+                              aria-describedby={labErrors[index]?.testInstructions ? `consultation-test-${index}-testInstructions-error` : undefined}
                               value={test.testInstructions}
                               onChange={(e) => updateLabTest(index, 'testInstructions', e.target.value)}
                               rows={2}
                               placeholder="Special instructions or requirements..."
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none text-sm transition-colors"
                             />
+                            {labErrors[index]?.testInstructions && <p id={`consultation-test-${index}-testInstructions-error`} role="alert" className="text-red-500 text-xs mt-1.5">{labErrors[index].testInstructions}</p>}
                           </div>
                         </div>
                       </div>
@@ -429,6 +546,7 @@ export function CreateConsultation() {
 
                   <button
                     type="button"
+                    disabled={partiallySaved}
                     onClick={addLabTest}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-[#38A3A5] border-2 border-dashed border-[#38A3A5]/40 rounded-lg hover:border-[#38A3A5] hover:bg-[#38A3A5]/5 transition-colors"
                   >
@@ -444,21 +562,22 @@ export function CreateConsultation() {
           {/* Modal footer */}
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
             <button
+              type="button"
               className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               onClick={cancel}
               disabled={saving}
             >
-              Cancel
+              {unconfirmedWrite ? 'Return to Queue' : 'Cancel'}
             </button>
             <button
+              type="submit"
               className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              onClick={save}
-              disabled={saving}
+              disabled={saving || unconfirmedWrite}
             >
               {saving ? 'Saving...' : partiallySaved ? 'Finish Saving' : 'Save Consultation'}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

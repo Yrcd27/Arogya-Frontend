@@ -13,6 +13,8 @@ import { clinicAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
 import { ApiError } from '../../services/httpClient';
 import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
+import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
 type PatientInfo = {
   id: number;
@@ -31,7 +33,7 @@ const isEmptyConsultationsResponse = (error: unknown) =>
 
 export default function Consultations() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,6 +55,12 @@ export default function Consultations() {
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
   const detailRequestRef = useRef(0);
+  const editSavingRef = useRef(false);
+  const editFormRef = useRef<HTMLFormElement>(null);
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
+  const [editErrors, setEditErrors] = useState<ConsultationErrors>({});
+  const [editError, setEditError] = useState('');
 
   const sortByNewestFirst = (list: Consultation[]) =>
     [...list].sort((a, b) => {
@@ -156,6 +164,9 @@ export default function Consultations() {
   };
 
   const openEdit = (c: Consultation) => {
+    if (editSavingRef.current) return;
+    setEditErrors({});
+    setEditError('');
     setEditingConsultation(c);
     setEditForm({
       chiefComplaint: c.chiefComplaint || '',
@@ -165,17 +176,59 @@ export default function Consultations() {
     });
   };
 
+  const closeEdit = () => {
+    if (!editSavingRef.current) setEditingConsultation(null);
+  };
+
+  const changeEditField = (field: ConsultationField, value: string) => {
+    if (editSavingRef.current) return;
+    setEditForm(previous => ({ ...previous, [field]: value }));
+    setEditError('');
+    setEditErrors(previous => ({ ...previous, [field]: previous[field] ? validateConsultation({ ...editForm, [field]: value })[field] : undefined }));
+  };
+
+  const editProps = (field: ConsultationField) => ({
+    id: `edit-consultation-${field}`,
+    disabled: savingEdit,
+    'aria-invalid': !!editErrors[field],
+    'aria-describedby': editErrors[field] ? `edit-consultation-${field}-error` : undefined,
+    onBlur: () => setEditErrors(previous => ({ ...previous, [field]: validateConsultation(editForm)[field] ?? previous[field] })),
+  });
+
+  const editFieldError = (field: ConsultationField) => editErrors[field]
+    ? <p id={`edit-consultation-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{editErrors[field]}</p> : null;
+
   const handleSaveEdit = async () => {
-    if (!editingConsultation) return;
+    if (editSavingRef.current || !editingConsultation) return;
+    setEditError('');
+    if (!isPositiveId(user?.id) || !isPositiveId(editingConsultation.id) || editingConsultation.doctorId !== user?.id) {
+      setEditError('The consultation or signed-in doctor could not be verified. Reload your consultations before saving.');
+      return;
+    }
+    const errors = validateConsultation(editForm);
+    setEditErrors(errors);
+    if (Object.keys(errors).length) {
+      if (editFormRef.current) focusFirstInvalidField(editFormRef.current);
+      return;
+    }
+    const submittedSession = sessionKey;
+    editSavingRef.current = true;
     setSavingEdit(true);
     try {
-      const updated = await consultationAPI.update(editingConsultation.id, editForm);
+      const updated = await consultationAPI.update(editingConsultation.id, normalizeConsultation(editForm));
+      if (currentSessionRef.current !== submittedSession) return;
       setConsultations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
       toast.success('Consultation updated');
       setEditingConsultation(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update consultation');
+      if (currentSessionRef.current !== submittedSession) return;
+      const errors = getApiFieldErrors(err, CONSULTATION_FIELDS);
+      setEditErrors(errors);
+      if (Object.keys(errors).length) {
+        if (editFormRef.current) focusFirstInvalidField(editFormRef.current);
+      } else setEditError(err instanceof Error ? err.message : 'Failed to update consultation');
     } finally {
+      editSavingRef.current = false;
       setSavingEdit(false);
     }
   };
@@ -648,9 +701,13 @@ export default function Consultations() {
       {editingConsultation && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
-          onClick={() => !savingEdit && setEditingConsultation(null)}
+          onClick={closeEdit}
         >
-          <div
+          <form
+            ref={editFormRef}
+            noValidate
+            aria-busy={savingEdit}
+            onSubmit={event => { event.preventDefault(); void handleSaveEdit(); }}
             className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -662,7 +719,9 @@ export default function Consultations() {
                 </p>
               </div>
               <button
-                onClick={() => setEditingConsultation(null)}
+                type="button"
+                onClick={closeEdit}
+                aria-label="Close edit consultation"
                 disabled={savingEdit}
                 className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
               >
@@ -673,62 +732,72 @@ export default function Consultations() {
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+              {editError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{editError}</div>}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label htmlFor="edit-consultation-chiefComplaint" className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint *</label>
                 <input
+                  {...editProps('chiefComplaint')}
                   value={editForm.chiefComplaint || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, chiefComplaint: e.target.value }))}
+                  onChange={e => changeEditField('chiefComplaint', e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent transition-colors"
                 />
+                {editFieldError('chiefComplaint')}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Present Illness</label>
+                  <label htmlFor="edit-consultation-presentIllness" className="block text-sm font-medium text-gray-700 mb-2">Present Illness</label>
                   <textarea
+                    {...editProps('presentIllness')}
                     value={editForm.presentIllness || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, presentIllness: e.target.value }))}
+                    onChange={e => changeEditField('presentIllness', e.target.value)}
                     rows={3}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                   />
+                  {editFieldError('presentIllness')}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Past Medical History</label>
+                  <label htmlFor="edit-consultation-pastMedicalHistory" className="block text-sm font-medium text-gray-700 mb-2">Past Medical History</label>
                   <textarea
+                    {...editProps('pastMedicalHistory')}
                     value={editForm.pastMedicalHistory || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, pastMedicalHistory: e.target.value }))}
+                    onChange={e => changeEditField('pastMedicalHistory', e.target.value)}
                     rows={3}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                   />
+                  {editFieldError('pastMedicalHistory')}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Recommendations</label>
+                <label htmlFor="edit-consultation-recommendations" className="block text-sm font-medium text-gray-700 mb-2">Recommendations *</label>
                 <textarea
+                  {...editProps('recommendations')}
                   value={editForm.recommendations || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, recommendations: e.target.value }))}
+                  onChange={e => changeEditField('recommendations', e.target.value)}
                   rows={3}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                 />
+                {editFieldError('recommendations')}
               </div>
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
               <button
+                type="button"
                 className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-                onClick={() => setEditingConsultation(null)}
+                onClick={closeEdit}
                 disabled={savingEdit}
               >
                 Cancel
               </button>
               <button
+                type="submit"
                 className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSaveEdit}
                 disabled={savingEdit}
               >
                 {savingEdit ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
