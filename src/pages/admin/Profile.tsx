@@ -9,7 +9,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import type { AdminProfile as StoredAdminProfile, CreateAdminProfileInput } from '../../types/user';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { PROFILE_FIELDS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
+import { MIN_BIRTH_DATE, PROFILE_FIELDS, PROFILE_MAX_LENGTH, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
 
 type AdminField = (typeof PROFILE_FIELDS.admin)[number];
 
@@ -70,6 +70,7 @@ const Profile: React.FC = () => {
 
   const fieldProps = (field: AdminField) => ({
     id: `admin-${field}`,
+    maxLength: PROFILE_MAX_LENGTH[field],
     disabled: saving,
     'aria-invalid': !!fieldErrors[field],
     'aria-describedby': fieldErrors[field] ? `admin-${field}-error` : undefined,
@@ -187,6 +188,7 @@ const Profile: React.FC = () => {
                           value={profile[name]}
                           onChange={handleInputChange}
                           required
+                          min={name === 'dateOfBirth' ? MIN_BIRTH_DATE : undefined}
                           max={name === 'dateOfBirth' ? localDateString() : undefined}
                           inputMode={name === 'phoneNumber' ? 'tel' : undefined}
                           autoComplete={name === 'phoneNumber' ? 'tel' : undefined}

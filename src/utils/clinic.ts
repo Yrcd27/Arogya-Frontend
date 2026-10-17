@@ -2,13 +2,15 @@
 
 import { PROVINCES_DISTRICTS, type Clinic, type ClinicFilters, type CreateClinicRequest, type SelectedDoctor } from '../types/clinic';
 import type { FieldErrors } from './formValidation';
-import { localDateString } from './profileValidation';
+import { localDateString, localTimeString } from './profileValidation';
 import { isPositiveId } from './clinicalValidation';
 
 export const CLINIC_FIELDS = ['clinicName', 'province', 'district', 'location', 'scheduledDate', 'scheduledTime', 'status', 'doctorIds'] as const;
 export type ClinicField = (typeof CLINIC_FIELDS)[number];
 export const CLINIC_STATUSES: readonly string[] = ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 export const CLINIC_SORT_OPTIONS = ['date', 'name', 'province'] as const;
+export const CLINIC_NAME_MAX_LENGTH = 255;
+export const CLINIC_LOCATION_MAX_LENGTH = 500;
 
 export function isValidClinicDate(value: string): boolean {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
@@ -33,14 +35,17 @@ export function getProvinceDistrictErrors(province: string, district: string, re
   return errors;
 }
 
-export function validateClinicFields(formData: CreateClinicRequest, selectedDoctors: SelectedDoctor[], isEditMode = false, allowedDoctorIds?: readonly number[], today = localDateString()): FieldErrors<ClinicField> {
+export function validateClinicFields(formData: CreateClinicRequest, selectedDoctors: SelectedDoctor[], isEditMode = false, allowedDoctorIds?: readonly number[], today = localDateString(), nowTime = localTimeString()): FieldErrors<ClinicField> {
   const errors: FieldErrors<ClinicField> = getProvinceDistrictErrors(formData.province, formData.district, true);
   if (!formData.clinicName.trim()) errors.clinicName = 'Clinic name is required.';
+  else if (formData.clinicName.trim().length > CLINIC_NAME_MAX_LENGTH) errors.clinicName = `Clinic name must be ${CLINIC_NAME_MAX_LENGTH} characters or fewer.`;
+  if (formData.location && formData.location.trim().length > CLINIC_LOCATION_MAX_LENGTH) errors.location = `Location must be ${CLINIC_LOCATION_MAX_LENGTH} characters or fewer.`;
   if (!formData.scheduledDate) errors.scheduledDate = 'Scheduled date is required.';
   else if (!isValidClinicDate(formData.scheduledDate)) errors.scheduledDate = 'Enter a valid scheduled date.';
   else if (!isEditMode && formData.scheduledDate < today) errors.scheduledDate = 'Scheduled date cannot be in the past.';
   if (!formData.scheduledTime) errors.scheduledTime = 'Scheduled time is required.';
   else if (!/^(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9])?$/.test(formData.scheduledTime)) errors.scheduledTime = 'Enter a valid time in 24-hour format.';
+  else if (!isEditMode && formData.scheduledDate === today && formData.scheduledTime.slice(0, 5) < nowTime) errors.scheduledTime = 'Scheduled time cannot be in the past.';
   if (!CLINIC_STATUSES.includes(formData.status) || !isEditMode && formData.status !== 'SCHEDULED') errors.status = 'Select a valid clinic status.';
   const ids = selectedDoctors.map(doctor => doctor.doctorId);
   if (!ids.length) errors.doctorIds = 'At least one doctor must be assigned to the clinic.';

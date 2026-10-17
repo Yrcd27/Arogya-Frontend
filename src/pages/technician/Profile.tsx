@@ -9,7 +9,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { ProfileView } from '../../components/profile/ProfileView';
 import type { CreateTechnicianProfileInput, TechnicianProfile as StoredTechnicianProfile } from '../../types/user';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { PROFILE_FIELDS, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
+import { MIN_BIRTH_DATE, PROFILE_FIELDS, PROFILE_MAX_LENGTH, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
 
 type TechnicianField = (typeof PROFILE_FIELDS.technician)[number];
 
@@ -130,6 +130,7 @@ const Profile: React.FC = () => {
 
   const fieldProps = (field: TechnicianField) => ({
     id: `technician-${field}`,
+    maxLength: PROFILE_MAX_LENGTH[field],
     disabled: saving,
     'aria-invalid': !!fieldErrors[field],
     'aria-describedby': fieldErrors[field] ? `technician-${field}-error` : undefined,
@@ -335,7 +336,7 @@ const Profile: React.FC = () => {
                   <label htmlFor="technician-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                     Date of Birth *
                   </label>
-                  <input {...fieldProps('dateOfBirth')} max={localDateString()}
+                  <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                     type="date"
                     name="dateOfBirth"
                     value={profile.dateOfBirth}

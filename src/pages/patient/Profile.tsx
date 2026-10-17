@@ -9,7 +9,7 @@ import { Header } from '../../components/patient/Header';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { ProfileView } from '../../components/profile/ProfileView';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { PROFILE_FIELDS, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
+import { MIN_BIRTH_DATE, PROFILE_FIELDS, PROFILE_MAX_LENGTH, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
 
 type PatientField = (typeof PROFILE_FIELDS.patient)[number];
 const emptyPatientProfile = {
@@ -99,6 +99,7 @@ export function Profile() {
 
   const fieldProps = (field: PatientField) => ({
     id: `patient-${field}`,
+    maxLength: PROFILE_MAX_LENGTH[field],
     disabled: loading,
     'aria-invalid': !!fieldErrors[field],
     'aria-describedby': fieldErrors[field] ? `patient-${field}-error` : undefined,
@@ -312,7 +313,7 @@ export function Profile() {
                       <label htmlFor="patient-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
-                      <input {...fieldProps('dateOfBirth')} max={localDateString()}
+                      <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                         type="date"
                         name="dateOfBirth"
                         value={formData.dateOfBirth}

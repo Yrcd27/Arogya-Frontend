@@ -6,16 +6,31 @@ export function normalizeEmail(value: string): string {
   return value.trim();
 }
 
+export const EMAIL_MAX_LENGTH = 254;
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 50;
+
 export function getEmailError(value: string): string | undefined {
   const email = normalizeEmail(value);
   if (!email) return 'Please enter your email address.';
+  if (email.length > EMAIL_MAX_LENGTH) return `Email address must be ${EMAIL_MAX_LENGTH} characters or fewer.`;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
   const [local, domain] = email.split('@');
   if (
+    local.length > 64 ||
     local.startsWith('.') || local.endsWith('.') || local.includes('..') ||
     /[<>()[\]\\,;:"]/.test(local) ||
-    domain.split('.').some(label => !/^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u.test(label))
+    domain.split('.').some(label => label.length > 63 || !/^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?$/u.test(label))
   ) return 'Please enter a valid email address.';
+  return undefined;
+}
+
+export function getUsernameError(value: string): string | undefined {
+  const username = value.trim();
+  if (!username) return 'Please enter a username.';
+  if (username.length < USERNAME_MIN_LENGTH) return `Username must be at least ${USERNAME_MIN_LENGTH} characters.`;
+  if (username.length > USERNAME_MAX_LENGTH) return `Username must be ${USERNAME_MAX_LENGTH} characters or fewer.`;
+  if (!/^[\p{L}\p{N}][\p{L}\p{M}\p{N}‍ ._-]*$/u.test(username)) return 'Username must start with a letter or number and can only contain letters, numbers, spaces, dots, underscores, and hyphens.';
   return undefined;
 }
 

@@ -36,6 +36,17 @@ export function normalizeConsultation(values: Partial<Record<ConsultationField, 
   };
 }
 
+export const LAB_TEST_NAME_MAX_LENGTH = 200;
+
+export function getLabTestNameError(name: string): string | undefined {
+  const text = name.trim();
+  if (!text) return 'Test name is required. Complete or remove this order.';
+  return text.length > LAB_TEST_NAME_MAX_LENGTH ? `Test name must be ${LAB_TEST_NAME_MAX_LENGTH} characters or fewer.` : undefined;
+}
+
 export function validateLabOrders(enabled: boolean, tests: LabTestFormData[]): FieldErrors<keyof LabTestFormData>[] {
-  return enabled ? tests.map(test => test.testName.trim() ? {} : { testName: 'Test name is required. Complete or remove this order.' }) : [];
+  return enabled ? tests.map(test => {
+    const testName = getLabTestNameError(test.testName);
+    return testName ? { testName } : {};
+  }) : [];
 }

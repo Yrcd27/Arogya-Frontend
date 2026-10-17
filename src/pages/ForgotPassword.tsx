@@ -19,7 +19,7 @@ import { toast } from 'react-toastify';
 import { userAPI } from '../services/userService';
 import { ApiError } from '../services/httpClient';
 import {
-  PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError,
+  EMAIL_MAX_LENGTH, PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError,
   getOtpError, getPasswordStrength, getResetPasswordCriteria, getResetPasswordError, normalizeEmail,
   type FieldErrors,
 } from '../utils/formValidation';
@@ -413,6 +413,7 @@ export function ForgotPassword() {
                     id="recovery-email"
                     name="email"
                     type="email"
+                    maxLength={EMAIL_MAX_LENGTH}
                     aria-invalid={!!fieldErrors.email}
                     aria-describedby={fieldErrors.email ? 'recovery-email-error' : undefined}
                     autoComplete="email"

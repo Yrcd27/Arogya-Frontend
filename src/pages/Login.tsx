@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { HomeIcon, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { loginAPI, getDashboardRoute } from '../utils/auth';
-import { focusFirstInvalidField, getApiFieldErrors, getEmailError, normalizeEmail } from '../utils/formValidation';
+import { EMAIL_MAX_LENGTH, focusFirstInvalidField, getApiFieldErrors, getEmailError, normalizeEmail } from '../utils/formValidation';
 
 export function Login() {
   const navigate = useNavigate();
@@ -131,6 +131,7 @@ export function Login() {
               id="login-email"
               name="email"
               type="email"
+              maxLength={EMAIL_MAX_LENGTH}
               required
               aria-invalid={!!emailError}
               aria-describedby={emailError ? 'login-email-error' : undefined}

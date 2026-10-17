@@ -6,8 +6,10 @@ import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
-import { 
+import {
   CLINIC_FIELDS,
+  CLINIC_LOCATION_MAX_LENGTH,
+  CLINIC_NAME_MAX_LENGTH,
   CLINIC_STATUSES,
   validateClinicFields,
   getDistrictOptions,
@@ -582,6 +584,7 @@ export function Clinics() {
                   </label>
                   <input
                     {...fieldProps('clinicName')}
+                    maxLength={CLINIC_NAME_MAX_LENGTH}
                     type="text"
                     name="clinicName"
                     value={formData.clinicName}
@@ -644,6 +647,7 @@ export function Clinics() {
                   </label>
                   <input
                     {...fieldProps('location')}
+                    maxLength={CLINIC_LOCATION_MAX_LENGTH}
                     type="text"
                     name="location"
                     value={formData.location}

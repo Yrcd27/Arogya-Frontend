@@ -18,6 +18,16 @@ export const PROFILE_OPTIONS = {
   technicianField: ['Radiology', 'Laboratory', 'Pharmacy', 'Cardiovascular', 'Respiratory', 'Emergency Medical', 'Surgical', 'Dental', 'Ophthalmic', 'Dialysis', 'Other'],
 } as const;
 
+export const PROFILE_MAX_LENGTH: Partial<Record<ProfileField, number>> = {
+  firstName: 100, lastName: 100, phoneNumber: 20, nicNumber: 12, licenseNumber: 50,
+  address: 255, allergies: 255, chronicDiseases: 255, emergencyContact: 20,
+  qualification: 255, certification: 255, assignedEquipment: 255,
+};
+
+export const MIN_BIRTH_YEAR = 1900;
+export const MIN_BIRTH_DATE = `${MIN_BIRTH_YEAR}-01-01`;
+export const MIN_PROFESSIONAL_AGE = 18;
+
 const FIELD_LABELS: Record<ProfileField, string> = {
   firstName: 'First name', lastName: 'Last name', dateOfBirth: 'Date of birth',
   phoneNumber: 'Phone number', nicNumber: 'NIC number', gender: 'Gender', bloodGroup: 'Blood group',
@@ -65,6 +75,10 @@ export function localDateString(date = new Date()): string {
   return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 }
 
+export function localTimeString(date = new Date()): string {
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
 export function getDateOfBirthError(value: string, required = false, today = localDateString()): string | undefined {
   const text = value.trim();
   if (!text) return required ? 'Date of birth is required.' : undefined;
@@ -72,7 +86,7 @@ export function getDateOfBirthError(value: string, required = false, today = loc
   const [year, month, day] = text.split('-').map(Number);
   const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const days = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return 'Enter a valid date of birth.';
+  if (year < MIN_BIRTH_YEAR || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return 'Enter a valid date of birth.';
   return text > today ? 'Date of birth cannot be in the future.' : undefined;
 }
 
@@ -93,10 +107,18 @@ export function normalizeProfileField(field: ProfileField, value: string | numbe
 export function getProfileFieldError(role: ProfileRole, field: ProfileField, value: string | number, originalValue?: string | number): string | undefined {
   const text = String(value).trim();
   const required = role === 'patient' ? field === 'firstName' || field === 'lastName' : true;
-  if (field === 'dateOfBirth') return getDateOfBirthError(text, required);
+  const unchangedStoredValue = originalValue !== undefined && text === String(originalValue).trim();
+  if (field === 'dateOfBirth') {
+    const dateError = getDateOfBirthError(text, required);
+    if (dateError || !text || role === 'patient' || unchangedStoredValue) return dateError;
+    const age = getAge(text);
+    return age !== undefined && age < MIN_PROFESSIONAL_AGE ? `A ${role} must be at least ${MIN_PROFESSIONAL_AGE} years old.` : undefined;
+  }
   if (field === 'phoneNumber' || field === 'emergencyContact') return getPhoneError(text, FIELD_LABELS[field], required);
   if (field === 'nicNumber') return getNicError(text, required);
   if (required && !text) return `${FIELD_LABELS[field]} is required.`;
+  const maxLength = PROFILE_MAX_LENGTH[field];
+  if (maxLength && text.length > maxLength && !unchangedStoredValue) return `${FIELD_LABELS[field]} must be ${maxLength} characters or fewer.`;
   if (field === 'experienceYears') {
     if (!/^[0-9]+$/.test(text) || !Number.isInteger(Number(text)) || Number(text) < 0 || Number(text) > 50) {
       return 'Enter a whole number of years from 0 to 50.';
@@ -104,7 +126,6 @@ export function getProfileFieldError(role: ProfileRole, field: ProfileField, val
   }
   if (field in PROFILE_OPTIONS && text) {
     const options: readonly string[] = PROFILE_OPTIONS[field as keyof typeof PROFILE_OPTIONS];
-    const unchangedStoredValue = originalValue !== undefined && text === String(originalValue).trim();
     if (!options.includes(text) && !unchangedStoredValue) return `Select a valid ${FIELD_LABELS[field].toLowerCase()}.`;
   }
   return undefined;

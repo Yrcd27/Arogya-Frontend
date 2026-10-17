@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { HomeIcon, Eye, EyeOff } from 'lucide-react';
 import { userAPI } from '../services/api';
 import { ApiError } from '../services/httpClient';
-import { PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError, getPasswordPolicyError, normalizeEmail, type FieldErrors } from '../utils/formValidation';
+import { EMAIL_MAX_LENGTH, PASSWORD_REQUIREMENTS, USERNAME_MAX_LENGTH, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError, getPasswordPolicyError, getUsernameError, normalizeEmail, type FieldErrors } from '../utils/formValidation';
 
 type RegisterField = 'username' | 'email' | 'password' | 'confirmPassword' | 'secretKey';
 
@@ -60,7 +60,7 @@ export function RegisterForm() {
 
   const getFieldError = (name: RegisterField, value: string, values = formData): string | undefined => {
     switch (name) {
-      case 'username': return value.trim() ? undefined : 'Please enter a username.';
+      case 'username': return getUsernameError(value);
       case 'email': return getEmailError(value);
       case 'password': return getPasswordPolicyError(value, 'Please enter a password.');
       case 'confirmPassword': return getConfirmationError(values.password, value);
@@ -351,6 +351,7 @@ export function RegisterForm() {
                     type="text" 
                     name="username"
                     id="register-username"
+                    maxLength={USERNAME_MAX_LENGTH}
                     aria-invalid={!!fieldErrors.username}
                     aria-describedby={fieldErrors.username ? 'register-username-error' : undefined}
                     autoComplete="username"
@@ -372,6 +373,7 @@ export function RegisterForm() {
                     type="email" 
                     name="email"
                     id="register-email"
+                    maxLength={EMAIL_MAX_LENGTH}
                     aria-invalid={!!fieldErrors.email}
                     aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
                     autoComplete="email"

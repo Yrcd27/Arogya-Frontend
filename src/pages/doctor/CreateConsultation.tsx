@@ -13,7 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { CONSULTATION_FIELDS, MAX_SESSION_NUMBER, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
+import { CONSULTATION_FIELDS, LAB_TEST_NAME_MAX_LENGTH, MAX_SESSION_NUMBER, getLabTestNameError, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
 export function CreateConsultation() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
@@ -70,7 +70,7 @@ export function CreateConsultation() {
   const updateLabTest = (index: number, field: keyof LabTestFormData, value: string) => {
     if (savingRef.current || progressRef.current.labOrders.has(index)) return;
     setLabTests(previous => previous.map((test, i) => i === index ? { ...test, [field]: value } : test));
-    setLabErrors(previous => previous.map((errors, i) => i === index ? { ...errors, [field]: field === 'testName' && !value.trim() ? 'Test name is required. Complete or remove this order.' : undefined } : errors));
+    setLabErrors(previous => previous.map((errors, i) => i === index ? { ...errors, [field]: field === 'testName' ? getLabTestNameError(value) : undefined } : errors));
     setSaveError('');
   };
 
@@ -491,6 +491,7 @@ export function CreateConsultation() {
                           <input
                             type="text"
                             id={`consultation-test-${index}-testName`}
+                            maxLength={LAB_TEST_NAME_MAX_LENGTH}
                             disabled={progressRef.current.labOrders.has(index)}
                             aria-invalid={!!labErrors[index]?.testName}
                             aria-describedby={labErrors[index]?.testName ? `consultation-test-${index}-testName-error` : undefined}

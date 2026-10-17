@@ -8,7 +8,7 @@ import { labTestAPI } from '../../services/labTestService';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
+import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, normalizeTestResultFile, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
 
 interface SubmitTestResultModalProps {
   labTest: LabTest;
@@ -60,7 +60,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (savingRef.current || outcomeUnknownRef.current) return;
-    const selected = Array.from(e.target.files || []);
+    const selected = Array.from(e.target.files || []).map(normalizeTestResultFile);
     e.target.value = '';
     if (selected.length === 0) return;
 
