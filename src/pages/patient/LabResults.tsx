@@ -12,7 +12,14 @@ import { FilePreviewModal } from '../../components/FilePreviewModal';
 const PAGE_SIZE = 10;
 
 export function LabResults() {
-  const { user } = useAuth();
+  const { user, sessionKey } = useAuth();
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
+  const previewRequestRef = useRef(0);
+  const previewPendingRef = useRef(false);
+  const previewUrlRef = useRef<string | null>(null);
+  const selectedResultRef = useRef<number | null>(null);
+  const downloadPendingRef = useRef(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
@@ -27,33 +34,58 @@ export function LabResults() {
   const [testNameByLabTestId, setTestNameByLabTestId] = useState<Record<number, string>>({});
   const loadTestResultsRef = useRef<(patientId: number, pageNumber: number) => Promise<void>>(async () => undefined);
   const latestRequest = useRef(0);
+  const [fileError, setFileError] = useState('');
+  const [downloadLoadingId, setDownloadLoadingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    currentSessionRef.current = sessionKey;
+    setSelectedResult(null);
+    selectedResultRef.current = null;
+    setPreviewFile(null);
+    setPreviewUrl(null);
+    setPreviewOwnerId(null);
+    setPreviewLoadingId(null);
+    previewPendingRef.current = false;
+    setFileError('');
+    setTestResults([]);
+    setTestNameByLabTestId({});
+    setPage(0);
+    return () => {
+      currentSessionRef.current = -1;
+      latestRequest.current += 1;
+      previewRequestRef.current += 1;
+      if (previewUrlRef.current) window.URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    };
+  }, [sessionKey]);
 
   useEffect(() => {
     if (user?.id) void loadTestResultsRef.current(user.id, page);
-  }, [user?.id, page]);
+  }, [user?.id, page, sessionKey]);
 
   const loadTestResults = async (patientId: number, pageNumber: number) => {
     const requestId = ++latestRequest.current;
+    const requestSession = sessionKey;
     setLoading(true);
     setError('');
     try {
       const { items, total } = await medicalRecordsAPI.getByPatientIdPaged(patientId, { page: pageNumber, size: PAGE_SIZE });
-      if (requestId !== latestRequest.current) return;
+      if (requestId !== latestRequest.current || currentSessionRef.current !== requestSession) return;
       setTestResults(items);
       setTotalResults(total);
-      await hydrateTestNames(items);
+      await hydrateTestNames(items, () => requestId === latestRequest.current && currentSessionRef.current === requestSession);
     } catch (err) {
-      if (requestId !== latestRequest.current) return;
+      if (requestId !== latestRequest.current || currentSessionRef.current !== requestSession) return;
       setError('Failed to load test results');
       console.error(err);
     } finally {
-      if (requestId === latestRequest.current) setLoading(false);
+      if (requestId === latestRequest.current && currentSessionRef.current === requestSession) setLoading(false);
     }
   };
 
   loadTestResultsRef.current = loadTestResults;
 
-  const hydrateTestNames = async (results: TestResult[]) => {
+  const hydrateTestNames = async (results: TestResult[], isCurrent: () => boolean) => {
     const missingIds = Array.from(new Set(results.map(r => r.labTestId))).filter(id => !testNameByLabTestId[id]);
     if (missingIds.length === 0) return;
 
@@ -70,39 +102,74 @@ export function LabResults() {
 
     const next: Record<number, string> = {};
     resolved.forEach(r => { next[r.labTestId] = r.name; });
-    setTestNameByLabTestId(prev => ({ ...prev, ...next }));
+    if (isCurrent()) setTestNameByLabTestId(prev => ({ ...prev, ...next }));
   };
 
   const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
   const handleDownload = async (testResultId: number, fileId: number, fileName: string) => {
+    if (downloadPendingRef.current) return;
+    const requestSession = sessionKey;
+    const selectedOwner = selectedResultRef.current;
+    downloadPendingRef.current = true;
+    setDownloadLoadingId(fileId);
+    setFileError('');
     try {
       await medicalRecordsAPI.downloadFile(testResultId, fileId, fileName);
     } catch (err) {
-      alert('Failed to download file');
-      console.error(err);
+      if (currentSessionRef.current === requestSession && selectedResultRef.current === selectedOwner) setFileError(err instanceof Error ? err.message : 'Failed to download this file. Try Download again.');
+    } finally {
+      downloadPendingRef.current = false;
+      if (currentSessionRef.current === requestSession) setDownloadLoadingId(null);
     }
   };
 
   const handlePreview = async (testResultId: number, file: TestResultFile) => {
-    if (previewLoadingId !== null) return;
+    if (previewPendingRef.current || selectedResultRef.current !== testResultId) return;
+    const requestId = ++previewRequestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === previewRequestRef.current && selectedResultRef.current === testResultId && currentSessionRef.current === requestSession;
+    previewPendingRef.current = true;
     setPreviewLoadingId(file.id);
+    setFileError('');
     try {
       const { url } = await medicalRecordsAPI.getFilePreviewUrl(testResultId, file.id, file.fileName);
+      if (!isCurrent()) { window.URL.revokeObjectURL(url); return; }
+      if (previewUrlRef.current) window.URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = url;
       setPreviewUrl(url);
       setPreviewFile(file);
       setPreviewOwnerId(testResultId);
     } catch (err) {
-      console.error('Failed to load file preview:', err);
+      if (isCurrent()) setFileError(err instanceof Error ? err.message : 'Failed to preview this file. Try Preview again.');
     } finally {
-      setPreviewLoadingId(null);
+      if (isCurrent()) { previewPendingRef.current = false; setPreviewLoadingId(null); }
     }
   };
 
   const closePreview = () => {
+    previewRequestRef.current += 1;
+    previewPendingRef.current = false;
+    setPreviewLoadingId(null);
+    if (previewUrlRef.current) window.URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     setPreviewFile(null);
     setPreviewUrl(null);
     setPreviewOwnerId(null);
+  };
+
+  const openResult = (result: TestResult) => {
+    closePreview();
+    selectedResultRef.current = result.id;
+    setSelectedResult(result);
+    setFileError('');
+  };
+
+  const closeResult = () => {
+    closePreview();
+    selectedResultRef.current = null;
+    setSelectedResult(null);
+    setFileError('');
   };
 
   const formatDate = (dateStr: string) => {
@@ -143,6 +210,7 @@ export function LabResults() {
             </h1>
           </div>
 
+          {fileError && !selectedResult && <p role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
           {error && (
             <div className="mb-4 flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               <span>{error}</span>
@@ -224,7 +292,7 @@ export function LabResults() {
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
                               <button
-                                onClick={() => setSelectedResult(result)}
+                                onClick={() => openResult(result)}
                                 className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
                                 title="View Details"
                               >
@@ -233,6 +301,7 @@ export function LabResults() {
                               {result.files.length === 1 && (
                                 <button
                                   onClick={() => handleDownload(result.id, result.files[0].id, result.files[0].fileName)}
+                                  disabled={downloadLoadingId !== null}
                                   className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
                                   title="Download File"
                                 >
@@ -261,11 +330,11 @@ export function LabResults() {
       </div>
 
       {selectedResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={() => setSelectedResult(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeResult}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-xl font-semibold text-gray-900">Test Result Details</h3>
-              <button onClick={() => setSelectedResult(null)} className="text-gray-500 hover:text-gray-700">
+              <button aria-label="Close test result" onClick={closeResult} className="text-gray-500 hover:text-gray-700">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -273,6 +342,7 @@ export function LabResults() {
             </div>
 
             <div className="space-y-4">
+              {fileError && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Test Name</label>
@@ -316,16 +386,17 @@ export function LabResults() {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
                             onClick={() => handlePreview(selectedResult.id, file)}
-                            disabled={previewLoadingId === file.id}
+                            disabled={previewLoadingId !== null}
                             className="px-3 py-2 text-[#38A3A5] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
                           >
                             {previewLoadingId === file.id ? 'Loading...' : 'Preview'}
                           </button>
                           <button
                             onClick={() => handleDownload(selectedResult.id, file.id, file.fileName)}
+                            disabled={downloadLoadingId !== null}
                             className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
                           >
-                            Download
+                            {downloadLoadingId === file.id ? 'Downloading...' : 'Download'}
                           </button>
                         </div>
                       </div>
@@ -338,7 +409,7 @@ export function LabResults() {
             <div className="mt-6 flex justify-end">
               <button
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                onClick={() => setSelectedResult(null)}
+                onClick={closeResult}
               >
                 Close
               </button>

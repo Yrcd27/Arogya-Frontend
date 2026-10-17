@@ -1,8 +1,9 @@
 // Medical Records Service API - routed through the API Gateway (see httpClient.ts)
-import { apiFetch, apiFetchBlob, toQueryString } from './httpClient';
+import { ApiError, apiFetch, apiFetchBlob, toQueryString } from './httpClient';
 import { unwrapList, type Page } from '../types/api';
 
 export const MAX_TEST_RESULT_FILES = 5;
+export const MAX_TEST_RESULT_REQUEST_BYTES = 10 * 1024 * 1024;
 
 export interface TestResultFile {
   id: number;
@@ -50,6 +51,14 @@ function toFormData(data: Partial<CreateTestResultRequest> & Partial<UpdateTestR
   (data.files || []).forEach(file => formData.append('files', file));
   (data.removeFileIds || []).forEach(id => formData.append('removeFileIds', String(id)));
   return formData;
+}
+
+export async function validateTestResultUpload(data: Partial<CreateTestResultRequest> & Partial<UpdateTestResultRequest>): Promise<void> {
+  const multipart = await new Response(toFormData(data)).blob();
+  if (multipart.size > MAX_TEST_RESULT_REQUEST_BYTES) {
+    const message = 'The complete upload must fit within 10 MiB, including new files, text, and upload metadata. Remove or reduce attachments and try again.';
+    throw new ApiError(413, message, { files: message });
+  }
 }
 
 export const medicalRecordsAPI = {

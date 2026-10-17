@@ -7,6 +7,7 @@ import { EyeIcon, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { isPositiveId } from '../../utils/clinicalValidation';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -14,7 +15,7 @@ interface MedicalRecord extends Consultation {
 }
 
 export function Records() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
@@ -25,16 +26,25 @@ export function Records() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const loadRecordsRef = useRef<() => Promise<void>>(async () => undefined);
+  const requestRef = useRef(0);
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
 
   useEffect(() => {
+    currentSessionRef.current = sessionKey;
+    setRecords([]);
+    setFilteredRecords([]);
+    setSelectedRecord(null);
+    setCurrentPage(1);
     void loadRecordsRef.current();
-  }, [currentUser?.id]);
+    return () => { requestRef.current += 1; currentSessionRef.current = -1; };
+  }, [currentUser?.id, sessionKey]);
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
       setFilteredRecords(records);
     } else {
-      const term = searchTerm.toLowerCase();
+      const term = searchTerm.trim().toLowerCase();
       const filtered = records.filter(record => 
         record.chiefComplaint?.toLowerCase().includes(term) ||
         record.doctorName?.toLowerCase().includes(term) ||
@@ -55,7 +65,14 @@ export function Records() {
   const paginatedRecords = filteredRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const loadRecords = async () => {
-    if (!currentUser) return;
+    const requestId = ++requestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === requestRef.current && currentSessionRef.current === requestSession;
+    if (!currentUser || !isPositiveId(currentUser.id)) {
+      setLoading(false);
+      setLoadError('The signed-in patient could not be verified. Sign in again before loading prescriptions.');
+      return;
+    }
     
     try {
       setLoading(true);
@@ -65,6 +82,8 @@ export function Records() {
       let consultations: Consultation[] = [];
       for (;;) {
         const { items, total } = await consultationAPI.list({ patientId: currentUser.id, page, size: pageSize });
+        if (!isCurrent()) return;
+        if (items.some(item => item.patientId !== currentUser.id)) throw new Error('The returned prescriptions do not match the signed-in patient. Please try again.');
         consultations = consultations.concat(items);
         if (items.length === 0 || consultations.length >= total) break;
         page += 1;
@@ -78,6 +97,7 @@ export function Records() {
       const clinicNameCache = new Map<number, Promise<string>>();
 
       const getDoctorName = (doctorId: number): Promise<string> => {
+        if (!isCurrent()) return Promise.resolve('');
         let promise = doctorNameCache.get(doctorId);
         if (!promise) {
           promise = (async () => {
@@ -86,6 +106,7 @@ export function Records() {
               const fullName = `${doctorProfile.firstName || ''} ${doctorProfile.lastName || ''}`.trim();
               return fullName ? `Dr. ${fullName}` : `Doctor #${doctorId}`;
             } catch {
+              if (!isCurrent()) return '';
               try {
                 const user = await userAPI.getUser(doctorId);
                 return `Dr. ${user?.username || doctorId}`;
@@ -100,6 +121,7 @@ export function Records() {
       };
 
       const getClinicName = (clinicId: number): Promise<string> => {
+        if (!isCurrent()) return Promise.resolve('');
         let promise = clinicNameCache.get(clinicId);
         if (!promise) {
           promise = clinicAPI
@@ -119,13 +141,14 @@ export function Records() {
         }))
       );
 
+      if (!isCurrent()) return;
       setRecords(enrichedRecords);
-      setFilteredRecords(enrichedRecords);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to load prescriptions:', error);
       setLoadError(error instanceof Error ? error.message : 'Failed to load prescriptions. Please try again.');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
@@ -175,6 +198,7 @@ export function Records() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <input 
                   type="text" 
+                  aria-label="Search prescriptions"
                   placeholder="Search prescriptions..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -194,7 +218,7 @@ export function Records() {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#38A3A5] mx-auto"></div>
                 <p className="mt-4">Loading prescriptions...</p>
               </div>
-            ) : filteredRecords.length === 0 ? (
+            ) : loadError ? null : filteredRecords.length === 0 ? (
               <EmptyState 
                 title="No prescriptions"
                 description="Your prescriptions will appear here"
@@ -258,7 +282,7 @@ export function Records() {
                 </table>
               </div>
             )}
-            {!loading && filteredRecords.length > 0 && (
+            {!loading && !loadError && filteredRecords.length > 0 && (
               <PaginationFooter
                 currentPage={safePage}
                 totalPages={totalPages}
@@ -280,6 +304,7 @@ export function Records() {
               <h2 className="text-2xl font-bold text-gray-900">Prescription Details</h2>
               <button
                 onClick={() => setSelectedRecord(null)}
+                aria-label="Close prescription details"
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <XIcon className="w-6 h-6" />
               </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
@@ -6,14 +6,27 @@ import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
-import { 
-  validateClinicForm,
+import {
+  CLINIC_FIELDS,
+  CLINIC_LOCATION_MAX_LENGTH,
+  CLINIC_NAME_MAX_LENGTH,
+  CLINIC_STATUSES,
+  validateClinicFields,
+  getDistrictOptions,
+  type ClinicField,
   formatTimeForAPI,
   filterClinics,
   sortClinics
 } from '../../utils/clinic';
+import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
+import { localDateString } from '../../utils/profileValidation';
+import { isPositiveId } from '../../utils/clinicalValidation';
+import { useAuth } from '../../hooks/useAuth';
 
 export function Clinics() {
+  const { user, sessionKey } = useAuth();
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -28,6 +41,23 @@ export function Clinics() {
   const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [doctorLookupFailed, setDoctorLookupFailed] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<ClinicField>>({});
+  const [saving, setSaving] = useState(false);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
+  const [doctorsError, setDoctorsError] = useState<string | null>(null);
+  const savingRef = useRef(false);
+  const deleteRef = useRef(false);
+  const assignmentsReadyRef = useRef(false);
+  const assignmentsLoadingRef = useRef(false);
+  const assignmentRequestRef = useRef(0);
+  const listRequestRef = useRef(0);
+  const doctorsRequestRef = useRef(0);
+  const editingClinicIdRef = useRef<number | null>(null);
+  const originalDoctorIdsRef = useRef<number[]>([]);
+  const loadClinicsRef = useRef<() => Promise<void>>(async () => undefined);
+  const loadDoctorsRef = useRef<() => Promise<void>>(async () => undefined);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -49,20 +79,23 @@ export function Clinics() {
 
   // Load clinics on component mount
   useEffect(() => {
-    loadClinics();
-  }, []);
-
-  // Load doctors for search
-  useEffect(() => {
-    loadDoctors();
-  }, []);
+    void loadClinicsRef.current();
+    void loadDoctorsRef.current();
+    setIsModalOpen(false);
+    assignmentRequestRef.current += 1;
+    return () => {
+      listRequestRef.current += 1;
+      doctorsRequestRef.current += 1;
+      assignmentRequestRef.current += 1;
+    };
+  }, [sessionKey]);
 
   // Filter doctors based on search term
   useEffect(() => {
     if (doctorSearchTerm.trim()) {
       const filtered = doctors.filter(doctor =>
-        doctor.name.toLowerCase().includes(doctorSearchTerm.toLowerCase()) ||
-        doctor.specialization.toLowerCase().includes(doctorSearchTerm.toLowerCase())
+        doctor.name.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase()) ||
+        doctor.specialization.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase())
       );
       setFilteredDoctors(filtered);
       setShowDoctorDropdown(true);
@@ -73,9 +106,10 @@ export function Clinics() {
   }, [doctorSearchTerm, doctors]);
 
   // Batch doctor count fetching with concurrency control to prevent triggering API Gateway rate limiting (HTTP 429)
-  const loadDoctorCountsInBatches = async (clinicList: Clinic[]) => {
+  const loadDoctorCountsInBatches = async (clinicList: Clinic[], requestId: number, requestSession: number) => {
     const batchSize = 2;
     for (let i = 0; i < clinicList.length; i += batchSize) {
+      if (listRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       const batch = clinicList.slice(i, i + batchSize);
       const batchResults = await Promise.all(
         batch.map(async (c) => {
@@ -87,6 +121,7 @@ export function Clinics() {
           }
         })
       );
+      if (listRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       setDoctorCounts(prev => {
         const next = { ...prev };
         batchResults.forEach(r => { next[r.id] = r.count; });
@@ -99,67 +134,111 @@ export function Clinics() {
   };
 
   const loadClinics = async () => {
+    const requestId = ++listRequestRef.current;
+    const requestSession = sessionKey;
     try {
       setIsLoading(true);
+      setListError(null);
       const data = await clinicAPI.getAllClinics();
+      if (listRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       const list = data || [];
       setClinics(list);
-      void loadDoctorCountsInBatches(list);
+      void loadDoctorCountsInBatches(list, requestId, requestSession);
     } catch (error) {
+      if (listRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       console.error('Failed to load clinics:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load clinics');
+      setListError(error instanceof Error ? error.message : 'Failed to load clinics');
     } finally {
-      setIsLoading(false);
+      if (listRequestRef.current === requestId && currentSessionRef.current === requestSession) setIsLoading(false);
     }
   };
 
   const loadDoctors = async () => {
+    const requestId = ++doctorsRequestRef.current;
+    const requestSession = sessionKey;
     try {
+      setDoctorsLoading(true);
+      setDoctorsError(null);
       const data = await doctorAPI.getAllDoctors();
+      if (doctorsRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       setDoctors(data || []);
     } catch (error) {
+      if (doctorsRequestRef.current !== requestId || currentSessionRef.current !== requestSession) return;
       console.error('Failed to load doctors:', error);
       setDoctors([]);
+      setDoctorsError(error instanceof Error ? error.message : 'Could not load the available doctors.');
+    } finally {
+      if (doctorsRequestRef.current === requestId && currentSessionRef.current === requestSession) setDoctorsLoading(false);
     }
   };
 
+  loadClinicsRef.current = loadClinics;
+  loadDoctorsRef.current = loadDoctors;
+
+  const allowedDoctorIds = () => [...doctors.map(doctor => doctor.doctorId), ...originalDoctorIdsRef.current];
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (savingRef.current) return;
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
+    const field = name as Exclude<ClinicField, 'doctorIds'>;
+    const next = {
+      ...formData,
       [name]: value,
       ...(name === 'province' && { district: '' }) // Reset district when province changes
-    }));
+    };
+    setFormData(next);
+    setError(null);
+    const errors = validateClinicFields(next, selectedDoctors, isEditMode, allowedDoctorIds());
+    setFieldErrors(previous => ({ ...previous, [field]: previous[field] ? errors[field] : undefined, ...(field === 'province' && { district: undefined }) }));
   };
 
+  const fieldProps = (field: ClinicField) => ({
+    id: `clinic-${field}`,
+    disabled: saving,
+    'aria-invalid': !!fieldErrors[field],
+    'aria-describedby': fieldErrors[field] ? `clinic-${field}-error` : undefined,
+    onBlur: () => {
+      if (savingRef.current) return;
+      if (field === 'clinicName' || field === 'location') setFormData(previous => ({ ...previous, [field]: previous[field].trim() }));
+      const message = validateClinicFields(formData, selectedDoctors, isEditMode, allowedDoctorIds())[field];
+      setFieldErrors(previous => ({ ...previous, [field]: message ?? previous[field] }));
+    },
+  });
+
+  const fieldError = (field: ClinicField) => fieldErrors[field]
+    ? <p id={`clinic-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors[field]}</p> : null;
+
   const handleDoctorSelect = (doctor: Doctor) => {
-    // Check if doctor is already selected
-    const isAlreadySelected = selectedDoctors.some(selected => selected.doctorId === doctor.doctorId);
-    
-    if (!isAlreadySelected) {
-      setSelectedDoctors(prev => [...prev, {
+    if (savingRef.current || assignmentsLoadingRef.current || isEditMode && !assignmentsReadyRef.current) return;
+    if (!isPositiveId(doctor.doctorId) || !doctors.some(item => item.doctorId === doctor.doctorId)) {
+      setFieldErrors(previous => ({ ...previous, doctorIds: 'Select a doctor from the available list.' }));
+      return;
+    }
+    setSelectedDoctors(prev => prev.some(selected => selected.doctorId === doctor.doctorId) ? prev : [...prev, {
         doctorId: doctor.doctorId,
         name: doctor.name,
         specialization: doctor.specialization
       }]);
-    }
     
     setDoctorSearchTerm('');
     setShowDoctorDropdown(false);
+    setFieldErrors(previous => ({ ...previous, doctorIds: undefined }));
   };
 
   const handleRemoveDoctor = (doctorId: number) => {
+    if (savingRef.current || assignmentsLoadingRef.current || isEditMode && !assignmentsReadyRef.current) return;
     setSelectedDoctors(prev => prev.filter(doctor => doctor.doctorId !== doctorId));
+    setFieldErrors(previous => ({ ...previous, doctorIds: previous.doctorIds && selectedDoctors.length <= 1 ? 'At least one doctor must be assigned to the clinic.' : undefined }));
   };
 
   const validateForm = () => {
-    if (isEditMode && doctorLookupFailed) {
+    if (isEditMode && !assignmentsReadyRef.current) {
       setError('Could not confirm the currently assigned doctors — retry loading them before saving, or this would remove all doctor assignments.');
       return false;
     }
-    const validationError = validateClinicForm(formData, selectedDoctors, isEditMode);
-    if (validationError) {
-      setError(validationError);
+    const errors = validateClinicFields(formData, selectedDoctors, isEditMode, allowedDoctorIds());
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
       return false;
     }
     return true;
@@ -167,14 +246,24 @@ export function Clinics() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRef.current || assignmentsLoadingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
     setError(null);
 
-    if (!validateForm()) {
+    if (!isPositiveId(user?.id) || isEditMode && (!editingClinic || !isPositiveId(editingClinic.id) || editingClinicIdRef.current !== editingClinic.id)) {
+      setError('The signed-in user or clinic could not be verified. Reload the page before saving.');
       return;
     }
 
+    if (!validateForm()) {
+      focusFirstInvalidField(form);
+      return;
+    }
+
+    const requestSession = sessionKey;
+    savingRef.current = true;
+    setSaving(true);
     try {
-      setIsLoading(true);
 
       // Step 1: Create clinic with doctor IDs included
       const clinicData = {
@@ -196,21 +285,38 @@ export function Clinics() {
         await clinicAPI.createClinic(clinicData);
       }
 
+      if (currentSessionRef.current !== requestSession) return;
+
       // Success
       setIsModalOpen(false);
       resetForm();
-      loadClinics();
+      void loadClinics();
       setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
       toast.success(isEditMode ? 'Clinic updated successfully' : 'Clinic created successfully');
     } catch (error) {
+      if (currentSessionRef.current !== requestSession) return;
       console.error('Failed to create/update clinic:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save clinic');
+      const errors = getApiFieldErrors(error, CLINIC_FIELDS, { selectedDoctors: 'doctorIds' });
+      setFieldErrors(errors);
+      if (Object.keys(errors).length) {
+        if (errors.status && !isEditMode) setError(errors.status);
+        focusFirstInvalidField(form);
+      }
+      else setError(error instanceof Error ? error.message : 'Failed to save clinic');
     } finally {
-      setIsLoading(false);
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
   const resetForm = () => {
+    assignmentRequestRef.current += 1;
+    editingClinicIdRef.current = null;
+    assignmentsReadyRef.current = false;
+    assignmentsLoadingRef.current = false;
+    originalDoctorIdsRef.current = [];
+    setAssignmentsLoading(false);
+    setFieldErrors({});
     setFormData({
       clinicName: '',
       province: '',
@@ -228,29 +334,60 @@ export function Clinics() {
     setDoctorLookupFailed(false);
   };
 
+  const closeModal = () => {
+    if (savingRef.current) return;
+    assignmentRequestRef.current += 1;
+    editingClinicIdRef.current = null;
+    setIsModalOpen(false);
+  };
+
+  const openCreate = () => {
+    if (savingRef.current) return;
+    resetForm();
+    setIsModalOpen(true);
+  };
+
   const loadAssignedDoctorsForEdit = async (clinicId: number) => {
-    setIsLoading(true);
+    if (savingRef.current || editingClinicIdRef.current !== clinicId || !isPositiveId(clinicId)) return;
+    const requestId = ++assignmentRequestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === assignmentRequestRef.current && currentSessionRef.current === requestSession && editingClinicIdRef.current === clinicId;
+    assignmentsLoadingRef.current = true;
+    assignmentsReadyRef.current = false;
+    setAssignmentsLoading(true);
     setError(null);
     try {
       const assignedDoctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
+      if (!isCurrent()) return;
       const selectedDoctorsForEdit = (assignedDoctors || []).map(cd => ({
         doctorId: cd.doctorRefId,
         name: cd.doctorName,
         specialization: cd.specialization,
       }));
+      if (selectedDoctorsForEdit.some(doctor => typeof doctor.doctorId !== 'number' || !isPositiveId(doctor.doctorId)) || new Set(selectedDoctorsForEdit.map(doctor => doctor.doctorId)).size !== selectedDoctorsForEdit.length) {
+        throw new Error('The assigned doctors could not be verified.');
+      }
+      originalDoctorIdsRef.current = selectedDoctorsForEdit.map(doctor => doctor.doctorId);
+      assignmentsReadyRef.current = true;
       setSelectedDoctors(selectedDoctorsForEdit);
       setDoctorLookupFailed(false);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to load assigned doctors:', error);
-      setSelectedDoctors([]);
       setDoctorLookupFailed(true);
       setError('Could not load the doctors currently assigned to this clinic. Saving is disabled until this loads successfully, so existing assignments are never accidentally cleared.');
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) {
+        assignmentsLoadingRef.current = false;
+        setAssignmentsLoading(false);
+      }
     }
   };
 
   const handleEdit = async (clinic: Clinic) => {
+    if (savingRef.current || !isPositiveId(clinic.id)) return;
+    resetForm();
+    editingClinicIdRef.current = clinic.id;
     setEditingClinic(clinic);
     setFormData({
       clinicName: clinic.clinicName,
@@ -258,7 +395,7 @@ export function Clinics() {
       district: clinic.district,
       location: clinic.location || '',
       scheduledDate: clinic.scheduledDate,
-      scheduledTime: clinic.scheduledTime.substring(0, 5), // Remove seconds
+      scheduledTime: clinic.scheduledTime,
       status: clinic.status
     });
 
@@ -269,19 +406,24 @@ export function Clinics() {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!clinicToDelete) return;
+    if (deleteRef.current || !clinicToDelete || !isPositiveId(clinicToDelete.id) || !isPositiveId(user?.id)) return;
+    const requestSession = sessionKey;
+    deleteRef.current = true;
     
     try {
       setDeleteLoading(true);
       await clinicAPI.deleteClinic(clinicToDelete.id);
-      loadClinics();
+      if (currentSessionRef.current !== requestSession) return;
+      void loadClinics();
       setRefreshTrigger(prev => prev + 1); // Trigger refresh of clinic cards
       toast.success('Clinic deleted successfully');
       setClinicToDelete(null);
     } catch (error) {
+      if (currentSessionRef.current !== requestSession) return;
       console.error('Failed to delete clinic:', error);
       toast.error('Failed to delete clinic. Please try again.');
     } finally {
+      deleteRef.current = false;
       setDeleteLoading(false);
     }
   };
@@ -297,14 +439,7 @@ export function Clinics() {
       sortBy: 'date'
     }),
     'date'
-  ).filter(clinic => {
-    // Additional location-based search for admin
-    const locationMatch = clinic.clinicName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         clinic.province.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         clinic.district.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (clinic.location && clinic.location.toLowerCase().includes(searchTerm.toLowerCase()));
-    return searchTerm === '' || locationMatch;
-  });
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -323,10 +458,8 @@ export function Clinics() {
               </h1>
             </div>
             <button 
-              onClick={() => {
-                resetForm();
-                setIsModalOpen(true);
-              }}
+              onClick={openCreate}
+              disabled={saving}
               className="flex items-center gap-2 px-6 py-3 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors"
             >
               <PlusIcon className="w-5 h-5" />
@@ -340,6 +473,7 @@ export function Clinics() {
               <div className="flex-1 relative">
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input 
+                  aria-label="Search clinics"
                   type="text" 
                   placeholder="Search by clinic name or location..."
                   value={searchTerm}
@@ -348,8 +482,11 @@ export function Clinics() {
                 />
               </div>
               <select 
+                aria-label="Filter clinics by status"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={e => {
+                  if (e.target.value === 'All Status' || CLINIC_STATUSES.includes(e.target.value)) setStatusFilter(e.target.value);
+                }}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
                 <option>All Status</option>
@@ -370,9 +507,10 @@ export function Clinics() {
           )}
 
           {/* Error State */}
-          {error && !isModalOpen && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-              {error}
+          {listError && (
+            <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+              {listError}
+              <button type="button" onClick={() => void loadClinics()} disabled={isLoading} className="ml-3 underline">Retry</button>
             </div>
           )}
 
@@ -390,7 +528,7 @@ export function Clinics() {
           </div>
 
           {/* Empty State */}
-          {!isLoading && filteredClinics.length === 0 && (
+          {!isLoading && !listError && filteredClinics.length === 0 && (
             <div className="text-center py-12">
               <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No clinics found</h3>
@@ -401,7 +539,7 @@ export function Clinics() {
               </p>
               {!searchTerm && statusFilter === 'All Status' && (
                 <button 
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={openCreate}
                   className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
                 >
                   Schedule Clinic
@@ -422,7 +560,10 @@ export function Clinics() {
                   {isEditMode ? 'Edit Clinic' : 'Schedule New Clinic'}
                 </h2>
                 <button
-                  onClick={() => setIsModalOpen(false)}
+                  type="button"
+                  onClick={closeModal}
+                  disabled={saving}
+                  aria-label="Close clinic form"
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <XIcon className="w-5 h-5" />
@@ -430,18 +571,20 @@ export function Clinics() {
               </div>
 
               {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
                 {/* Clinic Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="clinic-clinicName" className="block text-sm font-medium text-gray-700 mb-1">
                     Clinic Name *
                   </label>
                   <input
+                    {...fieldProps('clinicName')}
+                    maxLength={CLINIC_NAME_MAX_LENGTH}
                     type="text"
                     name="clinicName"
                     value={formData.clinicName}
@@ -450,15 +593,17 @@ export function Clinics() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     required
                   />
+                  {fieldError('clinicName')}
                 </div>
 
                 {/* Province and District */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="clinic-province" className="block text-sm font-medium text-gray-700 mb-1">
                       Province *
                     </label>
                     <select
+                      {...fieldProps('province')}
                       name="province"
                       value={formData.province}
                       onChange={handleInputChange}
@@ -470,34 +615,39 @@ export function Clinics() {
                         <option key={province} value={province}>{province}</option>
                       ))}
                     </select>
+                    {fieldError('province')}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="clinic-district" className="block text-sm font-medium text-gray-700 mb-1">
                       District *
                     </label>
                     <select
+                      {...fieldProps('district')}
                       name="district"
                       value={formData.district}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
-                      disabled={!formData.province}
+                      disabled={saving || !formData.province}
                     >
                       <option value="">Select District</option>
-                      {formData.province && (PROVINCES_DISTRICTS[formData.province as keyof typeof PROVINCES_DISTRICTS] || []).map(district => (
+                      {getDistrictOptions(formData.province).map(district => (
                         <option key={district} value={district}>{district}</option>
                       ))}
                     </select>
+                    {fieldError('district')}
                   </div>
                 </div>
 
                 {/* Location */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="clinic-location" className="block text-sm font-medium text-gray-700 mb-1">
                     Specific Location (Optional)
                   </label>
                   <input
+                    {...fieldProps('location')}
+                    maxLength={CLINIC_LOCATION_MAX_LENGTH}
                     type="text"
                     name="location"
                     value={formData.location}
@@ -505,47 +655,54 @@ export function Clinics() {
                     placeholder="e.g., Town Center, Near Hospital"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                   />
+                  {fieldError('location')}
                 </div>
 
                 {/* Date and Time */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="clinic-scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Date *
                     </label>
                     <input
+                      {...fieldProps('scheduledDate')}
                       type="date"
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
-                      min={isEditMode ? undefined : new Date().toISOString().split('T')[0]}
+                      min={isEditMode ? undefined : localDateString()}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
+                    {fieldError('scheduledDate')}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="clinic-scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Time *
                     </label>
                     <input
+                      {...fieldProps('scheduledTime')}
                       type="time"
+                      step={1}
                       name="scheduledTime"
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
+                    {fieldError('scheduledTime')}
                   </div>
                 </div>
 
                 {/* Status (only in edit mode) */}
                 {isEditMode && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="clinic-status" className="block text-sm font-medium text-gray-700 mb-1">
                       Status
                     </label>
                     <select
+                      {...fieldProps('status')}
                       name="status"
                       value={formData.status}
                       onChange={handleInputChange}
@@ -556,24 +713,25 @@ export function Clinics() {
                       <option value="COMPLETED">COMPLETED</option>
                       <option value="CANCELLED">CANCELLED</option>
                     </select>
+                    {fieldError('status')}
                   </div>
                 )}
 
                 {/* Doctor Assignment */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="clinic-doctorIds" className="block text-sm font-medium text-gray-700 mb-1">
                     {isEditMode ? 'Update Assigned Doctors' : 'Assign Doctors'} *
                   </label>
 
                   {/* Loading state for edit mode */}
-                  {isEditMode && isLoading && (
+                  {isEditMode && assignmentsLoading && (
                     <div className="text-center py-4">
                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#38A3A5]"></div>
                       <p className="mt-2 text-sm text-gray-600">Loading assigned doctors...</p>
                     </div>
                   )}
 
-                  {isEditMode && !isLoading && doctorLookupFailed && (
+                  {isEditMode && !assignmentsLoading && doctorLookupFailed && (
                     <div className="mb-3 flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                       <p className="text-sm text-red-700">Couldn't confirm current assignments.</p>
                       <button
@@ -587,26 +745,34 @@ export function Clinics() {
                   )}
 
                   {/* Only show doctor selection when not loading */}
-                  {!(isEditMode && isLoading) && (
+                  {!(isEditMode && assignmentsLoading) && (
                     <>
+                    {doctorsLoading && <p role="status" className="mb-2 text-sm text-gray-600">Loading available doctors...</p>}
+                    {doctorsError && <div role="alert" className="mb-3 text-sm text-red-700">
+                      {doctorsError}
+                      <button type="button" disabled={saving || doctorsLoading} onClick={() => void loadDoctors()} className="ml-2 underline">Retry doctor search</button>
+                    </div>}
                     {/* Doctor Search */}
                     <div className="relative mb-3">
                       <input
+                        {...fieldProps('doctorIds')}
                         type="text"
+                        disabled={saving || assignmentsLoading || doctorLookupFailed || doctorsLoading || !!doctorsError}
                         value={doctorSearchTerm}
-                        onChange={(e) => setDoctorSearchTerm(e.target.value)}
+                        onChange={e => { if (!savingRef.current) setDoctorSearchTerm(e.target.value); }}
                         placeholder="Search doctors by name or specialization..."
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       />
                       
                       {/* Doctor Dropdown */}
-                      {showDoctorDropdown && (
+                      {showDoctorDropdown && !doctorsLoading && !doctorsError && !doctorLookupFailed && (
                         <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
                           {filteredDoctors.length > 0 ? (
                             filteredDoctors.map(doctor => (
                               <button
                                 key={doctor.doctorId}
                                 type="button"
+                                disabled={saving || doctorsLoading || doctorLookupFailed}
                                 onClick={() => handleDoctorSelect(doctor)}
                                 className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                               >
@@ -637,6 +803,8 @@ export function Clinics() {
                               </div>
                               <button
                                 type="button"
+                                disabled={saving || assignmentsLoading || doctorLookupFailed}
+                                aria-label={`Remove ${doctor.name} from this clinic`}
                                 onClick={() => handleRemoveDoctor(doctor.doctorId)}
                                 className="text-red-600 hover:text-red-800"
                               >
@@ -649,24 +817,26 @@ export function Clinics() {
                     )}
                     </>
                   )}
+                  {fieldError('doctorIds')}
                 </div>
 
                 {/* Submit Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={closeModal}
+                    disabled={saving}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={isLoading || (isEditMode && doctorLookupFailed)}
+                    disabled={saving || assignmentsLoading || (isEditMode && doctorLookupFailed)}
                     title={isEditMode && doctorLookupFailed ? "Can't save until assigned doctors load successfully" : undefined}
                     className="flex-1 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? 'Saving...' : (isEditMode ? 'Update Clinic' : 'Schedule Clinic')}
+                    {saving ? 'Saving...' : assignmentsLoading ? 'Loading assignments...' : (isEditMode ? 'Update Clinic' : 'Schedule Clinic')}
                   </button>
                 </div>
               </form>
@@ -683,7 +853,7 @@ export function Clinics() {
         confirmLabel="Delete"
         confirmClassName="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setClinicToDelete(null)}
+        onCancel={() => { if (!deleteRef.current) setClinicToDelete(null); }}
         loading={deleteLoading}
       />
     </div>

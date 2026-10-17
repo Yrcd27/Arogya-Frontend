@@ -15,10 +15,15 @@ import { ApiError } from '../../services/httpClient';
 import { StatusBadge } from '../../components/StatusBadge';
 import { PaginationFooter } from '../../components/PaginationFooter';
 import { EmptyState } from '../../components/EmptyState';
+import { useAuth } from '../../hooks/useAuth';
+import { isPositiveId } from '../../utils/clinicalValidation';
 
 type ResultAvailability = 'checking' | 'present' | 'absent' | 'error';
 
 export function LabTests() {
+  const { sessionKey } = useAuth();
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
   const { profile, status: profileStatus } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
@@ -43,12 +48,29 @@ export function LabTests() {
   const loadLabTestsRef = useRef<() => Promise<void>>(async () => undefined);
   const consultationCacheRef = useRef<Map<number, Promise<{ patientId: number; name: string }>>>(new Map());
   const checkedResultsRef = useRef<Set<number>>(new Set());
+  const resultChecksInFlightRef = useRef<Set<number>>(new Set());
+  const listRequestRef = useRef(0);
+  const actionRef = useRef(false);
+  const hydrateResultPresenceRef = useRef<(tests: LabTest[]) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
+    currentSessionRef.current = sessionKey;
+    setShowSubmitModal(false);
+    setShowEditModal(false);
+    setShowDetailsModal(false);
+    setTestToSubmit(null);
+    setSelectedTest(null);
+    setEditingResult(null);
+    setPatientByConsultation({});
+    consultationCacheRef.current.clear();
     void loadLabTestsRef.current();
-  }, []);
+    return () => { listRequestRef.current += 1; currentSessionRef.current = -1; };
+  }, [sessionKey]);
 
   const loadLabTests = async () => {
+    const requestId = ++listRequestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === listRequestRef.current && currentSessionRef.current === requestSession;
     setLoading(true);
     setError('');
     try {
@@ -57,32 +79,41 @@ export function LabTests() {
       let data: LabTest[] = [];
       for (;;) {
         const { items, total } = await labTestAPI.list({ page, size: pageSize });
+        if (!isCurrent()) return;
         data = data.concat(items);
         if (items.length === 0 || data.length >= total) break;
         page += 1;
       }
+      checkedResultsRef.current.clear();
+      resultChecksInFlightRef.current.clear();
+      setResultAvailabilityByLabTest({});
+      setResultAvailabilityErrors({});
       setLabTests(data);
-      void hydratePatientDetails(data);
+      void hydratePatientDetails(data, isCurrent);
     } catch (err) {
+      if (!isCurrent()) return;
       setError('Failed to load lab tests');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   };
 
   loadLabTestsRef.current = loadLabTests;
 
-  const hydratePatientDetails = async (tests: LabTest[]) => {
+  const hydratePatientDetails = async (tests: LabTest[], isCurrent: () => boolean) => {
     const consultationIds = Array.from(new Set(tests.map(t => t.consultationId)));
-    const missing = consultationIds.filter(id => !patientByConsultation[id] && !consultationCacheRef.current.has(id));
+    const missing = consultationIds.filter(id => !patientByConsultation[id]);
     if (missing.length === 0) return;
 
     // Use promise cache to eliminate redundant consultation and patient lookups (N+1 defense)
     const promises = missing.map((consultationId) => {
+      const cached = consultationCacheRef.current.get(consultationId);
+      if (cached) return cached.then(result => ({ ...result, consultationId }));
       const promise = (async () => {
         try {
           const consultation = await consultationAPI.get(consultationId);
+          if (!isCurrent()) return { consultationId, patientId: 0, name: '-' };
           const patientId = consultation.patientId;
 
           try {
@@ -94,6 +125,7 @@ export function LabTests() {
           }
 
           try {
+            if (!isCurrent()) return { consultationId, patientId: 0, name: '-' };
             const user = await userAPI.getUser(patientId);
             const name = user?.username || `Patient #${patientId}`;
             return { consultationId, patientId, name };
@@ -113,17 +145,21 @@ export function LabTests() {
     results.forEach((r) => {
       next[r.consultationId] = { patientId: r.patientId, name: r.name };
     });
-    setPatientByConsultation(prev => ({ ...prev, ...next }));
+    if (isCurrent()) setPatientByConsultation(prev => ({ ...prev, ...next }));
   };
 
-  const hydrateResultPresence = async (tests: LabTest[]) => {
+  const hydrateResultPresence = async (tests: LabTest[], forceRetry = false) => {
+    const requestId = listRequestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === listRequestRef.current && currentSessionRef.current === requestSession;
     // Only check results for tests that haven't been verified yet
     const candidateIds = tests
-      .filter(t => (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && !checkedResultsRef.current.has(t.id))
+      .filter(t => (t.status === 'PENDING' || t.status === 'IN_PROGRESS') && !resultChecksInFlightRef.current.has(t.id) && (forceRetry || !checkedResultsRef.current.has(t.id)))
       .map(t => t.id);
     if (candidateIds.length === 0) return;
 
     candidateIds.forEach(id => checkedResultsRef.current.add(id));
+    candidateIds.forEach(id => resultChecksInFlightRef.current.add(id));
 
     setResultAvailabilityByLabTest(previous => ({
       ...previous,
@@ -138,12 +174,14 @@ export function LabTests() {
     // Check with small batches of 3 to avoid query spikes
     const batchSize = 3;
     for (let i = 0; i < candidateIds.length; i += batchSize) {
+      if (!isCurrent()) return;
       const batch = candidateIds.slice(i, i + batchSize);
       const checks = await Promise.all(
         batch.map(async (labTestId) => {
           try {
             const result = await medicalRecordsAPI.getByLabTestId(labTestId);
-            return { labTestId, availability: result?.id ? 'present' as const : 'error' as const };
+            if (!isPositiveId(result?.id) || result.labTestId !== labTestId) throw new Error('The result response could not be verified.');
+            return { labTestId, availability: 'present' as const };
           } catch (err) {
             if (err instanceof ApiError && err.status === 404) return { labTestId, availability: 'absent' as const };
             return {
@@ -154,6 +192,8 @@ export function LabTests() {
           }
         })
       );
+      if (!isCurrent()) return;
+      batch.forEach(id => resultChecksInFlightRef.current.delete(id));
 
       const next: Record<number, ResultAvailability> = {};
       const nextErrors: Record<number, string> = {};
@@ -166,19 +206,22 @@ export function LabTests() {
     }
   };
 
+  hydrateResultPresenceRef.current = hydrateResultPresence;
+
   const filteredTests = useMemo(() => {
     let filtered = labTests;
 
-    if (assignedToMeOnly && profile?.id) {
-      filtered = filtered.filter(test => test.assignedTechnicianId === profile.id);
+    if (assignedToMeOnly) {
+      filtered = profileStatus === 'ready' && isPositiveId(profile?.id)
+        ? filtered.filter(test => test.assignedTechnicianId === profile?.id) : [];
     }
 
     if (statusFilter !== 'ALL') {
       filtered = filtered.filter(test => test.status === statusFilter);
     }
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (searchTerm.trim()) {
+      const term = searchTerm.trim().toLowerCase();
       filtered = filtered.filter(test =>
         test.testName.toLowerCase().includes(term) ||
         test.id.toString().includes(term) ||
@@ -189,7 +232,7 @@ export function LabTests() {
     }
 
     return filtered;
-  }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, searchTerm, statusFilter]);
+  }, [assignedToMeOnly, labTests, patientByConsultation, profile?.id, profileStatus, searchTerm, statusFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -200,10 +243,10 @@ export function LabTests() {
   const paginatedTests = filteredTests.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   useEffect(() => {
-    if (paginatedTests.length > 0) {
-      void hydrateResultPresence(paginatedTests);
+    if (!loading && paginatedTests.length > 0) {
+      void hydrateResultPresenceRef.current(paginatedTests);
     }
-  }, [paginatedTests]);
+  }, [loading, paginatedTests]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -237,6 +280,15 @@ export function LabTests() {
   };
 
   const handleTakeTest = async (test: LabTest) => {
+    if (actionRef.current) return;
+    if (!isPositiveId(test.id) || !isPositiveId(profile?.id) || profileStatus !== 'ready') {
+      setError('Your technician profile or the selected test could not be verified. Refresh before continuing.');
+      return;
+    }
+    if (test.assignedTechnicianId && test.assignedTechnicianId !== profile?.id) {
+      setActionErrors(previous => ({ ...previous, [test.id]: 'This test is assigned to another technician.' }));
+      return;
+    }
     const resultAvailability = resultAvailabilityByLabTest[test.id] ?? 'checking';
     if (resultAvailability === 'present') {
       handleViewDetails(test);
@@ -257,12 +309,13 @@ export function LabTests() {
       return;
     }
     if (!profile?.id) {
-      setError(profileStatus === 'not-found'
-        ? 'Please complete your profile first, then try again.'
-        : 'Your technician profile has not loaded yet — please try again in a moment.');
+      setError('Your technician profile has not loaded yet. Please refresh before continuing.');
       return;
     }
     if (actionLoadingId !== null) return;
+    if (test.status !== 'PENDING') return;
+    const requestSession = sessionKey;
+    actionRef.current = true;
     setActionLoadingId(test.id);
     setActionErrors(previous => {
       const next = { ...previous };
@@ -276,13 +329,17 @@ export function LabTests() {
       }
       if (test.assignedTechnicianId !== profile.id) {
         await labTestAPI.assign(test.id, profile.id);
+        if (currentSessionRef.current !== requestSession) return;
         assigned = true;
       }
       const started = await labTestAPI.start(test.id);
+      if (currentSessionRef.current !== requestSession) return;
+      if (started.id !== test.id || started.consultationId !== test.consultationId || started.status !== 'IN_PROGRESS') throw new Error('The server did not confirm this test as in progress. Refresh the worklist.');
       setLabTests(prev => prev.map(t => (t.id === test.id ? started : t)));
       setTestToSubmit(started);
       setShowSubmitModal(true);
     } catch (err) {
+      if (currentSessionRef.current !== requestSession) return;
       setActionErrors(previous => ({
         ...previous,
         [test.id]: assigned
@@ -291,6 +348,7 @@ export function LabTests() {
       }));
       await loadLabTests();
     } finally {
+      actionRef.current = false;
       setActionLoadingId(null);
     }
   };
@@ -315,7 +373,10 @@ export function LabTests() {
   };
 
   const handleDelete = async (resultId: number) => {
+    if (!isPositiveId(resultId)) throw new Error('The selected result could not be verified. Reopen it before deleting.');
+    const requestSession = sessionKey;
     await medicalRecordsAPI.delete(resultId);
+    if (currentSessionRef.current !== requestSession) return;
     setShowDetailsModal(false);
     setSelectedTest(null);
     await loadLabTests();
@@ -360,6 +421,7 @@ export function LabTests() {
               {Object.entries(statusCounts).map(([status, count]) => (
                 <button
                   key={status}
+                  aria-pressed={statusFilter === status}
                   onClick={() => setStatusFilter(status)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${statusFilter === status
                     ? 'bg-[#38A3A5] text-white'
@@ -379,6 +441,7 @@ export function LabTests() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
+                  aria-label="Search lab tests"
                   placeholder="Search by test name, patient, ID, or consultation ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -389,12 +452,14 @@ export function LabTests() {
                 <input
                   type="checkbox"
                   checked={assignedToMeOnly}
+                  disabled={!assignedToMeOnly && (profileStatus !== 'ready' || !isPositiveId(profile?.id))}
                   onChange={(e) => setAssignedToMeOnly(e.target.checked)}
                   className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
                 />
                 Assigned to me
               </label>
             </div>
+            {(profileStatus !== 'ready' || !isPositiveId(profile?.id)) && <p className="mt-2 text-sm text-gray-600" role="status">{profileStatus === 'loading' ? 'Verifying your technician profile before filtering assignments…' : 'Your technician profile could not be verified. Assignment filtering is unavailable; you can still view all tests.'}</p>}
           </div>
 
           {error && (
@@ -407,7 +472,7 @@ export function LabTests() {
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <div className="text-gray-600">Loading lab tests...</div>
             </div>
-          ) : filteredTests.length === 0 ? (
+          ) : error || assignedToMeOnly && (profileStatus !== 'ready' || !isPositiveId(profile?.id)) ? null : filteredTests.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm">
               <EmptyState title="No lab tests found" description="Try adjusting your search or filters." />
             </div>
@@ -476,7 +541,7 @@ export function LabTests() {
                           ) : resultAvailability === 'error' ? (
                             <button
                               type="button"
-                              onClick={() => void hydrateResultPresence([test])}
+                              onClick={() => void hydrateResultPresence([test], true)}
                               className="px-4 py-2 rounded-lg border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50"
                             >
                               Retry check
@@ -519,6 +584,7 @@ export function LabTests() {
       {/* Test Result Details Modal */}
       {showDetailsModal && selectedTest && (
         <TestResultDetailsModal
+          key={`${sessionKey}:${selectedTest.id}`}
           labTest={selectedTest}
           onClose={() => {
             setShowDetailsModal(false);
@@ -533,6 +599,7 @@ export function LabTests() {
       {/* Edit Test Result Modal */}
       {showEditModal && editingResult && (
         <EditTestResultModal
+          key={`${sessionKey}:${editingResult.id}`}
           testResult={editingResult}
           onClose={() => {
             setShowEditModal(false);
@@ -545,6 +612,7 @@ export function LabTests() {
       {/* Submit Test Result Modal */}
       {showSubmitModal && testToSubmit && profile?.id && (
         <SubmitTestResultModal
+          key={`${sessionKey}:${testToSubmit.id}`}
           labTest={testToSubmit}
           technicianId={profile.id}
           onClose={() => {

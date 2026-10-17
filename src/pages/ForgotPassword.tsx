@@ -17,8 +17,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { userAPI } from '../services/userService';
+import { ApiError } from '../services/httpClient';
+import {
+  EMAIL_MAX_LENGTH, PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError,
+  getOtpError, getPasswordStrength, getResetPasswordCriteria, getResetPasswordError, normalizeEmail,
+  type FieldErrors,
+} from '../utils/formValidation';
 
 type Step = 1 | 2 | 3 | 4;
+type RecoveryField = 'email' | 'otp' | 'newPassword' | 'confirmPassword';
 
 export function ForgotPassword() {
   const navigate = useNavigate();
@@ -26,6 +33,9 @@ export function ForgotPassword() {
   // State
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState<boolean>(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<RecoveryField>>({});
+  const [formError, setFormError] = useState('');
+  const pendingRef = useRef(false);
 
   // Step 1: Email
   const [email, setEmail] = useState<string>('');
@@ -68,32 +78,64 @@ export function ForgotPassword() {
   // Auto-focus first OTP input when entering step 2
   useEffect(() => {
     if (step === 2) {
-      setTimeout(() => {
+      const timer = window.setTimeout(() => {
         otpInputsRef.current[0]?.focus();
       }, 100);
+      return () => window.clearTimeout(timer);
     }
   }, [step]);
+
+  const returnToEmail = () => {
+    if (pendingRef.current) return;
+    setStep(1);
+    setOtp(['', '', '', '', '', '']);
+    setResetToken('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setFieldErrors({});
+    setFormError('');
+  };
+
+  const showRequestError = (cause: unknown, form: HTMLFormElement | null, fields: readonly RecoveryField[], fallback: string) => {
+    const errors = getApiFieldErrors(cause, fields, { password: 'newPassword', code: 'otp' });
+    if (Object.keys(errors).length && form) {
+      setFieldErrors(errors);
+      focusFirstInvalidField(form);
+    } else {
+      setFormError(cause instanceof Error ? cause.message : fallback);
+    }
+  };
 
   // ----------------------------------------------------------------------
   // Step 1 Handler: Request OTP
   // ----------------------------------------------------------------------
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      toast.error('Please enter your email address.');
+    if (pendingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
+    const cleanEmail = normalizeEmail(email);
+    const emailError = getEmailError(cleanEmail);
+    setEmail(cleanEmail);
+    setFormError('');
+    setFieldErrors({ email: emailError });
+    if (emailError) {
+      focusFirstInvalidField(form);
       return;
     }
 
+    pendingRef.current = true;
     setLoading(true);
     try {
       const res = await userAPI.forgotPassword(cleanEmail);
       toast.success(res.message || 'Verification code sent to your email.');
+      setOtp(['', '', '', '', '', '']);
+      setResetToken('');
       setStep(2);
       setResendCooldown(60);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send verification code. Please try again.');
+      showRequestError(err, form, ['email'], 'Failed to send verification code. Please try again.');
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   };
@@ -102,90 +144,107 @@ export function ForgotPassword() {
   // Step 2 Handlers: OTP Inputs & Verification
   // ----------------------------------------------------------------------
   const handleOtpChange = (index: number, value: string) => {
-    const sanitized = value.replace(/\D/g, ''); // Numbers only
-
-    if (!sanitized) {
-      const updated = [...otp];
-      updated[index] = '';
-      setOtp(updated);
+    setFormError('');
+    if (!/^[0-9]*$/.test(value) || (value.length !== 1 && value.length !== 0 && value.length !== 6)) {
+      setFieldErrors(previous => ({ ...previous, otp: 'Use numbers only. Paste the complete 6-digit code.' }));
       return;
     }
-
-    // Handle single character typed
+    if (value.length === 6) {
+      setOtp(value.split(''));
+      setFieldErrors(previous => ({ ...previous, otp: undefined }));
+      otpInputsRef.current[5]?.focus();
+      return;
+    }
     const updated = [...otp];
-    updated[index] = sanitized[sanitized.length - 1];
+    updated[index] = value;
     setOtp(updated);
-
-    // Auto-advance to next input
-    if (index < 5) {
+    setFieldErrors(previous => ({ ...previous, otp: previous.otp ? getOtpError(updated.join('')) : undefined }));
+    if (value && index < 5) {
       otpInputsRef.current[index + 1]?.focus();
     }
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace') {
-      if (!otp[index] && index > 0) {
-        otpInputsRef.current[index - 1]?.focus();
-      }
+      e.preventDefault();
+      const target = otp[index] || index === 0 ? index : index - 1;
+      setOtp(previous => previous.map((digit, digitIndex) => digitIndex === target ? '' : digit));
+      setFieldErrors(previous => ({ ...previous, otp: undefined }));
+      setFormError('');
+      otpInputsRef.current[target]?.focus();
     } else if (e.key === 'ArrowLeft' && index > 0) {
+      e.preventDefault();
       otpInputsRef.current[index - 1]?.focus();
     } else if (e.key === 'ArrowRight' && index < 5) {
+      e.preventDefault();
       otpInputsRef.current[index + 1]?.focus();
     }
   };
 
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').trim().replace(/\D/g, '');
-    if (!pastedData) return;
-
-    const digits = pastedData.slice(0, 6).split('');
-    const updated = ['', '', '', '', '', ''];
-    digits.forEach((digit, i) => {
-      if (i < 6) updated[i] = digit;
-    });
-    setOtp(updated);
-
-    // Focus last filled or 6th input
-    const nextIndex = Math.min(digits.length, 5);
-    otpInputsRef.current[nextIndex]?.focus();
+    const pastedData = e.clipboardData.getData('text').trim();
+    const message = getOtpError(pastedData);
+    setFieldErrors(previous => ({ ...previous, otp: message }));
+    setFormError('');
+    if (message) return;
+    setOtp(pastedData.split(''));
+    otpInputsRef.current[5]?.focus();
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pendingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
     const code = otp.join('');
-    if (code.length !== 6) {
-      toast.error('Please enter the complete 6-digit verification code.');
+    const message = getOtpError(code);
+    setFieldErrors({ otp: message });
+    setFormError('');
+    if (message) {
+      otpInputsRef.current[Math.max(0, otp.findIndex(digit => !digit))]?.focus();
       return;
     }
 
+    pendingRef.current = true;
     setLoading(true);
     try {
-      const res = await userAPI.verifyOtp(email.trim(), code);
+      const res = await userAPI.verifyOtp(normalizeEmail(email), code);
+      if (!res || typeof res.resetToken !== 'string' || !res.resetToken.trim()) {
+        throw new Error('Verification could not be completed. Please verify your code again.');
+      }
       setResetToken(res.resetToken);
       toast.success('Code verified successfully! Please enter your new password.');
       setStep(3);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Invalid or expired verification code.');
+      if (err instanceof ApiError && err.status === 401) {
+        setFieldErrors({ otp: err.message || 'Invalid or expired verification code.' });
+        focusFirstInvalidField(form);
+      } else {
+        showRequestError(err, form, ['otp'], 'Invalid or expired verification code.');
+      }
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   };
 
   const handleResendOtp = async () => {
-    if (!canResend || loading) return;
-
+    if (!canResend || pendingRef.current) return;
+    pendingRef.current = true;
     setLoading(true);
+    setFormError('');
+    setFieldErrors({});
     try {
-      const res = await userAPI.forgotPassword(email.trim());
+      const res = await userAPI.forgotPassword(normalizeEmail(email));
       toast.success(res.message || 'A new verification code has been sent.');
       setOtp(['', '', '', '', '', '']);
       setResendCooldown(60);
       setCanResend(false);
-      otpInputsRef.current[0]?.focus();
+      window.requestAnimationFrame(() => otpInputsRef.current[0]?.focus());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to resend code.');
+      showRequestError(err, null, [], 'Failed to resend code. Please try again.');
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   };
@@ -193,39 +252,44 @@ export function ForgotPassword() {
   // ----------------------------------------------------------------------
   // Step 3 Handler: Reset Password
   // ----------------------------------------------------------------------
-  const passwordCriteria = {
-    length: newPassword.length >= 8,
-    uppercase: /[A-Z]/.test(newPassword),
-    lowercase: /[a-z]/.test(newPassword),
-    number: /[0-9]/.test(newPassword),
-    special: /[!@#$%^&*(),.?":{}|<>]/.test(newPassword),
-  };
+  const passwordCriteria = getResetPasswordCriteria(newPassword);
 
-  const passedCriteriaCount = Object.values(passwordCriteria).filter(Boolean).length;
-  const isPasswordStrong = passedCriteriaCount >= 4 && passwordCriteria.length;
+  const passwordStrength = getPasswordStrength(newPassword);
+  const showPasswordRequirements = !!newPassword && !!getResetPasswordError(newPassword) && fieldErrors.newPassword !== PASSWORD_REQUIREMENTS;
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!isPasswordStrong) {
-      toast.error('Password does not meet minimum security requirements.');
+    if (pendingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
+    const errors: FieldErrors<RecoveryField> = {
+      newPassword: getResetPasswordError(newPassword),
+      confirmPassword: getConfirmationError(newPassword, confirmPassword),
+    };
+    setFieldErrors(errors);
+    setFormError('');
+    if (Object.values(errors).some(Boolean)) {
+      focusFirstInvalidField(form);
+      return;
+    }
+    if (!resetToken.trim()) {
+      setFormError('Your password reset session is missing. Please start over to request another code.');
       return;
     }
 
-    if (!passwordsMatch) {
-      toast.error('Passwords do not match. Please verify both fields.');
-      return;
-    }
-
+    pendingRef.current = true;
     setLoading(true);
     try {
-      const res = await userAPI.resetPassword(email.trim(), resetToken, newPassword);
+      const res = await userAPI.resetPassword(normalizeEmail(email), resetToken, newPassword);
       toast.success(res.message || 'Password reset successfully!');
+      setResetToken('');
+      setNewPassword('');
+      setConfirmPassword('');
       setStep(4);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reset password. Please start over.');
+      showRequestError(err, form, ['newPassword', 'confirmPassword'], 'Failed to reset password. Please try again.');
     } finally {
+      pendingRef.current = false;
       setLoading(false);
     }
   };
@@ -330,20 +394,39 @@ export function ForgotPassword() {
 
         {/* Card Content */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 transition-all duration-300">
+          {formError && (
+            <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p>{formError}</p>
+              {step > 1 && <button type="button" onClick={returnToEmail} disabled={loading} className="mt-2 font-medium underline disabled:opacity-50">Start over</button>}
+            </div>
+          )}
           {/* STEP 1: Enter Email */}
           {step === 1 && (
-            <form onSubmit={handleRequestOtp} className="space-y-6">
+            <form onSubmit={handleRequestOtp} noValidate className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Registered Email Address</label>
+                <label htmlFor="recovery-email" className="block text-sm font-medium text-gray-900 mb-2">Registered Email Address</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
                     <Mail className="w-5 h-5" />
                   </span>
                   <input
+                    id="recovery-email"
+                    name="email"
                     type="email"
+                    maxLength={EMAIL_MAX_LENGTH}
+                    aria-invalid={!!fieldErrors.email}
+                    aria-describedby={fieldErrors.email ? 'recovery-email-error' : undefined}
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setFormError('');
+                      setFieldErrors(previous => ({ ...previous, email: previous.email ? getEmailError(e.target.value) : undefined }));
+                    }}
+                    onBlur={() => {
+                      setEmail(normalizeEmail(email));
+                      setFieldErrors(previous => ({ ...previous, email: getEmailError(email) ?? previous.email }));
+                    }}
                     placeholder="e.g. name@example.com"
                     className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent text-gray-900 text-sm"
                     required
@@ -351,6 +434,7 @@ export function ForgotPassword() {
                     autoFocus
                   />
                 </div>
+                {fieldErrors.email && <p id="recovery-email-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.email}</p>}
                 <p className="mt-2 text-xs text-gray-500">
                   We will send a 6-digit one-time password (OTP) to this address.
                 </p>
@@ -389,7 +473,7 @@ export function ForgotPassword() {
 
           {/* STEP 2: Verify 6-digit OTP */}
           {step === 2 && (
-            <form onSubmit={handleVerifyOtp} className="space-y-6">
+            <form onSubmit={handleVerifyOtp} noValidate className="space-y-6">
               <div className="bg-[#38A3A5]/5 border border-[#38A3A5]/20 rounded-xl p-3.5 flex items-center justify-between text-xs text-gray-700">
                 <div className="flex items-center gap-2 truncate">
                   <Mail className="w-4 h-4 text-[#38A3A5] shrink-0" />
@@ -397,10 +481,8 @@ export function ForgotPassword() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setStep(1);
-                    setOtp(['', '', '', '', '', '']);
-                  }}
+                  onClick={returnToEmail}
+                  disabled={loading}
                   className="text-[#38A3A5] font-semibold hover:underline shrink-0 ml-2"
                 >
                   Change
@@ -408,25 +490,33 @@ export function ForgotPassword() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-3 text-center">
+                <p id="recovery-otp-label" className="block text-sm font-medium text-gray-900 mb-3 text-center">
                   Enter 6-Digit Code
-                </label>
-                <div className="flex items-center justify-between gap-2" onPaste={handleOtpPaste}>
+                </p>
+                <div role="group" aria-labelledby="recovery-otp-label" className="flex items-center justify-between gap-2" onPaste={handleOtpPaste}>
                   {otp.map((digit, idx) => (
                     <input
                       key={idx}
+                      id={`recovery-otp-${idx}`}
+                      name={`otp-${idx + 1}`}
+                      aria-label={`Verification code digit ${idx + 1} of 6`}
+                      aria-invalid={!!fieldErrors.otp}
+                      aria-describedby={fieldErrors.otp ? 'recovery-otp-error' : undefined}
                       ref={(el) => (otpInputsRef.current[idx] = el)}
                       type="text"
                       inputMode="numeric"
+                      autoComplete={idx === 0 ? 'one-time-code' : 'off'}
                       maxLength={1}
                       value={digit}
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(idx, e.key as any)}
+                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                      onFocus={(e) => e.currentTarget.select()}
                       className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-gray-300 focus:border-[#38A3A5] focus:ring-2 focus:ring-[#38A3A5]/20 text-gray-900 transition-all bg-gray-50 focus:bg-white"
                       disabled={loading}
                     />
                   ))}
                 </div>
+                {fieldErrors.otp && <p id="recovery-otp-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.otp}</p>}
               </div>
 
               {/* Countdown / Resend */}
@@ -452,7 +542,7 @@ export function ForgotPassword() {
               <button
                 type="submit"
                 className="w-full inline-flex items-center justify-center gap-2 bg-[#38A3A5] text-white py-3 rounded-xl font-semibold hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-[#38A3A5]/30"
-                disabled={loading || otp.join('').length !== 6}
+                disabled={loading}
               >
                 {loading ? (
                   <>
@@ -470,7 +560,8 @@ export function ForgotPassword() {
               <div className="text-center pt-2">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={returnToEmail}
+                  disabled={loading}
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-[#38A3A5] transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -482,19 +573,33 @@ export function ForgotPassword() {
 
           {/* STEP 3: Reset Password */}
           {step === 3 && (
-            <form onSubmit={handleResetPassword} className="space-y-5">
+            <form onSubmit={handleResetPassword} noValidate className="space-y-5">
               {/* New Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">New Password</label>
+                <label htmlFor="recovery-password" className="block text-sm font-medium text-gray-900 mb-2">New Password</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
                     <KeyRound className="w-5 h-5" />
                   </span>
                   <input
+                    id="recovery-password"
+                    name="newPassword"
+                    aria-invalid={!!fieldErrors.newPassword}
+                    aria-describedby={[showPasswordRequirements && 'recovery-password-requirements', fieldErrors.newPassword && 'recovery-password-error'].filter(Boolean).join(' ') || undefined}
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewPassword(value);
+                      setFormError('');
+                      setFieldErrors(previous => ({
+                        ...previous,
+                        newPassword: previous.newPassword ? getResetPasswordError(value) : undefined,
+                        confirmPassword: confirmPassword ? getConfirmationError(value, confirmPassword) : previous.confirmPassword,
+                      }));
+                    }}
+                    onBlur={() => setFieldErrors(previous => ({ ...previous, newPassword: getResetPasswordError(newPassword) ?? previous.newPassword }))}
                     placeholder="Enter new password"
                     className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent text-gray-900 text-sm"
                     required
@@ -503,12 +608,15 @@ export function ForgotPassword() {
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? 'Hide new password' : 'Show new password'}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {showPasswordRequirements && <p id="recovery-password-requirements" className="mt-2 text-xs text-gray-500">{PASSWORD_REQUIREMENTS}</p>}
+                {fieldErrors.newPassword && <p id="recovery-password-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.newPassword}</p>}
               </div>
 
               {/* Password Strength Meter */}
@@ -518,14 +626,14 @@ export function ForgotPassword() {
                     <span className="text-gray-600">Password Strength:</span>
                     <span
                       className={`font-semibold ${
-                        passedCriteriaCount <= 2
+                        passwordStrength.level === 1
                           ? 'text-red-500'
-                          : passedCriteriaCount <= 3
+                          : passwordStrength.level === 3
                           ? 'text-yellow-600'
                           : 'text-[#38A3A5]'
                       }`}
                     >
-                      {passedCriteriaCount <= 2 ? 'Weak' : passedCriteriaCount <= 3 ? 'Medium' : 'Strong'}
+                      {passwordStrength.label}
                     </span>
                   </div>
 
@@ -535,10 +643,10 @@ export function ForgotPassword() {
                       <div
                         key={level}
                         className={`rounded-full transition-all duration-300 ${
-                          passedCriteriaCount >= level
-                            ? passedCriteriaCount <= 2
+                          passwordStrength.level >= level
+                            ? passwordStrength.level === 1
                               ? 'bg-red-400'
-                              : passedCriteriaCount <= 3
+                              : passwordStrength.level === 3
                               ? 'bg-yellow-400'
                               : 'bg-[#38A3A5]'
                             : 'bg-gray-200'
@@ -581,22 +689,35 @@ export function ForgotPassword() {
                       )}
                       <span>1 number</span>
                     </div>
+                    <div className="flex items-center gap-1.5">
+                      {passwordCriteria.special ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <X className="w-3.5 h-3.5 text-gray-300" />}
+                      <span>1 special character</span>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Confirm Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Confirm New Password</label>
+                <label htmlFor="recovery-confirm-password" className="block text-sm font-medium text-gray-900 mb-2">Confirm New Password</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
                     <ShieldCheck className="w-5 h-5" />
                   </span>
                   <input
+                    id="recovery-confirm-password"
+                    name="confirmPassword"
+                    aria-invalid={!!fieldErrors.confirmPassword}
+                    aria-describedby={fieldErrors.confirmPassword ? 'recovery-confirm-password-error' : confirmPassword ? 'recovery-password-match' : undefined}
                     type={showConfirmPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setFormError('');
+                      setFieldErrors(previous => ({ ...previous, confirmPassword: previous.confirmPassword || e.target.value ? getConfirmationError(newPassword, e.target.value) : undefined }));
+                    }}
+                    onBlur={() => setFieldErrors(previous => ({ ...previous, confirmPassword: getConfirmationError(newPassword, confirmPassword) ?? previous.confirmPassword }))}
                     placeholder="Re-enter new password"
                     className="w-full pl-11 pr-11 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent text-gray-900 text-sm"
                     required
@@ -604,14 +725,17 @@ export function ForgotPassword() {
                   />
                   <button
                     type="button"
+                    aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
                   >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {confirmPassword && (
+                {fieldErrors.confirmPassword && <p id="recovery-confirm-password-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.confirmPassword}</p>}
+                {confirmPassword && !fieldErrors.confirmPassword && (
                   <p
+                    id="recovery-password-match"
                     className={`mt-1.5 text-xs flex items-center gap-1 ${
                       passwordsMatch ? 'text-emerald-600' : 'text-red-500'
                     }`}
@@ -632,7 +756,7 @@ export function ForgotPassword() {
               <button
                 type="submit"
                 className="w-full inline-flex items-center justify-center gap-2 bg-[#38A3A5] text-white py-3 rounded-xl font-semibold hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-[#38A3A5]/30 pt-3"
-                disabled={loading || !isPasswordStrong || !passwordsMatch}
+                disabled={loading}
               >
                 {loading ? (
                   <>

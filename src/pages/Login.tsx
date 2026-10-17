@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { HomeIcon, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { loginAPI, getDashboardRoute } from '../utils/auth';
+import { EMAIL_MAX_LENGTH, focusFirstInvalidField, getApiFieldErrors, getEmailError, normalizeEmail } from '../utils/formValidation';
 
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const [email, setEmail] = useState(location.state?.email || '');
+  const [email, setEmail] = useState<string>(typeof location.state?.email === 'string' ? location.state.email : '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   // Check for success message from registration
   useEffect(() => {
@@ -40,30 +42,21 @@ export function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
     setFormError('');
-
-    let isValid = true;
-    const cleanEmail = email.trim();
-
-    if (!cleanEmail) {
-      setEmailError('Please enter your email address.');
-      isValid = false;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setEmailError('Please enter a valid email address.');
-      isValid = false;
-    } else {
-      setEmailError('');
+    const cleanEmail = normalizeEmail(email);
+    const nextEmailError = getEmailError(cleanEmail);
+    const nextPasswordError = !password ? 'Please enter your password.' : undefined;
+    setEmail(cleanEmail);
+    setEmailError(nextEmailError || '');
+    setPasswordError(nextPasswordError || '');
+    if (nextEmailError || nextPasswordError) {
+      focusFirstInvalidField(form);
+      return;
     }
 
-    if (!password) {
-      setPasswordError('Please enter your password.');
-      isValid = false;
-    } else {
-      setPasswordError('');
-    }
-
-    if (!isValid) return;
-
+    submittingRef.current = true;
     setLoading(true);
 
     try {
@@ -78,19 +71,17 @@ export function Login() {
       // Redirect to intended page or dashboard based on user role
       const from = location.state?.from?.pathname || getDashboardRoute(user.userRole.roleName);
 
-      // Small delay to show the toast before navigation
-      setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 500);
+      navigate(from, { replace: true });
 
     } catch (err) {
+      const fieldErrors = getApiFieldErrors(err, ['email', 'password'] as const);
+      setEmailError(fieldErrors.email || '');
+      setPasswordError(fieldErrors.password || '');
       const msg = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
-      setFormError(msg);
-      toast.error(msg, {
-        position: "top-right",
-        autoClose: 4000,
-      });
+      if (Object.keys(fieldErrors).length) focusFirstInvalidField(form);
+      else setFormError(msg);
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -126,24 +117,34 @@ export function Login() {
       </div>
       <div className="bg-white rounded-xl shadow-sm p-8">
         {formError && (
-          <div className="mb-6 flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          <div role="alert" className="mb-6 flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
             <span>{formError}</span>
           </div>
         )}
         <form onSubmit={handleLogin} noValidate className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-900 mb-2">
               Email
             </label>
             <input
+              id="login-email"
+              name="email"
               type="email"
+              maxLength={EMAIL_MAX_LENGTH}
+              required
+              aria-invalid={!!emailError}
+              aria-describedby={emailError ? 'login-email-error' : undefined}
               autoComplete="email"
               value={email}
               onChange={e => {
                 setEmail(e.target.value);
-                if (emailError) setEmailError('');
+                if (emailError) setEmailError(getEmailError(e.target.value) || '');
                 if (formError) setFormError('');
+              }}
+              onBlur={() => {
+                setEmail(normalizeEmail(email));
+                setEmailError(previous => getEmailError(email) || previous);
               }}
               placeholder="Enter your email"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
@@ -154,7 +155,7 @@ export function Login() {
               disabled={loading}
             />
             {emailError && (
-              <p className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
+              <p id="login-email-error" role="alert" className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>{emailError}</span>
               </p>
@@ -162,7 +163,7 @@ export function Login() {
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-900">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-900">
                 Password
               </label>
               <button
@@ -175,14 +176,20 @@ export function Login() {
             </div>
             <div className="relative">
               <input
+                id="login-password"
+                name="password"
+                required
+                aria-invalid={!!passwordError}
+                aria-describedby={passwordError ? 'login-password-error' : undefined}
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
                 onChange={e => {
                   setPassword(e.target.value);
-                  if (passwordError) setPasswordError('');
+                  if (passwordError) setPasswordError(e.target.value ? '' : 'Please enter your password.');
                   if (formError) setFormError('');
                 }}
+                onBlur={() => setPasswordError(previous => password ? previous : 'Please enter your password.')}
                 placeholder="Enter your password"
                 className={`w-full pl-4 pr-11 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
                   passwordError
@@ -201,7 +208,7 @@ export function Login() {
               </button>
             </div>
             {passwordError && (
-              <p className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
+              <p id="login-password-error" role="alert" className="mt-1.5 text-xs text-red-600 font-medium flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>{passwordError}</span>
               </p>

@@ -17,9 +17,10 @@ export function FilePreviewModal({ fileName, fileType, url, onClose, onDownload 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.URL.revokeObjectURL(url);
     };
-  }, [onClose, url]);
+  }, [onClose]);
+
+  useEffect(() => () => window.URL.revokeObjectURL(url), [url]);
 
   const isImage = fileType.startsWith('image/');
   const isPdf = fileType === 'application/pdf';

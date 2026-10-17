@@ -5,18 +5,38 @@ import { SearchIcon, MapPinIcon, CalendarIcon, ClockIcon, UsersIcon, XIcon, Hosp
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
-import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
+import { isPositiveId } from '../../utils/clinicalValidation';
+import type { QueueTokenResponse } from '../../services/queueService';
+import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS, type ClinicFilters } from '../../types/clinic';
+import { localDateString } from '../../utils/profileValidation';
 import { 
   formatDate, 
   formatTime, 
   getDaysUntilClinic,
   getAvailableClinics,
   filterClinics,
-  sortClinics
+  sortClinics,
+  validateClinicFilters,
+  getDistrictOptions
 } from '../../utils/clinic';
 
+const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
+const rememberedQueueTokens = new Map<string, string>();
+const readQueueToken = (key: string): string | null => {
+  try { return rememberedQueueTokens.get(key) ?? sessionStorage.getItem(key) ?? null; }
+  catch { return rememberedQueueTokens.get(key) ?? null; }
+};
+const rememberQueueToken = (key: string, value: string | null) => {
+  if (value === null) rememberedQueueTokens.delete(key);
+  else rememberedQueueTokens.set(key, value);
+  try {
+    if (value === null) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch { return; }
+};
+
 export function Clinics() {
-  const { user } = useAuth();
+  const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +59,10 @@ export function Clinics() {
   const [nameHydrationFailed, setNameHydrationFailed] = useState(false);
   const [joinedClinicIds, setJoinedClinicIds] = useState<Set<number>>(new Set());
   const joinRequestRef = useRef(false);
+  const selectedClinicRef = useRef<number | null>(null);
+  const queueRequestRef = useRef(0);
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,15 +78,29 @@ export function Clinics() {
 
   // Auto-detect logged-in patient profile
   useEffect(() => {
+    let cancelled = false;
+    setPatientId(null);
+    setPatientName(null);
+    setPatientFetchError(null);
+    setJoinedClinicIds(new Set());
+    setQueueTokens([]);
+    setNameById({});
+    setSelectedClinic(null);
+    selectedClinicRef.current = null;
+    queueRequestRef.current += 1;
+    setIsQueueModalOpen(false);
+    setIsDetailsModalOpen(false);
     (async () => {
       try {
         if (!user) return;
         const profile = await profileAPI.getPatient(user.id);
+        if (cancelled) return;
         // Always use user.id as patientId (backend validates against user ID)
         setPatientId(String(user.id));
         const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
         if (name) setPatientName(name);
       } catch (e) {
+        if (cancelled) return;
         if (e instanceof ApiError && e.status === 404) {
           // Empty profile state: fallback to user account info gracefully without showing error banner (D-19)
           if (user?.id) setPatientId(String(user.id));
@@ -71,11 +109,10 @@ export function Clinics() {
           return;
         }
         setPatientFetchError(e instanceof Error ? e.message : 'Failed to fetch patient profile');
-        // Fallback: still enable queue actions using the user's id
-        if (user?.id) setPatientId(String(user.id));
       }
     })();
-  }, [user]);
+    return () => { cancelled = true; };
+  }, [user, sessionKey]);
 
   const loadClinics = async () => {
     try {
@@ -95,11 +132,14 @@ export function Clinics() {
   };
 
   const loadClinicDoctors = async (clinicId: number) => {
+    const requestSession = currentSessionRef.current;
     try {
       const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
+      if (selectedClinicRef.current !== clinicId || currentSessionRef.current !== requestSession) return;
       setClinicDoctors(doctors || []);
       setClinicDoctorsError(false);
     } catch (error) {
+      if (selectedClinicRef.current !== clinicId || currentSessionRef.current !== requestSession) return;
       console.error('Failed to load clinic doctors:', error);
       setClinicDoctors([]);
       setClinicDoctorsError(true);
@@ -107,6 +147,9 @@ export function Clinics() {
   };
 
   const handleViewDetails = async (clinic: Clinic) => {
+    if (joinRequestRef.current) return;
+    selectedClinicRef.current = clinic.id;
+    setClinicDoctors([]);
     setSelectedClinic(clinic);
     setIsDetailsModalOpen(true);
     setQueueError(null);
@@ -118,32 +161,64 @@ export function Clinics() {
     ]);
   };
 
+  const findActiveQueueToken = async (tokens: QueueTokenResponse[], clinicId: number, ownerId: string) => {
+    const key = patientQueueKey(ownerId, clinicId);
+    const existing = tokens.find(token => String(token.patientId) === ownerId && Number(token.clinicId) === clinicId
+      && (token.status === 'PENDING' || token.status === 'SERVING'));
+    if (existing) {
+      rememberQueueToken(key, String(existing.id));
+      return existing;
+    }
+    const remembered = readQueueToken(key);
+    if (remembered === null) return undefined;
+    if (!isPositiveId(remembered)) throw new Error('A previous queue join has an unconfirmed outcome. Check the queue with clinic staff before trying again.');
+    try {
+      const token = await queueAPI.getToken(Number(remembered));
+      if (token.id !== Number(remembered) || Number(token.clinicId) !== clinicId || String(token.patientId) !== ownerId) throw new Error('The saved queue token does not match this patient and clinic.');
+      if (token.status === 'PENDING' || token.status === 'SERVING') return token;
+      if (token.status !== 'COMPLETED' && token.status !== 'CANCELLED') throw new Error('The previous queue token could not be verified.');
+      rememberQueueToken(key, null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) rememberQueueToken(key, null);
+      else throw error;
+    }
+    return undefined;
+  };
+
   const loadQueueForClinic = async (clinic: Clinic) => {
+    const requestId = ++queueRequestRef.current;
+    const requestSession = currentSessionRef.current;
+    const isCurrent = () => requestId === queueRequestRef.current && selectedClinicRef.current === clinic.id && currentSessionRef.current === requestSession;
     try {
       setQueueLoading(true);
       setQueueError(null);
+      setQueueTokens([]);
       const tokens = await queueAPI.getClinicQueue(String(clinic.id));
+      if (!isCurrent()) return;
       setQueueTokens(tokens || []);
-      await hydratePatientNames(tokens || []);
-      const hasActiveToken = patientId
-        ? tokens.some(t => String(t.patientId) === String(patientId) && (t.status === 'PENDING' || t.status === 'SERVING'))
-        : false;
+      const ownToken = isPositiveId(user?.id) ? await findActiveQueueToken(tokens, clinic.id, String(user?.id)) : undefined;
+      if (!isCurrent()) return;
+      if (ownToken && !tokens.some(token => token.id === ownToken.id)) setQueueTokens([...tokens, ownToken]);
+      await hydratePatientNames(tokens || [], isCurrent);
+      if (!isCurrent()) return;
       setJoinedClinicIds(prev => {
         const next = new Set(prev);
-        if (hasActiveToken) next.add(clinic.id);
+        if (ownToken) next.add(clinic.id);
         else next.delete(clinic.id);
         return next;
       });
     } catch (error) {
+      if (!isCurrent()) return;
       console.error('Failed to load queue:', error);
       setQueueTokens([]);
       setQueueError(error instanceof Error ? error.message : 'Failed to load queue');
     } finally {
-      setQueueLoading(false);
+      if (isCurrent()) setQueueLoading(false);
     }
   };
 
   const openQueueModal = async (clinic: Clinic) => {
+    selectedClinicRef.current = clinic.id;
     setSelectedClinic(clinic);
     setIsQueueModalOpen(true);
     await loadQueueForClinic(clinic);
@@ -151,7 +226,8 @@ export function Clinics() {
 
   // Resolve and cache patient display names for a list of tokens
   const hydratePatientNames = async (
-    tokens: import('../../services/queueService').QueueTokenResponse[]
+    tokens: import('../../services/queueService').QueueTokenResponse[],
+    isCurrent: () => boolean,
   ) => {
     const ids = Array.from(new Set(tokens.map(t => String(t.patientId)).filter(Boolean)));
     const missing = ids.filter(id => !nameById[id]);
@@ -164,23 +240,23 @@ export function Clinics() {
             const name = [prof?.firstName, prof?.lastName].filter(Boolean).join(' ');
             if (name) return { id, name };
           } catch {
-            setNameHydrationFailed(true);
+            if (isCurrent()) setNameHydrationFailed(true);
           }
           try {
             const user = await userAPI.getUser(Number(id));
             const name = user?.username || `User #${id}`;
             return { id, name };
           } catch {
-            setNameHydrationFailed(true);
+            if (isCurrent()) setNameHydrationFailed(true);
             return { id, name: `User #${id}` };
           }
         })
       );
       const map: Record<string, string> = {};
       results.forEach(r => { map[r.id] = r.name; });
-      setNameById(prev => ({ ...prev, ...map }));
+      if (isCurrent()) setNameById(prev => ({ ...prev, ...map }));
     } catch (e) {
-      setNameHydrationFailed(true);
+      if (isCurrent()) setNameHydrationFailed(true);
     }
   };
 
@@ -188,9 +264,11 @@ export function Clinics() {
     if (joinRequestRef.current) return;
     setJoinSuccess(null);
     setJoinError(null);
+    selectedClinicRef.current = clinic.id;
     setSelectedClinic(clinic);
 
-    if (!patientId) {
+    if (!isPositiveId(clinic.id) || !clinics.some(item => item.id === clinic.id) || clinic.status !== 'SCHEDULED'
+      || !isPositiveId(user?.id) || patientId !== String(user?.id) || patientFetchError) {
       setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
       setIsQueueModalOpen(true);
       return;
@@ -198,37 +276,50 @@ export function Clinics() {
 
     joinRequestRef.current = true;
     setJoinLoading(true);
+    const requestSession = sessionKey;
+    const isCurrent = () => currentSessionRef.current === requestSession && selectedClinicRef.current === clinic.id;
+    const key = patientQueueKey(patientId, clinic.id);
+    let writePending = false;
     try {
       const currentQueue = await queueAPI.getClinicQueue(String(clinic.id));
-      const existingToken = currentQueue.find(
-        token => String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
-      );
+      if (!isCurrent()) return;
+      const existingToken = await findActiveQueueToken(currentQueue, clinic.id, patientId);
+      if (!isCurrent()) return;
 
       if (existingToken) {
+        rememberQueueToken(key, String(existingToken.id));
+        setJoinedClinicIds(previous => new Set(previous).add(clinic.id));
         setJoinError(`You are already in this clinic queue. Your token is #${existingToken.tokenNumber}.`);
       } else {
         // No consultation exists yet at this point — the doctor creates one
         // when they call this patient in, and links it via queueTokenId.
+        writePending = true;
         const res = await queueAPI.createToken({
           clinicId: String(clinic.id),
           patientId: patientId,
           consultationId: '',
         });
+        if (!isPositiveId(res.id) || Number(res.clinicId) !== clinic.id || String(res.patientId) !== patientId) throw new Error('The queue service returned an unexpected token. Check the queue before trying again.');
+        rememberQueueToken(key, String(res.id));
+        writePending = false;
+        if (!isCurrent()) return;
+        setJoinedClinicIds(previous => new Set(previous).add(clinic.id));
         setJoinSuccess(`Token #${res.tokenNumber} created. Position: ${res.position}`);
       }
     } catch (error) {
+      if (writePending && (!(error instanceof ApiError) || error.status === 0 || error.status >= 500)) rememberQueueToken(key, 'unconfirmed');
+      if (!isCurrent()) return;
       console.error('Failed to join queue:', error);
       setJoinError(error instanceof Error ? error.message : 'Failed to join queue');
     } finally {
+      if (isCurrent()) await openQueueModal(clinic);
       joinRequestRef.current = false;
       setJoinLoading(false);
     }
-
-    await openQueueModal(clinic);
   };
 
   const handleViewQueue = async () => {
-    if (!selectedClinic) return;
+    if (!selectedClinic || joinRequestRef.current) return;
     await openQueueModal(selectedClinic);
   };
 
@@ -237,22 +328,50 @@ export function Clinics() {
     await joinQueueForClinic(selectedClinic);
   };
 
+  const closeQueueModal = () => {
+    if (joinRequestRef.current) return;
+    queueRequestRef.current += 1;
+    setIsQueueModalOpen(false);
+  };
+
+  const closeDetailsModal = () => {
+    if (joinRequestRef.current) return;
+    queueRequestRef.current += 1;
+    setIsDetailsModalOpen(false);
+  };
+
   const activeQueueToken = queueTokens.find(
     token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
   );
 
-  // Filter and sort clinics
-  const filteredAndSortedClinics = sortClinics(
-    filterClinics(clinics, {
-      searchTerm,
-      province: selectedProvince,
-      district: selectedDistrict,
-      dateRange,
-      status: 'SCHEDULED', // Patients only see scheduled clinics
-      sortBy
-    }),
+  const clinicFilters: ClinicFilters = {
+    searchTerm,
+    province: selectedProvince,
+    district: selectedDistrict,
+    dateRange,
+    status: 'SCHEDULED', // Patients only see scheduled clinics
     sortBy
-  );
+  };
+  const filterErrors = validateClinicFilters(clinicFilters);
+  const filtersValid = Object.keys(filterErrors).length === 0;
+  const filteredAndSortedClinics = filtersValid ? sortClinics(filterClinics(clinics, clinicFilters), sortBy) : [];
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedProvince('');
+    setSelectedDistrict('');
+    setDateRange({ start: '', end: '' });
+    setSortBy('date');
+  };
+
+  const filterProps = (field: keyof typeof filterErrors) => ({
+    id: `clinic-filter-${field}`,
+    'aria-invalid': !!filterErrors[field],
+    'aria-describedby': filterErrors[field] ? `clinic-filter-${field}-error` : undefined,
+  });
+
+  const filterError = (field: keyof typeof filterErrors) => filterErrors[field]
+    ? <p id={`clinic-filter-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{filterErrors[field]}</p> : null;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -311,6 +430,7 @@ export function Clinics() {
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
+                  aria-label="Search clinics"
                   placeholder="Search clinics..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -319,68 +439,88 @@ export function Clinics() {
               </div>
 
               {/* Province Filter */}
+              <div>
+              <label htmlFor="clinic-filter-province" className="sr-only">Filter by province</label>
               <select
+                {...filterProps('province')}
                 value={selectedProvince}
                 onChange={(e) => {
                   setSelectedProvince(e.target.value);
                   setSelectedDistrict(''); // Reset district when province changes
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
                 <option value="">All Provinces</option>
                 {Object.keys(PROVINCES_DISTRICTS).map(province => (
                   <option key={province} value={province}>{province}</option>
                 ))}
               </select>
+              {filterError('province')}
+              </div>
 
               {/* District Filter */}
+              <div>
+              <label htmlFor="clinic-filter-district" className="sr-only">Filter by district</label>
               <select
+                {...filterProps('district')}
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 disabled={!selectedProvince}
               >
                 <option value="">All Districts</option>
-                {selectedProvince && (PROVINCES_DISTRICTS[selectedProvince as keyof typeof PROVINCES_DISTRICTS] || []).map(district => (
+                {getDistrictOptions(selectedProvince).map(district => (
                   <option key={district} value={district}>{district}</option>
                 ))}
               </select>
+              {filterError('district')}
+              </div>
 
               {/* Sort */}
+              <div>
+              <label htmlFor="clinic-filter-sortBy" className="sr-only">Sort clinics</label>
               <select
+                {...filterProps('sortBy')}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'province')}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
                 <option value="date">Sort by Date</option>
                 <option value="name">Sort by Name</option>
                 <option value="province">Sort by Province</option>
               </select>
+              {filterError('sortBy')}
+              </div>
             </div>
 
             {/* Date Range Filter */}
             <div className="flex flex-col sm:flex-row gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <label htmlFor="clinic-filter-start" className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
                 <input
+                  {...filterProps('start')}
                   type="date"
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={localDateString()}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 />
+                {filterError('start')}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <label htmlFor="clinic-filter-end" className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
                 <input
+                  {...filterProps('end')}
                   type="date"
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  min={dateRange.start || new Date().toISOString().split('T')[0]}
+                  min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                 />
+                {filterError('end')}
               </div>
             </div>
+            {!filtersValid && <p className="mt-3 text-sm text-gray-700">Correct the filters to display clinics, or <button type="button" onClick={clearFilters} className="text-[#2d8284] underline">clear filters</button>.</p>}
           </div>
 
           {/* Loading State */}
@@ -399,7 +539,7 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          {!isLoading && !error && (
+          {!isLoading && !error && filtersValid && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredAndSortedClinics.map(clinic => (
                 <ClinicCard 
@@ -408,13 +548,14 @@ export function Clinics() {
                   onViewDetails={handleViewDetails}
                   onJoinQueue={joinQueueForClinic}
                   alreadyJoined={joinedClinicIds.has(clinic.id)}
+                  joinPending={joinLoading}
                 />
               ))}
             </div>
           )}
 
           {/* Empty State */}
-          {!isLoading && !error && filteredAndSortedClinics.length === 0 && (
+          {!isLoading && !error && filtersValid && filteredAndSortedClinics.length === 0 && (
             <div className="text-center py-12">
               <HospitalIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -428,12 +569,7 @@ export function Clinics() {
               </p>
               {searchTerm || selectedProvince || selectedDistrict || dateRange.start || dateRange.end ? (
                 <button 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setSelectedProvince('');
-                    setSelectedDistrict('');
-                    setDateRange({ start: '', end: '' });
-                  }}
+                  onClick={clearFilters}
                   className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
                 >
                   Clear Filters
@@ -453,7 +589,8 @@ export function Clinics() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Clinic Details</h2>
                 <button
-                  onClick={() => setIsDetailsModalOpen(false)}
+                  onClick={closeDetailsModal}
+                  disabled={joinLoading}
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <XIcon className="w-5 h-5" />
@@ -550,13 +687,14 @@ export function Clinics() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleJoinQueue}
-                      disabled={joinLoading || !!patientFetchError || !!activeQueueToken}
+                      disabled={joinLoading || queueLoading || !!patientFetchError || !patientId || !!activeQueueToken}
                       className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
                     >
                       {joinLoading ? 'Joining...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
                     </button>
                     <button
                       onClick={handleViewQueue}
+                      disabled={joinLoading || queueLoading}
                       className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
                     >
                       View Queue
@@ -571,7 +709,8 @@ export function Clinics() {
               {/* Close Button */}
               <div className="mt-6 pt-4 border-t">
                 <button
-                  onClick={() => setIsDetailsModalOpen(false)}
+                  onClick={closeDetailsModal}
+                  disabled={joinLoading}
                   className="w-full px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
                 >
                   Close
@@ -592,7 +731,8 @@ export function Clinics() {
                   <p className="text-sm text-gray-600">{selectedClinic.clinicName}</p>
                 </div>
                 <button
-                  onClick={() => setIsQueueModalOpen(false)}
+                  onClick={closeQueueModal}
+                  disabled={joinLoading}
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <XIcon className="w-5 h-5" />
@@ -611,7 +751,7 @@ export function Clinics() {
 
               {queueLoading ? (
                 <div className="text-center py-8 text-gray-500">Loading queue...</div>
-              ) : queueTokens.filter(t => t.status !== 'COMPLETED').length === 0 ? (
+              ) : queueError ? null : queueTokens.filter(t => t.status !== 'COMPLETED').length === 0 ? (
                 <p className="text-gray-500 italic text-center py-8">No one is waiting in this queue yet.</p>
               ) : (
                 <div className="space-y-2">
@@ -671,7 +811,7 @@ export function Clinics() {
               <div className="mt-6 pt-4 border-t flex gap-3">
                 <button
                   onClick={() => joinQueueForClinic(selectedClinic)}
-                  disabled={joinLoading || !!patientFetchError || !!activeQueueToken}
+                  disabled={joinLoading || queueLoading || !!patientFetchError || !patientId || !!activeQueueToken}
                   className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors ${
                     joinLoading || patientFetchError || activeQueueToken ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#38A3A5] hover:bg-[#2d8284]'
                   }`}
@@ -679,7 +819,8 @@ export function Clinics() {
                   {joinLoading ? 'Joining...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
                 </button>
                 <button
-                  onClick={() => setIsQueueModalOpen(false)}
+                  onClick={closeQueueModal}
+                  disabled={joinLoading}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Close
@@ -699,11 +840,13 @@ function ClinicCard({
   onViewDetails,
   onJoinQueue,
   alreadyJoined,
+  joinPending,
 }: {
   clinic: Clinic;
   onViewDetails: (clinic: Clinic) => void;
   onJoinQueue: (clinic: Clinic) => void;
   alreadyJoined: boolean;
+  joinPending: boolean;
 }) {
   const daysUntil = getDaysUntilClinic(clinic.scheduledDate);
 
@@ -747,13 +890,14 @@ function ClinicCard({
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => onViewDetails(clinic)}
+          disabled={joinPending}
           className="w-full px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
         >
           View Details
         </button>
         <button
           onClick={() => onJoinQueue(clinic)}
-          disabled={alreadyJoined}
+          disabled={alreadyJoined || joinPending}
           className={`w-full px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
             alreadyJoined ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
           }`}

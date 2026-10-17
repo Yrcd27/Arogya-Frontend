@@ -17,7 +17,7 @@ export interface AuthResponse {
   token: string;
   username: string;
   email: string;
-  /** Flat role name, e.g. "DOCTOR" — not the full UserRole object. */
+  /** Flat role name, e.g. "Doctor" — not the full UserRole object. */
   role: string;
 }
 

@@ -155,7 +155,7 @@ export const doctorAPI = {
         return [];
       }
       console.error('Failed to fetch doctor profiles:', error);
-      return [];
+      throw error;
     }
   },
 };

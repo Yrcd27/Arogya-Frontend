@@ -53,7 +53,7 @@ export function RoleSelection() {
       state: {
         roleData: {
           id: role.id,
-          roleName: role.displayName.toUpperCase(),
+          roleName: role.name.charAt(0).toUpperCase() + role.name.slice(1),
           roleDescription: role.description,
           requiresSecret: role.requiresSecret,
         },

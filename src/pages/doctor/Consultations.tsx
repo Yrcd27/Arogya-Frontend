@@ -13,6 +13,8 @@ import { clinicAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
 import { ApiError } from '../../services/httpClient';
 import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
+import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
 type PatientInfo = {
   id: number;
@@ -31,7 +33,7 @@ const isEmptyConsultationsResponse = (error: unknown) =>
 
 export default function Consultations() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,6 +55,16 @@ export default function Consultations() {
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
   const detailRequestRef = useRef(0);
+  const listRequestRef = useRef(0);
+  const listLoadingRef = useRef(false);
+  const actionRef = useRef(false);
+  const [actionPending, setActionPending] = useState(false);
+  const editSavingRef = useRef(false);
+  const editFormRef = useRef<HTMLFormElement>(null);
+  const currentSessionRef = useRef(sessionKey);
+  currentSessionRef.current = sessionKey;
+  const [editErrors, setEditErrors] = useState<ConsultationErrors>({});
+  const [editError, setEditError] = useState('');
 
   const sortByNewestFirst = (list: Consultation[]) =>
     [...list].sort((a, b) => {
@@ -63,22 +75,52 @@ export default function Consultations() {
     });
 
   useEffect(() => {
+    currentSessionRef.current = sessionKey;
+    actionRef.current = false;
+    editSavingRef.current = false;
+    setActionPending(false);
+    setSavingEdit(false);
+    setDeletingId(null);
+    setBulkDeleting(false);
+    setConsultations([]);
+    setPatients({});
+    setClinics({});
+    setTotalElements(null);
+    setSelectedIds(new Set());
+    setSelectedConsultation(null);
+    setEditingConsultation(null);
+    setConfirmAction(null);
     void loadConsultationsRef.current(1);
-  }, [user?.id]);
+    return () => {
+      currentSessionRef.current = -1;
+      listRequestRef.current += 1;
+      detailRequestRef.current += 1;
+    };
+  }, [user?.id, sessionKey]);
 
   useEffect(() => {
     // Reload when returning from consultation creation
     if (location.state?.consultationCreated) {
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         void loadConsultationsRef.current(1);
       }, 500);
       // Clear the state
       window.history.replaceState({}, document.title);
+      return () => clearTimeout(timeoutId);
     }
   }, [location.state]);
 
   const loadConsultations = async (displayPage: number, size: number = pageSize) => {
-    if (!user?.id) return;
+    const requestId = ++listRequestRef.current;
+    const requestSession = sessionKey;
+    const isCurrent = () => requestId === listRequestRef.current && currentSessionRef.current === requestSession;
+    if (!user || !isPositiveId(user.id)) {
+      listLoadingRef.current = false;
+      setLoading(false);
+      setError('The signed-in doctor could not be verified. Sign in again before loading consultations.');
+      return;
+    }
+    listLoadingRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -86,17 +128,21 @@ export default function Consultations() {
         userAPI.getAllUsers(),
         clinicAPI.getAllClinics(),
       ]);
+      if (!isCurrent()) return;
 
       let probedTotal: number;
       try {
         ({ total: probedTotal } = await consultationAPI.list({ doctorId: user.id, page: 0, size: 1 }));
       } catch (error) {
+        if (!isCurrent()) return;
         if (!isEmptyConsultationsResponse(error)) throw error;
         setConsultations([]);
         setTotalElements(0);
         setCurrentPage(1);
+        setSelectedIds(new Set());
         return;
       }
+      if (!isCurrent()) return;
       const totalBackendPages = Math.max(1, Math.ceil(probedTotal / size));
       const safeDisplayPage = Math.min(Math.max(1, displayPage), totalBackendPages);
       const backendPageIndex = totalBackendPages - safeDisplayPage;
@@ -107,6 +153,13 @@ export default function Consultations() {
         size,
       });
 
+      if (!isCurrent()) return;
+      if (data.some(item => item.doctorId !== user.id)) throw new Error('The returned consultations do not match the signed-in doctor. Please try again.');
+      if (safeDisplayPage === currentPage) {
+        const previousPageIds = new Set(consultations.map(item => item.id));
+        const returnedIds = new Set(data.map(item => item.id));
+        setSelectedIds(previous => new Set([...previous].filter(id => !previousPageIds.has(id) || returnedIds.has(id))));
+      }
       setConsultations(sortByNewestFirst(data));
       setTotalElements(total);
       setCurrentPage(safeDisplayPage);
@@ -123,39 +176,59 @@ export default function Consultations() {
       });
       setClinics(clinicMap);
     } catch (err) {
-      setError("Failed to load consultations");
+      if (!isCurrent()) return;
+      setError(err instanceof Error ? err.message : 'Failed to load consultations');
     } finally {
-      setLoading(false);
+      if (isCurrent()) {
+        listLoadingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
   loadConsultationsRef.current = loadConsultations;
 
-  const handleComplete = async (id: number) => {
+  const canMutate = (id: number) => {
+    if (actionRef.current || editSavingRef.current || listLoadingRef.current || currentSessionRef.current !== sessionKey) return false;
+    const consultation = consultations.find(item => item.id === id);
+    if (!isPositiveId(id) || !isPositiveId(user?.id) || consultation?.doctorId !== user?.id) {
+      toast.error('The consultation or signed-in doctor could not be verified. Refresh before continuing.');
+      return false;
+    }
+    return true;
+  };
+
+  const changeStatus = async (id: number, operation: 'complete' | 'cancel') => {
+    if (!canMutate(id)) return false;
+    const submittedSession = sessionKey;
+    actionRef.current = true;
+    setActionPending(true);
     try {
-      const updated = await consultationAPI.complete(id);
+      const updated = await consultationAPI[operation](id);
+      if (currentSessionRef.current !== submittedSession) return false;
+      if (updated.id !== id || updated.doctorId !== user?.id) throw new Error('The service did not confirm the updated consultation. Refresh before continuing.');
       setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      toast.success('Consultation marked as complete');
+      toast.success(operation === 'complete' ? 'Consultation marked as complete' : 'Consultation cancelled');
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to complete consultation');
+      if (currentSessionRef.current !== submittedSession) return false;
+      toast.error(err instanceof Error ? err.message : `Failed to ${operation} consultation`);
       return false;
+    } finally {
+      if (currentSessionRef.current === submittedSession) {
+        actionRef.current = false;
+        setActionPending(false);
+      }
     }
   };
 
-  const handleCancel = async (id: number) => {
-    try {
-      const updated = await consultationAPI.cancel(id);
-      setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      toast.success('Consultation cancelled');
-      return true;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to cancel consultation');
-      return false;
-    }
-  };
+  const handleComplete = (id: number) => changeStatus(id, 'complete');
+  const handleCancel = (id: number) => changeStatus(id, 'cancel');
 
   const openEdit = (c: Consultation) => {
+    if (!canMutate(c.id)) return;
+    setEditErrors({});
+    setEditError('');
     setEditingConsultation(c);
     setEditForm({
       chiefComplaint: c.chiefComplaint || '',
@@ -165,40 +238,99 @@ export default function Consultations() {
     });
   };
 
+  const closeEdit = () => {
+    if (!editSavingRef.current) setEditingConsultation(null);
+  };
+
+  const changeEditField = (field: ConsultationField, value: string) => {
+    if (editSavingRef.current) return;
+    setEditForm(previous => ({ ...previous, [field]: value }));
+    setEditError('');
+    setEditErrors(previous => ({ ...previous, [field]: previous[field] ? validateConsultation({ ...editForm, [field]: value })[field] : undefined }));
+  };
+
+  const editProps = (field: ConsultationField) => ({
+    id: `edit-consultation-${field}`,
+    disabled: savingEdit,
+    'aria-invalid': !!editErrors[field],
+    'aria-describedby': editErrors[field] ? `edit-consultation-${field}-error` : undefined,
+    onBlur: () => setEditErrors(previous => ({ ...previous, [field]: validateConsultation(editForm)[field] ?? previous[field] })),
+  });
+
+  const editFieldError = (field: ConsultationField) => editErrors[field]
+    ? <p id={`edit-consultation-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{editErrors[field]}</p> : null;
+
   const handleSaveEdit = async () => {
-    if (!editingConsultation) return;
+    if (editSavingRef.current || actionRef.current || listLoadingRef.current || !editingConsultation || currentSessionRef.current !== sessionKey) return;
+    setEditError('');
+    if (!isPositiveId(user?.id) || !isPositiveId(editingConsultation.id) || editingConsultation.doctorId !== user?.id) {
+      setEditError('The consultation or signed-in doctor could not be verified. Reload your consultations before saving.');
+      return;
+    }
+    const errors = validateConsultation(editForm);
+    setEditErrors(errors);
+    if (Object.keys(errors).length) {
+      if (editFormRef.current) focusFirstInvalidField(editFormRef.current);
+      return;
+    }
+    const submittedSession = sessionKey;
+    editSavingRef.current = true;
     setSavingEdit(true);
     try {
-      const updated = await consultationAPI.update(editingConsultation.id, editForm);
+      const updated = await consultationAPI.update(editingConsultation.id, normalizeConsultation(editForm));
+      if (currentSessionRef.current !== submittedSession) return;
+      if (updated.id !== editingConsultation.id || updated.doctorId !== user?.id) throw new Error('The service did not confirm the saved consultation. Refresh before editing again.');
       setConsultations((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
       toast.success('Consultation updated');
       setEditingConsultation(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update consultation');
+      if (currentSessionRef.current !== submittedSession) return;
+      const errors = getApiFieldErrors(err, CONSULTATION_FIELDS);
+      setEditErrors(errors);
+      if (Object.keys(errors).length) {
+        if (editFormRef.current) focusFirstInvalidField(editFormRef.current);
+      } else setEditError(err instanceof Error ? err.message : 'Failed to update consultation');
     } finally {
-      setSavingEdit(false);
+      if (currentSessionRef.current === submittedSession) {
+        editSavingRef.current = false;
+        setSavingEdit(false);
+      }
     }
   };
 
   const handleDelete = (id: number) => {
+    if (!canMutate(id)) return;
     setConfirmAction({ type: 'single', id });
   };
 
   const confirmSingleDelete = async (id: number) => {
+    if (!canMutate(id)) return;
+    const submittedSession = sessionKey;
+    actionRef.current = true;
+    setActionPending(true);
     setDeletingId(id);
     try {
       await consultationAPI.remove(id);
+      if (currentSessionRef.current !== submittedSession) return;
+      setSelectedIds(previous => new Set([...previous].filter(selectedId => selectedId !== id)));
       await loadConsultations(currentPage);
+      if (currentSessionRef.current !== submittedSession) return;
       toast.success('Consultation deleted');
     } catch (err) {
+      if (currentSessionRef.current !== submittedSession) return;
       toast.error(err instanceof Error ? err.message : 'Failed to delete consultation');
     } finally {
-      setDeletingId(null);
-      setConfirmAction(null);
+      if (currentSessionRef.current === submittedSession) {
+        actionRef.current = false;
+        setActionPending(false);
+        setDeletingId(null);
+        setConfirmAction(null);
+      }
     }
   };
 
   const toggleSelectRow = (id: number) => {
+    if (!canMutate(id)) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -208,6 +340,7 @@ export default function Consultations() {
   };
 
   const toggleSelectAllOnPage = () => {
+    if (actionRef.current || editSavingRef.current || listLoadingRef.current) return;
     const pageIds = paginatedConsultations.map((c) => c.id);
     const allSelected = pageIds.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
@@ -222,24 +355,35 @@ export default function Consultations() {
   };
 
   const handleBulkDelete = () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0 || actionRef.current || editSavingRef.current || listLoadingRef.current) return;
     setConfirmAction({ type: 'bulk' });
   };
 
   const confirmBulkDelete = async () => {
     const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    if (ids.length === 0 || ids.some(id => !isPositiveId(id)) || !isPositiveId(user?.id)
+      || actionRef.current || editSavingRef.current || listLoadingRef.current || currentSessionRef.current !== sessionKey) return;
+    const submittedSession = sessionKey;
+    actionRef.current = true;
+    setActionPending(true);
     setBulkDeleting(true);
     try {
       await consultationAPI.removeMany(ids);
+      if (currentSessionRef.current !== submittedSession) return;
       setSelectedIds(new Set());
       await loadConsultations(currentPage);
+      if (currentSessionRef.current !== submittedSession) return;
       toast.success(`${ids.length} consultation${ids.length > 1 ? 's' : ''} deleted`);
     } catch (err) {
+      if (currentSessionRef.current !== submittedSession) return;
       toast.error(err instanceof Error ? err.message : 'Failed to delete selected consultations');
     } finally {
-      setConfirmAction(null);
-      setBulkDeleting(false);
+      if (currentSessionRef.current === submittedSession) {
+        actionRef.current = false;
+        setActionPending(false);
+        setConfirmAction(null);
+        setBulkDeleting(false);
+      }
     }
   };
 
@@ -260,6 +404,7 @@ export default function Consultations() {
   };
 
   const closeConsultationDetails = () => {
+    if (actionRef.current) return;
     detailRequestRef.current += 1;
     setSelectedConsultation(null);
     setDetailError(null);
@@ -267,20 +412,23 @@ export default function Consultations() {
   };
 
   const handleConsultationClick = async (consultation: Consultation) => {
+    if (actionRef.current || editSavingRef.current) return;
     const requestId = ++detailRequestRef.current;
+    const requestSession = sessionKey;
     setSelectedConsultation(consultation);
     setLoadingLabTests(true);
     setDetailError(null);
     try {
       const withTests = await consultationAPI.getWithTests(consultation.id);
-      if (requestId !== detailRequestRef.current) return;
+      if (requestId !== detailRequestRef.current || currentSessionRef.current !== requestSession) return;
+      if (withTests.id !== consultation.id || withTests.patientId !== consultation.patientId || withTests.doctorId !== user?.id) throw new Error('The returned details do not match this consultation. Refresh before continuing.');
       setSelectedConsultation(withTests);
     } catch (err) {
-      if (requestId !== detailRequestRef.current) return;
+      if (requestId !== detailRequestRef.current || currentSessionRef.current !== requestSession) return;
       console.error('Failed to load consultation details:', err);
       setDetailError(err instanceof Error ? err.message : 'Failed to load consultation details. Please try again.');
     } finally {
-      if (requestId === detailRequestRef.current) setLoadingLabTests(false);
+      if (requestId === detailRequestRef.current && currentSessionRef.current === requestSession) setLoadingLabTests(false);
     }
   };
 
@@ -315,15 +463,15 @@ export default function Consultations() {
                   <span className="text-sm text-red-700 font-medium">{selectedIds.size} selected</span>
                   <button
                     onClick={handleBulkDelete}
-                    disabled={bulkDeleting}
+                    disabled={actionPending || savingEdit || loading}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
                   </button>
                   <button
-                    onClick={() => setSelectedIds(new Set())}
-                    disabled={bulkDeleting}
+                    onClick={() => { if (!actionRef.current && !editSavingRef.current) setSelectedIds(new Set()); }}
+                    disabled={actionPending || savingEdit}
                     className="text-sm text-gray-500 hover:text-gray-700 px-1"
                   >
                     Clear
@@ -331,8 +479,8 @@ export default function Consultations() {
                 </div>
               )}
               <button
-                onClick={() => loadConsultations(currentPage)}
-                disabled={loading}
+                onClick={() => { if (actionRef.current || editSavingRef.current) return; setSelectedIds(new Set()); void loadConsultations(currentPage); }}
+                disabled={loading || actionPending || savingEdit}
                 className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50"
               >
                 {loading ? 'Refreshing...' : 'Refresh'}
@@ -366,6 +514,8 @@ export default function Consultations() {
                       <th className="px-4 py-4 text-left w-10">
                         <input
                           type="checkbox"
+                          aria-label="Select all consultations on this page"
+                          disabled={actionPending || savingEdit}
                           checked={paginatedConsultations.length > 0 && paginatedConsultations.every((c) => selectedIds.has(c.id))}
                           onChange={toggleSelectAllOnPage}
                           className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
@@ -388,6 +538,8 @@ export default function Consultations() {
                           <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
+                              aria-label={`Select consultation ${c.id}`}
+                              disabled={actionPending || savingEdit}
                               checked={selectedIds.has(c.id)}
                               onChange={() => toggleSelectRow(c.id)}
                               className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
@@ -424,6 +576,7 @@ export default function Consultations() {
                                   }}
                                   className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                   title="Mark as complete"
+                                  disabled={actionPending || savingEdit}
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
                                 </button>
@@ -436,6 +589,7 @@ export default function Consultations() {
                                   }}
                                   className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                   title="Cancel consultation"
+                                  disabled={actionPending || savingEdit}
                                 >
                                   <XCircle className="w-4 h-4" />
                                 </button>
@@ -447,6 +601,7 @@ export default function Consultations() {
                                 }}
                                 className="p-2 text-gray-500 hover:text-[#2d8284] hover:bg-[#38A3A5]/10 rounded-lg transition-colors"
                                 title="Edit consultation"
+                                disabled={actionPending || savingEdit}
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -455,7 +610,7 @@ export default function Consultations() {
                                   e.stopPropagation();
                                   handleDelete(c.id);
                                 }}
-                                disabled={deletingId === c.id}
+                                disabled={actionPending || savingEdit}
                                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
                                 title="Delete consultation"
                               >
@@ -474,7 +629,7 @@ export default function Consultations() {
                 totalPages={totalPages}
                 pageSize={pageSize}
                 totalItems={totalElements ?? 0}
-                loading={loading}
+                loading={loading || actionPending || savingEdit}
                 onPageChange={(p) => loadConsultations(p)}
                 onPageSizeChange={(newSize) => {
                   setPageSize(newSize);
@@ -492,7 +647,7 @@ export default function Consultations() {
           <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-xl font-semibold text-gray-900">Consultation Details</h3>
-              <button onClick={closeConsultationDetails} className="text-gray-500 hover:text-gray-700" aria-label="Close consultation details">
+              <button onClick={closeConsultationDetails} disabled={actionPending} className="text-gray-500 hover:text-gray-700" aria-label="Close consultation details">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -616,6 +771,7 @@ export default function Consultations() {
               {selectedConsultation.status === 'IN_PROGRESS' && (
                 <button
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  disabled={actionPending || savingEdit || loading}
                   onClick={async () => {
                     if (await handleComplete(selectedConsultation.id)) closeConsultationDetails();
                   }}
@@ -626,6 +782,7 @@ export default function Consultations() {
               {(selectedConsultation.status === 'SCHEDULED' || selectedConsultation.status === 'IN_PROGRESS') && (
                 <button
                   className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                  disabled={actionPending || savingEdit || loading}
                   onClick={async () => {
                     if (await handleCancel(selectedConsultation.id)) closeConsultationDetails();
                   }}
@@ -635,6 +792,7 @@ export default function Consultations() {
               )}
               <button
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                disabled={actionPending}
                 onClick={closeConsultationDetails}
               >
                 Close
@@ -648,9 +806,13 @@ export default function Consultations() {
       {editingConsultation && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
-          onClick={() => !savingEdit && setEditingConsultation(null)}
+          onClick={closeEdit}
         >
-          <div
+          <form
+            ref={editFormRef}
+            noValidate
+            aria-busy={savingEdit}
+            onSubmit={event => { event.preventDefault(); void handleSaveEdit(); }}
             className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -662,7 +824,9 @@ export default function Consultations() {
                 </p>
               </div>
               <button
-                onClick={() => setEditingConsultation(null)}
+                type="button"
+                onClick={closeEdit}
+                aria-label="Close edit consultation"
                 disabled={savingEdit}
                 className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
               >
@@ -673,62 +837,72 @@ export default function Consultations() {
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+              {editError && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{editError}</div>}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label htmlFor="edit-consultation-chiefComplaint" className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint *</label>
                 <input
+                  {...editProps('chiefComplaint')}
                   value={editForm.chiefComplaint || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, chiefComplaint: e.target.value }))}
+                  onChange={e => changeEditField('chiefComplaint', e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent transition-colors"
                 />
+                {editFieldError('chiefComplaint')}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Present Illness</label>
+                  <label htmlFor="edit-consultation-presentIllness" className="block text-sm font-medium text-gray-700 mb-2">Present Illness</label>
                   <textarea
+                    {...editProps('presentIllness')}
                     value={editForm.presentIllness || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, presentIllness: e.target.value }))}
+                    onChange={e => changeEditField('presentIllness', e.target.value)}
                     rows={3}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                   />
+                  {editFieldError('presentIllness')}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Past Medical History</label>
+                  <label htmlFor="edit-consultation-pastMedicalHistory" className="block text-sm font-medium text-gray-700 mb-2">Past Medical History</label>
                   <textarea
+                    {...editProps('pastMedicalHistory')}
                     value={editForm.pastMedicalHistory || ''}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, pastMedicalHistory: e.target.value }))}
+                    onChange={e => changeEditField('pastMedicalHistory', e.target.value)}
                     rows={3}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                   />
+                  {editFieldError('pastMedicalHistory')}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Recommendations</label>
+                <label htmlFor="edit-consultation-recommendations" className="block text-sm font-medium text-gray-700 mb-2">Recommendations *</label>
                 <textarea
+                  {...editProps('recommendations')}
                   value={editForm.recommendations || ''}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, recommendations: e.target.value }))}
+                  onChange={e => changeEditField('recommendations', e.target.value)}
                   rows={3}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent resize-none transition-colors"
                 />
+                {editFieldError('recommendations')}
               </div>
             </div>
 
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
               <button
+                type="button"
                 className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-                onClick={() => setEditingConsultation(null)}
+                onClick={closeEdit}
                 disabled={savingEdit}
               >
                 Cancel
               </button>
               <button
+                type="submit"
                 className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSaveEdit}
                 disabled={savingEdit}
               >
                 {savingEdit ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
@@ -742,7 +916,7 @@ export default function Consultations() {
         }
         confirmLabel="Delete"
         loading={confirmAction?.type === 'bulk' ? bulkDeleting : deletingId !== null}
-        onCancel={() => setConfirmAction(null)}
+        onCancel={() => { if (!actionRef.current) setConfirmAction(null); }}
         onConfirm={() => {
           if (confirmAction?.type === 'single') confirmSingleDelete(confirmAction.id);
           else if (confirmAction?.type === 'bulk') confirmBulkDelete();

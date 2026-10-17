@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { getAge } from '../../utils/profileValidation';
 
 interface PatientProfile {
   firstName: string;
@@ -8,19 +9,6 @@ interface PatientProfile {
   dateOfBirth: string;
   bloodGroup: string;
 }
-
-// Helper function to calculate age from date of birth
-const calculateAge = (dateOfBirth: string): number => {
-  if (!dateOfBirth) return 0;
-  const today = new Date();
-  const birthDate = new Date(dateOfBirth);
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-};
 
 // Helper function to get initials from name
 const getInitials = (firstName: string, lastName: string): string => {
@@ -39,7 +27,7 @@ export function PatientCard() {
 
   const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Loading...';
   const initials = profile ? getInitials(profile.firstName, profile.lastName) : '...';
-  const age = profile?.dateOfBirth ? calculateAge(profile.dateOfBirth) : '-';
+  const age = getAge(profile?.dateOfBirth) ?? '-';
   const nic = profile?.nicNumber || '-';
   const bloodType = profile?.bloodGroup || '-';
 

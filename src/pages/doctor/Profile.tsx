@@ -8,6 +8,10 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { ProfileView } from '../../components/profile/ProfileView';
 import type { CreateDoctorProfileInput, DoctorProfile as StoredDoctorProfile } from '../../types/user';
+import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
+import { MIN_BIRTH_DATE, PROFILE_FIELDS, PROFILE_MAX_LENGTH, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
+
+type DoctorField = (typeof PROFILE_FIELDS.doctor)[number];
 
 interface DoctorProfile {
   id?: number;
@@ -19,7 +23,7 @@ interface DoctorProfile {
   licenseNumber: string;
   specialization: string;
   qualification: string;
-  experienceYears: number;
+  experienceYears: string;
   user: {
     id: number;
   };
@@ -28,7 +32,7 @@ interface DoctorProfile {
 function createEmptyProfile(userId: number): DoctorProfile {
   return {
     firstName: '', lastName: '', dateOfBirth: '', phoneNumber: '', nicNumber: '',
-    licenseNumber: '', specialization: '', qualification: '', experienceYears: 0,
+    licenseNumber: '', specialization: '', qualification: '', experienceYears: '0',
     user: { id: userId }
   };
 }
@@ -46,7 +50,7 @@ const Profile: React.FC = () => {
     licenseNumber: '',
     specialization: '',
     qualification: '',
-    experienceYears: 0,
+    experienceYears: '0',
     user: {
       id: 0
     }
@@ -56,7 +60,10 @@ const Profile: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [isNewProfile, setIsNewProfile] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<ProfileField>>({});
   const savedProfile = useRef<DoctorProfile | null>(null);
+  const currentUserIdRef = useRef(user?.id);
+  currentUserIdRef.current = user?.id;
   useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
   const loading = profileStatus === 'loading';
 
@@ -73,12 +80,12 @@ const Profile: React.FC = () => {
         licenseNumber: storedProfile.licenseNumber || '',
         specialization: storedProfile.specialization || '',
         qualification: storedProfile.qualification || '',
-        experienceYears: storedProfile.experienceYears || 0,
+        experienceYears: storedProfile.experienceYears == null ? '' : String(storedProfile.experienceYears),
         user: { id: storedProfile.user?.id ?? user?.id ?? 0 },
       });
       setIsNewProfile(false);
       savedProfile.current = {
-        id: storedProfile.id, firstName: storedProfile.firstName || '', lastName: storedProfile.lastName || '', dateOfBirth: storedProfile.dateOfBirth || '', phoneNumber: storedProfile.phoneNumber || '', nicNumber: storedProfile.nicNumber || '', licenseNumber: storedProfile.licenseNumber || '', specialization: storedProfile.specialization || '', qualification: storedProfile.qualification || '', experienceYears: storedProfile.experienceYears || 0, user: { id: storedProfile.user?.id ?? user?.id ?? 0 },
+        id: storedProfile.id, firstName: storedProfile.firstName || '', lastName: storedProfile.lastName || '', dateOfBirth: storedProfile.dateOfBirth || '', phoneNumber: storedProfile.phoneNumber || '', nicNumber: storedProfile.nicNumber || '', licenseNumber: storedProfile.licenseNumber || '', specialization: storedProfile.specialization || '', qualification: storedProfile.qualification || '', experienceYears: storedProfile.experienceYears == null ? '' : String(storedProfile.experienceYears), user: { id: storedProfile.user?.id ?? user?.id ?? 0 },
       };
       setIsEditing(false);
     } else if (profileStatus === 'not-found' && user?.id) {
@@ -93,67 +100,123 @@ const Profile: React.FC = () => {
   }, [currentProfile, profileError, profileStatus, user?.id]);
 
   const startEditing = () => {
+    if (profileStatus !== 'ready' && profileStatus !== 'not-found') return;
     savedProfile.current = profile;
     setError('');
     setSuccess('');
+    setFieldErrors({});
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
+    if (savingRef.current) return;
     if (savedProfile.current) setProfile(savedProfile.current);
     setError('');
+    setFieldErrors({});
     setIsEditing(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    if (savingRef.current) return;
     const { name, value } = e.target;
+    const field = name as DoctorField;
     setProfile(prev => ({
       ...prev,
-      [name]: name === 'experienceYears' ? parseInt(value) || 0 : value
+      [name]: value
     }));
+    setError('');
+    setFieldErrors(previous => ({ ...previous, [field]: previous[field] ? getProfileFieldError('doctor', field, value, savedProfile.current?.[field]) : undefined }));
   };
+
+  const fieldProps = (field: DoctorField) => ({
+    id: `doctor-${field}`,
+    maxLength: PROFILE_MAX_LENGTH[field],
+    disabled: saving,
+    'aria-invalid': !!fieldErrors[field],
+    'aria-describedby': fieldErrors[field] ? `doctor-${field}-error` : undefined,
+    onBlur: () => {
+      if (savingRef.current) return;
+      const value = normalizeProfileField(field, profile[field]);
+      setProfile(previous => ({ ...previous, [field]: value }));
+      setFieldErrors(previous => ({ ...previous, [field]: getProfileFieldError('doctor', field, value, savedProfile.current?.[field]) ?? previous[field] }));
+    },
+  });
+
+  const fieldError = (field: DoctorField) => fieldErrors[field]
+    ? <p id={`doctor-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors[field]}</p> : null;
 
   const savingRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (savingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
+    setError('');
+    setSuccess('');
+    if (!user?.id || !Number.isInteger(user.id) || user.id <= 0) {
+      setError('User information not found. Please login again.');
+      return;
+    }
+    if (profileStatus !== 'ready' && profileStatus !== 'not-found') {
+      setError('Your profile could not be loaded. Please reload the page before saving.');
+      return;
+    }
+    const errors = validateProfile('doctor', profile, savedProfile.current ?? {});
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      focusFirstInvalidField(form);
+      return;
+    }
+    if (!isNewProfile && (profile.id === undefined || !Number.isInteger(profile.id) || profile.id <= 0)) {
+      setError('Profile ID is missing. Please reload the page and try again.');
+      return;
+    }
+    const submittedUserId = user.id;
+    const normalized = normalizeProfile('doctor', profile);
     savingRef.current = true;
     setSaving(true);
     setError('');
     setSuccess('');
 
     const requestBody: CreateDoctorProfileInput = {
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      dateOfBirth: profile.dateOfBirth,
-      phoneNumber: profile.phoneNumber,
-      nicNumber: profile.nicNumber,
-      licenseNumber: profile.licenseNumber,
-      specialization: profile.specialization,
-      qualification: profile.qualification,
-      experienceYears: profile.experienceYears,
-      user: { id: user?.id || profile.user.id },
+      firstName: normalized.firstName,
+      lastName: normalized.lastName,
+      dateOfBirth: normalized.dateOfBirth,
+      phoneNumber: normalized.phoneNumber,
+      nicNumber: normalized.nicNumber,
+      licenseNumber: normalized.licenseNumber,
+      specialization: normalized.specialization,
+      qualification: normalized.qualification,
+      experienceYears: Number(normalized.experienceYears),
+      user: { id: submittedUserId },
     };
 
     try {
       if (isNewProfile) {
         const created = await profileAPI.createDoctor(requestBody);
-        setProfile(prev => ({ ...prev, id: created.id }));
+        if (currentUserIdRef.current !== submittedUserId) return;
+        setProfile({ ...normalized, id: created.id });
+        savedProfile.current = { ...normalized, id: created.id };
         replaceProfile(created);
         setSuccess('Profile created successfully!');
         setIsNewProfile(false);
       } else {
-        if (!profile.id) throw new Error('Profile ID is missing. Please refresh and try again.');
+        if (profile.id === undefined) throw new Error('Profile ID is missing. Please reload the page and try again.');
         const updated = await profileAPI.updateDoctor({ ...requestBody, id: profile.id });
-        setProfile(prev => ({ ...prev, id: updated.id }));
+        if (currentUserIdRef.current !== submittedUserId) return;
+        setProfile({ ...normalized, id: updated.id });
+        savedProfile.current = { ...normalized, id: updated.id };
         replaceProfile(updated);
         setSuccess('Profile updated successfully!');
       }
       setIsEditing(false);
     } catch (error: unknown) {
-      console.error('Error saving profile:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save profile');
+      if (currentUserIdRef.current !== submittedUserId) return;
+      const errors = getApiFieldErrors(error, PROFILE_FIELDS.doctor);
+      if (Object.keys(errors).length) {
+        setFieldErrors(errors);
+        focusFirstInvalidField(form);
+      } else setError(error instanceof Error ? error.message : 'Failed to save profile');
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -219,7 +282,7 @@ const Profile: React.FC = () => {
 
           {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
             {error && (
-              <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div role="alert" className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
                 <span className="text-red-700">{error}</span>
               </div>
@@ -232,14 +295,14 @@ const Profile: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} noValidate aria-busy={saving} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* First Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-firstName" className="block text-sm font-medium text-gray-700 mb-2">
                     First Name *
                   </label>
-                  <input
+                  <input {...fieldProps('firstName')}
                     type="text"
                     name="firstName"
                     value={profile.firstName}
@@ -248,14 +311,15 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="Enter first name"
                   />
+                  {fieldError('firstName')}
                 </div>
 
                 {/* Last Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-lastName" className="block text-sm font-medium text-gray-700 mb-2">
                     Last Name *
                   </label>
-                  <input
+                  <input {...fieldProps('lastName')}
                     type="text"
                     name="lastName"
                     value={profile.lastName}
@@ -264,14 +328,15 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="Enter last name"
                   />
+                  {fieldError('lastName')}
                 </div>
 
                 {/* Date of Birth */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                     Date of Birth *
                   </label>
-                  <input
+                  <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                     type="date"
                     name="dateOfBirth"
                     value={profile.dateOfBirth}
@@ -279,14 +344,15 @@ const Profile: React.FC = () => {
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                   />
+                  {fieldError('dateOfBirth')}
                 </div>
 
                 {/* Phone Number */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     Phone Number *
                   </label>
-                  <input
+                  <input {...fieldProps('phoneNumber')} inputMode="tel" autoComplete="tel"
                     type="tel"
                     name="phoneNumber"
                     value={profile.phoneNumber}
@@ -295,14 +361,15 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="+94771234567"
                   />
+                  {fieldError('phoneNumber')}
                 </div>
 
                 {/* NIC Number */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-nicNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     NIC Number *
                   </label>
-                  <input
+                  <input {...fieldProps('nicNumber')} autoCapitalize="characters" spellCheck={false}
                     type="text"
                     name="nicNumber"
                     value={profile.nicNumber}
@@ -311,14 +378,15 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="123456789V or 123456789012"
                   />
+                  {fieldError('nicNumber')}
                 </div>
 
                 {/* Medical License Number */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-licenseNumber" className="block text-sm font-medium text-gray-700 mb-2">
                     Medical License Number *
                   </label>
-                  <input
+                  <input {...fieldProps('licenseNumber')}
                     type="text"
                     name="licenseNumber"
                     value={profile.licenseNumber}
@@ -327,14 +395,15 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="Enter medical license number"
                   />
+                  {fieldError('licenseNumber')}
                 </div>
 
                 {/* Specialization */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-specialization" className="block text-sm font-medium text-gray-700 mb-2">
                     Specialization *
                   </label>
-                  <select
+                  <select {...fieldProps('specialization')}
                     name="specialization"
                     value={profile.specialization}
                     onChange={handleInputChange}
@@ -342,30 +411,18 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                   >
                     <option value="">Select specialization</option>
-                    <option value="Cardiology">Cardiology</option>
-                    <option value="Dermatology">Dermatology</option>
-                    <option value="Endocrinology">Endocrinology</option>
-                    <option value="Family Medicine">Family Medicine</option>
-                    <option value="Gastroenterology">Gastroenterology</option>
-                    <option value="Internal Medicine">Internal Medicine</option>
-                    <option value="Neurology">Neurology</option>
-                    <option value="Oncology">Oncology</option>
-                    <option value="Pediatrics">Pediatrics</option>
-                    <option value="Psychiatry">Psychiatry</option>
-                    <option value="Pulmonology">Pulmonology</option>
-                    <option value="Radiology">Radiology</option>
-                    <option value="Surgery">Surgery</option>
-                    <option value="Urology">Urology</option>
-                    <option value="Other">Other</option>
+                    {profile.specialization && !PROFILE_OPTIONS.specialization.some(option => option === profile.specialization) && <option value={profile.specialization}>{profile.specialization} (current value)</option>}
+                    {PROFILE_OPTIONS.specialization.map(option => <option key={option} value={option}>{option}</option>)}
                   </select>
+                  {fieldError('specialization')}
                 </div>
 
                 {/* Experience Years */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="doctor-experienceYears" className="block text-sm font-medium text-gray-700 mb-2">
                     Experience (Years) *
                   </label>
-                  <input
+                  <input {...fieldProps('experienceYears')} step="1"
                     type="number"
                     name="experienceYears"
                     value={profile.experienceYears}
@@ -376,15 +433,16 @@ const Profile: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     placeholder="Years of experience"
                   />
+                  {fieldError('experienceYears')}
                 </div>
               </div>
 
               {/* Qualifications */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="doctor-qualification" className="block text-sm font-medium text-gray-700 mb-2">
                   Medical Qualifications *
                 </label>
-                <textarea
+                <textarea {...fieldProps('qualification')}
                   name="qualification"
                   value={profile.qualification}
                   onChange={handleInputChange}
@@ -393,6 +451,7 @@ const Profile: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                   placeholder="Enter your medical qualifications (e.g., MBBS, MD, Fellowship details)"
                 />
+                {fieldError('qualification')}
               </div>
 
               <div className="flex flex-col-reverse gap-3 pt-6 border-t border-gray-200 sm:flex-row sm:justify-end">
@@ -422,7 +481,7 @@ const Profile: React.FC = () => {
             onEdit={startEditing}
             sections={[
               { title: 'Personal information', details: [{ label: 'First name', value: profile.firstName }, { label: 'Last name', value: profile.lastName }, { label: 'Date of birth', value: profile.dateOfBirth }, { label: 'NIC number', value: profile.nicNumber }] },
-              { title: 'Professional information', details: [{ label: 'License number', value: profile.licenseNumber }, { label: 'Specialization', value: profile.specialization }, { label: 'Experience', value: profile.experienceYears ? `${profile.experienceYears} years` : '' }, { label: 'Qualifications', value: profile.qualification }] },
+              { title: 'Professional information', details: [{ label: 'License number', value: profile.licenseNumber }, { label: 'Specialization', value: profile.specialization }, { label: 'Experience', value: profile.experienceYears !== '' ? `${profile.experienceYears} years` : '' }, { label: 'Qualifications', value: profile.qualification }] },
               { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] },
             ]}
           />}
