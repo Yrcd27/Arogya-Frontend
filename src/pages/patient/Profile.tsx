@@ -8,39 +8,37 @@ import type { CreatePatientProfileInput, PatientProfile } from '../../types/user
 import { Header } from '../../components/patient/Header';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { ProfileView } from '../../components/profile/ProfileView';
+import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
+import { PROFILE_FIELDS, PROFILE_OPTIONS, getProfileFieldError, localDateString, normalizeProfile, normalizeProfileField, validateProfile, type ProfileField } from '../../utils/profileValidation';
+
+type PatientField = (typeof PROFILE_FIELDS.patient)[number];
+const emptyPatientProfile = {
+  id: 0, firstName: '', lastName: '', dateOfBirth: '', phoneNumber: '', nicNumber: '', address: '',
+  gender: '', bloodGroup: '', allergies: '', chronicDiseases: '', emergencyContact: '',
+};
 
 export function Profile() {
   const { user } = useAuth();
   const { profile: currentProfile, status: profileStatus, error: profileError, replaceProfile } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
-  const [formData, setFormData] = useState({
-    id: 0,
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '',
-    phoneNumber: '',
-    nicNumber: '',
-    address: '',
-    gender: '',
-    bloodGroup: '',
-    allergies: '',
-    chronicDiseases: '',
-    emergencyContact: '',
-  });
+  const [formData, setFormData] = useState(emptyPatientProfile);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hasProfile, setHasProfile] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<ProfileField>>({});
   const savedFormData = useRef(formData);
+  const currentUserIdRef = useRef(user?.id);
+  currentUserIdRef.current = user?.id;
   useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
 
   useEffect(() => {
     const profile = currentProfile as PatientProfile | null;
     if (profile) {
-        setFormData({
+        const nextProfile = {
           id: profile.id,
           firstName: profile.firstName || '',
           lastName: profile.lastName || '',
@@ -53,10 +51,16 @@ export function Profile() {
           allergies: profile.allergies || '',
           chronicDiseases: profile.chronicDiseases || '',
           emergencyContact: profile.emergencyContact || '',
-        });
+        };
+        setFormData(nextProfile);
+        savedFormData.current = nextProfile;
+        setFieldErrors({});
         setHasProfile(true);
         setIsEditing(false);
       } else if (profileStatus === 'not-found') {
+        setFormData(emptyPatientProfile);
+        savedFormData.current = emptyPatientProfile;
+        setFieldErrors({});
         setHasProfile(false);
         setIsEditing(false);
       } else if (profileStatus === 'error') {
@@ -65,74 +69,124 @@ export function Profile() {
   }, [currentProfile, profileError, profileStatus]);
 
   const startEditing = () => {
+    if (profileStatus !== 'ready' && profileStatus !== 'not-found') return;
     savedFormData.current = formData;
     setError('');
     setSuccess('');
+    setFieldErrors({});
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
+    if (savingRef.current) return;
     setFormData(savedFormData.current);
     setError('');
+    setFieldErrors({});
     setIsEditing(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    if (savingRef.current) return;
     const { name, value } = e.target;
+    const field = name as PatientField;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    setError('');
+    setFieldErrors(previous => ({ ...previous, [field]: previous[field] ? getProfileFieldError('patient', field, value, savedFormData.current[field]) : undefined }));
   };
+
+  const fieldProps = (field: PatientField) => ({
+    id: `patient-${field}`,
+    disabled: loading,
+    'aria-invalid': !!fieldErrors[field],
+    'aria-describedby': fieldErrors[field] ? `patient-${field}-error` : undefined,
+    onBlur: () => {
+      if (savingRef.current) return;
+      const value = normalizeProfileField(field, formData[field]);
+      setFormData(previous => ({ ...previous, [field]: value }));
+      setFieldErrors(previous => ({ ...previous, [field]: getProfileFieldError('patient', field, value, savedFormData.current[field]) ?? previous[field] }));
+    },
+  });
+
+  const fieldError = (field: PatientField) => fieldErrors[field]
+    ? <p id={`patient-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors[field]}</p> : null;
 
   const savingRef = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (savingRef.current) return;
+    const form = e.currentTarget as HTMLFormElement;
+    setError('');
+    setSuccess('');
+    if (!user?.id || !Number.isInteger(user.id) || user.id <= 0) {
+      setError('User information not found. Please login again.');
+      return;
+    }
+    if (profileStatus !== 'ready' && profileStatus !== 'not-found') {
+      setError('Your profile could not be loaded. Please reload the page before saving.');
+      return;
+    }
+    const errors = validateProfile('patient', formData, savedFormData.current);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      focusFirstInvalidField(form);
+      return;
+    }
+    if (hasProfile && (!Number.isInteger(formData.id) || formData.id <= 0)) {
+      setError('Profile ID is missing. Please reload the page and try again.');
+      return;
+    }
+    const submittedUserId = user.id;
+    const normalized = normalizeProfile('patient', formData);
     savingRef.current = true;
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      if (!user?.id) {
-        setError('User information not found. Please login again.');
-        return;
-      }
-
       const profileData: CreatePatientProfileInput = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        dateOfBirth: formData.dateOfBirth,
-        phoneNumber: formData.phoneNumber,
-        nicNumber: formData.nicNumber,
-        address: formData.address,
-        gender: formData.gender,
-        bloodGroup: formData.bloodGroup,
-        allergies: formData.allergies,
-        chronicDiseases: formData.chronicDiseases,
-        emergencyContact: formData.emergencyContact,
-        user: { id: user.id },
+        firstName: normalized.firstName,
+        lastName: normalized.lastName,
+        dateOfBirth: normalized.dateOfBirth,
+        phoneNumber: normalized.phoneNumber,
+        nicNumber: normalized.nicNumber,
+        address: normalized.address,
+        gender: normalized.gender,
+        bloodGroup: normalized.bloodGroup,
+        allergies: normalized.allergies,
+        chronicDiseases: normalized.chronicDiseases,
+        emergencyContact: normalized.emergencyContact,
+        user: { id: submittedUserId },
       };
 
       if (hasProfile) {
         const updated = await profileAPI.updatePatient({ ...profileData, id: formData.id });
-        setFormData(prev => ({ ...prev, id: updated.id }));
+        if (currentUserIdRef.current !== submittedUserId) return;
+        setFormData({ ...normalized, id: updated.id });
+        savedFormData.current = { ...normalized, id: updated.id };
         replaceProfile(updated);
         setSuccess('Profile updated successfully!');
 
       } else {
         const created = await profileAPI.createPatient(profileData);
-        setFormData(prev => ({ ...prev, id: created.id }));
+        if (currentUserIdRef.current !== submittedUserId) return;
+        setFormData({ ...normalized, id: created.id });
+        savedFormData.current = { ...normalized, id: created.id };
         replaceProfile(created);
         setSuccess('Profile created successfully!');
         setHasProfile(true);
       }
       setIsEditing(false);
     } catch (error) {
-      console.error('Profile operation failed:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save profile. Please try again.');
+      if (currentUserIdRef.current !== submittedUserId) return;
+      const errors = getApiFieldErrors(error, PROFILE_FIELDS.patient);
+      if (Object.keys(errors).length) {
+        setFieldErrors(errors);
+        focusFirstInvalidField(form);
+      } else setError(error instanceof Error ? error.message : 'Failed to save profile. Please try again.');
     } finally {
       savingRef.current = false;
       setLoading(false);
@@ -183,7 +237,7 @@ export function Profile() {
           )}
 
           {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-6">
                 {/* Success/Error Messages */}
                 {success && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -201,7 +255,7 @@ export function Profile() {
                 )}
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex">
                       <div className="flex-shrink-0">
                         <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -220,10 +274,10 @@ export function Profile() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-firstName" className="block text-sm font-medium text-gray-700 mb-2">
                         First Name *
                       </label>
-                      <input
+                      <input {...fieldProps('firstName')}
                         type="text"
                         name="firstName"
                         value={formData.firstName}
@@ -233,12 +287,13 @@ export function Profile() {
                         required
                         disabled={loading}
                       />
+                      {fieldError('firstName')}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-lastName" className="block text-sm font-medium text-gray-700 mb-2">
                         Last Name *
                       </label>
-                      <input
+                      <input {...fieldProps('lastName')}
                         type="text"
                         name="lastName"
                         value={formData.lastName}
@@ -248,15 +303,16 @@ export function Profile() {
                         required
                         disabled={loading}
                       />
+                      {fieldError('lastName')}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
-                      <input
+                      <input {...fieldProps('dateOfBirth')} max={localDateString()}
                         type="date"
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
@@ -264,12 +320,13 @@ export function Profile() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('dateOfBirth')}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number
                       </label>
-                      <input
+                      <input {...fieldProps('phoneNumber')} inputMode="tel" autoComplete="tel"
                         type="tel"
                         name="phoneNumber"
                         value={formData.phoneNumber}
@@ -278,14 +335,15 @@ export function Profile() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('phoneNumber')}
                     </div>
                   </div>
 
                   <div className="mt-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="patient-nicNumber" className="block text-sm font-medium text-gray-700 mb-2">
                       NIC Number
                     </label>
-                    <input
+                    <input {...fieldProps('nicNumber')} autoCapitalize="characters" spellCheck={false}
                       type="text"
                       name="nicNumber"
                       value={formData.nicNumber}
@@ -294,6 +352,7 @@ export function Profile() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       disabled={loading}
                     />
+                    {fieldError('nicNumber')}
                   </div>
                 </div>
 
@@ -302,10 +361,10 @@ export function Profile() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Medical Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label htmlFor="patient-gender" className="block text-sm font-medium text-gray-900 mb-2">
                         Gender
                       </label>
-                      <select
+                      <select {...fieldProps('gender')}
                         name="gender"
                         value={formData.gender}
                         onChange={handleInputChange}
@@ -313,15 +372,16 @@ export function Profile() {
                         disabled={loading}
                       >
                         <option value="">Not specified</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
+                        {formData.gender && !PROFILE_OPTIONS.gender.some(option => option === formData.gender) && <option value={formData.gender}>{formData.gender} (current value)</option>}
+                        {PROFILE_OPTIONS.gender.map(option => <option key={option} value={option}>{option}</option>)}
                       </select>
+                      {fieldError('gender')}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label htmlFor="patient-bloodGroup" className="block text-sm font-medium text-gray-900 mb-2">
                         Blood Group
                       </label>
-                      <select
+                      <select {...fieldProps('bloodGroup')}
                         name="bloodGroup"
                         value={formData.bloodGroup}
                         onChange={handleInputChange}
@@ -329,24 +389,19 @@ export function Profile() {
                         disabled={loading}
                       >
                         <option value="">Not specified</option>
-                        <option value="O+">O+</option>
-                        <option value="O-">O-</option>
-                        <option value="A+">A+</option>
-                        <option value="A-">A-</option>
-                        <option value="B+">B+</option>
-                        <option value="B-">B-</option>
-                        <option value="AB+">AB+</option>
-                        <option value="AB-">AB-</option>
+                        {formData.bloodGroup && !PROFILE_OPTIONS.bloodGroup.some(option => option === formData.bloodGroup) && <option value={formData.bloodGroup}>{formData.bloodGroup} (current value)</option>}
+                        {PROFILE_OPTIONS.bloodGroup.map(option => <option key={option} value={option}>{option}</option>)}
                       </select>
+                      {fieldError('bloodGroup')}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label htmlFor="patient-allergies" className="block text-sm font-medium text-gray-900 mb-2">
                         Allergies
                       </label>
-                      <input
+                      <input {...fieldProps('allergies')}
                         type="text"
                         name="allergies"
                         value={formData.allergies}
@@ -355,12 +410,13 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('allergies')}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">
+                      <label htmlFor="patient-chronicDiseases" className="block text-sm font-medium text-gray-900 mb-2">
                         Chronic Diseases
                       </label>
-                      <input
+                      <input {...fieldProps('chronicDiseases')}
                         type="text"
                         name="chronicDiseases"
                         value={formData.chronicDiseases}
@@ -369,6 +425,7 @@ export function Profile() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('chronicDiseases')}
                     </div>
                   </div>
                 </div>
@@ -378,10 +435,10 @@ export function Profile() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-address" className="block text-sm font-medium text-gray-700 mb-2">
                         Address
                       </label>
-                      <textarea
+                      <textarea {...fieldProps('address')}
                         name="address"
                         value={formData.address}
                         onChange={handleInputChange}
@@ -390,13 +447,14 @@ export function Profile() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('address')}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="patient-emergencyContact" className="block text-sm font-medium text-gray-700 mb-2">
                         Emergency Contact
                       </label>
-                      <input
-                        type="text"
+                      <input {...fieldProps('emergencyContact')} inputMode="tel" autoComplete="off"
+                        type="tel"
                         name="emergencyContact"
                         value={formData.emergencyContact}
                         onChange={handleInputChange}
@@ -404,6 +462,7 @@ export function Profile() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                         disabled={loading}
                       />
+                      {fieldError('emergencyContact')}
                     </div>
                   </div>
                 </div>

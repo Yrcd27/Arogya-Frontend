@@ -19,7 +19,7 @@ import { toast } from 'react-toastify';
 import { userAPI } from '../services/userService';
 import { ApiError } from '../services/httpClient';
 import {
-  focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError,
+  PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError,
   getOtpError, getPasswordStrength, getResetPasswordCriteria, getResetPasswordError, normalizeEmail,
   type FieldErrors,
 } from '../utils/formValidation';
@@ -255,6 +255,7 @@ export function ForgotPassword() {
   const passwordCriteria = getResetPasswordCriteria(newPassword);
 
   const passwordStrength = getPasswordStrength(newPassword);
+  const showPasswordRequirements = !!newPassword && !!getResetPasswordError(newPassword) && fieldErrors.newPassword !== PASSWORD_REQUIREMENTS;
   const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -583,7 +584,7 @@ export function ForgotPassword() {
                     id="recovery-password"
                     name="newPassword"
                     aria-invalid={!!fieldErrors.newPassword}
-                    aria-describedby={fieldErrors.newPassword ? 'recovery-password-requirements recovery-password-error' : 'recovery-password-requirements'}
+                    aria-describedby={[showPasswordRequirements && 'recovery-password-requirements', fieldErrors.newPassword && 'recovery-password-error'].filter(Boolean).join(' ') || undefined}
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     value={newPassword}
@@ -613,7 +614,7 @@ export function ForgotPassword() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p id="recovery-password-requirements" className="mt-2 text-xs text-gray-500">Use at least 8 characters and at least 3 of: uppercase letters, lowercase letters, numbers, or special characters (!@#$%^&amp;*(),.?&quot;:&#123;&#125;|&lt;&gt;).</p>
+                {showPasswordRequirements && <p id="recovery-password-requirements" className="mt-2 text-xs text-gray-500">{PASSWORD_REQUIREMENTS}</p>}
                 {fieldErrors.newPassword && <p id="recovery-password-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.newPassword}</p>}
               </div>
 

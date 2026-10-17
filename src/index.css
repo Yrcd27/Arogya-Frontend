@@ -22,6 +22,11 @@ iframe.VIpgJd-ZVi9od-ORHb-OEVmcd.skiptranslate,
   visibility: hidden !important;
 }
 
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 .google-translate-host {
   position: fixed;
   width: 1px;

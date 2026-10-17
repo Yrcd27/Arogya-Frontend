@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { HomeIcon } from 'lucide-react';
+import { HomeIcon, Eye, EyeOff } from 'lucide-react';
 import { userAPI } from '../services/api';
 import { ApiError } from '../services/httpClient';
 import { PASSWORD_REQUIREMENTS, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError, getPasswordPolicyError, normalizeEmail, type FieldErrors } from '../utils/formValidation';
@@ -22,6 +22,9 @@ export function RegisterForm() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [visibleFields, setVisibleFields] = useState({ secretKey: false, password: false, confirmPassword: false });
+  const toggleVisibility = (field: keyof typeof visibleFields) =>
+    setVisibleFields(previous => ({ ...previous, [field]: !previous[field] }));
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<RegisterField>>({});
   const submittingRef = useRef(false);
@@ -305,20 +308,30 @@ export function RegisterForm() {
                       <label htmlFor="register-secretKey" className="block text-sm font-medium text-gray-900 mb-2">
                         Secret Key *
                       </label>
-                      <input 
-                        type="password" 
-                        name="secretKey"
-                        id="register-secretKey"
-                        aria-invalid={!!fieldErrors.secretKey}
-                        aria-describedby={fieldErrors.secretKey ? 'register-secretKey-error' : undefined}
-                        value={formData.secretKey}
-                        onChange={handleInputChange}
-                        onBlur={handleBlur}
-                        placeholder="Enter secret key"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
-                        required
-                        disabled={loading}
-                      />
+                      <div className="relative">
+                        <input
+                          type={visibleFields.secretKey ? 'text' : 'password'}
+                          name="secretKey"
+                          id="register-secretKey"
+                          aria-invalid={!!fieldErrors.secretKey}
+                          aria-describedby={fieldErrors.secretKey ? 'register-secretKey-error' : undefined}
+                          value={formData.secretKey}
+                          onChange={handleInputChange}
+                          onBlur={handleBlur}
+                          placeholder="Enter secret key"
+                          className="w-full pl-4 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                          required
+                          disabled={loading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleVisibility('secretKey')}
+                          aria-label={visibleFields.secretKey ? 'Hide secret key' : 'Show secret key'}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
+                        >
+                          {visibleFields.secretKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
                       {fieldErrors.secretKey && <p id="register-secretKey-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.secretKey}</p>}
                     </div>
                   </div>
@@ -379,43 +392,65 @@ export function RegisterForm() {
                   <label htmlFor="register-password" className="block text-sm font-medium text-gray-900 mb-2">
                     Password *
                   </label>
-                  <input 
-                    type="password" 
-                    name="password"
-                    id="register-password"
-                    aria-invalid={!!fieldErrors.password}
-                    aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
-                    autoComplete="new-password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    onBlur={handleBlur}
-                    placeholder="Create a password" 
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
-                    required
-                    disabled={loading}
-                  />
-                  <p className="mt-1.5 text-xs text-gray-500">{PASSWORD_REQUIREMENTS}</p>
+                  <div className="relative">
+                    <input
+                      type={visibleFields.password ? 'text' : 'password'}
+                      name="password"
+                      id="register-password"
+                      aria-invalid={!!fieldErrors.password}
+                      aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
+                      autoComplete="new-password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      onBlur={handleBlur}
+                      placeholder="Create a password"
+                      className="w-full pl-4 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                      required
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVisibility('password')}
+                      aria-label={visibleFields.password ? 'Hide password' : 'Show password'}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
+                    >
+                      {visibleFields.password ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {formData.password && getPasswordPolicyError(formData.password, '') && fieldErrors.password !== PASSWORD_REQUIREMENTS && (
+                    <p className="mt-1.5 text-xs text-gray-500">{PASSWORD_REQUIREMENTS}</p>
+                  )}
                   {fieldErrors.password && <p id="register-password-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.password}</p>}
                 </div>
                 <div>
                   <label htmlFor="register-confirmPassword" className="block text-sm font-medium text-gray-900 mb-2">
                     Confirm Password *
                   </label>
-                  <input 
-                    type="password" 
-                    name="confirmPassword"
-                    id="register-confirmPassword"
-                    aria-invalid={!!fieldErrors.confirmPassword}
-                    aria-describedby={fieldErrors.confirmPassword ? 'register-confirmPassword-error' : undefined}
-                    autoComplete="new-password"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    onBlur={handleBlur}
-                    placeholder="Confirm your password" 
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
-                    required
-                    disabled={loading}
-                  />
+                  <div className="relative">
+                    <input
+                      type={visibleFields.confirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      id="register-confirmPassword"
+                      aria-invalid={!!fieldErrors.confirmPassword}
+                      aria-describedby={fieldErrors.confirmPassword ? 'register-confirmPassword-error' : undefined}
+                      autoComplete="new-password"
+                      value={formData.confirmPassword}
+                      onChange={handleInputChange}
+                      onBlur={handleBlur}
+                      placeholder="Confirm your password"
+                      className="w-full pl-4 pr-11 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                      required
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleVisibility('confirmPassword')}
+                      aria-label={visibleFields.confirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
+                    >
+                      {visibleFields.confirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                   {fieldErrors.confirmPassword && <p id="register-confirmPassword-error" role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors.confirmPassword}</p>}
                 </div>
               </div>
