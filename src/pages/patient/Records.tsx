@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
@@ -179,16 +180,16 @@ export function Records() {
       />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Prescriptions</p>
+        <PageContent>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Prescriptions</p>
             <h1 className="text-3xl font-bold text-gray-900">
               Prescriptions
             </h1>
           </div>
 
           {loadError && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {loadError}
             </div>
           )}
@@ -293,7 +294,7 @@ export function Records() {
               />
             )}
           </div>
-        </main>
+        </PageContent>
       </div>
 
       {/* View Record Modal */}

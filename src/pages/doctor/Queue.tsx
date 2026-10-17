@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -375,13 +376,13 @@ export function Queue() {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 lg:p-6">
-          <div className="mb-4">
+        <PageContent>
+          <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Patient Queue</p>
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Patient Queue</h1>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="doctor-queue-clinic" className="block text-sm font-medium text-gray-700 mb-2">Select Clinic</label>
@@ -438,7 +439,7 @@ export function Queue() {
 
           {/* Now serving */}
           {servingToken && (
-            <div className="bg-[#e6f6f6] border border-[#38A3A5] rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div className="bg-[#e6f6f6] border border-[#38A3A5] rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#38A3A5] text-white rounded-full flex items-center justify-center font-semibold">
                   {servingToken.tokenNumber}
@@ -548,7 +549,7 @@ export function Queue() {
           )}
 
           {recentlyDone.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
+            <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Completed this session</h3>
               <div className="space-y-2">
                 {recentlyDone.map(t => (
@@ -565,7 +566,7 @@ export function Queue() {
               </div>
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {isProfileModalOpen && selectedPatientId && (

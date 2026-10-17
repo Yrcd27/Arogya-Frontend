@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { SaveIcon, AlertCircleIcon, CheckCircleIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/doctor/Header';
@@ -232,11 +233,11 @@ const Profile: React.FC = () => {
         />
         <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
           <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          <PageContent>
             <div className="flex items-center justify-center h-full">
               <div className="text-gray-500">Loading profile...</div>
             </div>
-          </main>
+          </PageContent>
         </div>
       </div>
     );
@@ -250,16 +251,16 @@ const Profile: React.FC = () => {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-          <div className="mb-4 sm:mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+        <PageContent scrollable>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Profile</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {isNewProfile ? 'Complete Your Doctor Profile' : 'Doctor Profile'}
             </h1>
           </div>
 
           {isNewProfile && !isEditing && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
@@ -269,13 +270,13 @@ const Profile: React.FC = () => {
           )}
 
           {error && !isEditing && (
-            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
               <AlertCircleIcon className="h-5 w-5" />{error}
             </div>
           )}
 
           {success && !isEditing && (
-            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+            <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
               <CheckCircleIcon className="h-5 w-5" />{success}
             </div>
           )}
@@ -485,7 +486,7 @@ const Profile: React.FC = () => {
               { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] },
             ]}
           />}
-        </main>
+        </PageContent>
       </div>
     </div>
   );

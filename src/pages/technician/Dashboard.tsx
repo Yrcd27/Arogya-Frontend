@@ -1,89 +1,37 @@
-import { useState } from 'react';
-import { Header } from '../../components/technician/Header';
+import { useMemo, useState } from 'react';
+import { ClipboardList, FileCheck2, FlaskConical } from 'lucide-react';
 import { Sidebar } from '../../components/technician/Sidebar';
-import { FlaskConicalIcon, ClipboardListIcon, UsersIcon, CalendarIcon, AlertCircleIcon } from 'lucide-react';
+import { Header } from '../../components/technician/Header';
+import { DashboardMetric, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const { stats, failedFields, loading, error } = useDashboardData({ includeTestResults: true });
-
-  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
-
-  const techStats = [
-    {
-      label: 'Total Patients',
-      value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
-      icon: UsersIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Lab Tests',
-      value: loading ? '...' : fmt(stats.totalLabTests, failedFields.totalLabTests),
-      icon: FlaskConicalIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Scheduled Clinics',
-      value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
-      icon: CalendarIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Reports Generated',
-      value: loading ? '...' : fmt(stats.totalTestResults, failedFields.totalTestResults),
-      icon: ClipboardListIcon,
-      color: '#38A3A5'
-    }
-  ];
+  const { labTests, reports, profileStatus, profileError } = useDashboardData({ role: 'technician' });
+  const needsAttention = useMemo(
+    () => labTests.data?.items.filter(test => test.status === 'PENDING' || test.status === 'IN_PROGRESS') ?? [],
+    [labTests.data],
+  );
+  const reportError = reports.error || (profileStatus === 'error' ? profileError || 'Your technician profile could not be verified.' : null);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-      />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className={'flex min-h-screen flex-col transition-all duration-300 ' + (isSidebarOpen ? 'md:ml-64' : 'md:ml-0')}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6">
-          <div className="mb-4">
-            <p className="text-gray-600 text-sm mb-1">Dashboard</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Technician Dashboard
-            </h1>
+        <main className="min-w-0 flex-1 space-y-5 p-4 sm:p-6">
+          <div><p className="mb-1 text-sm text-gray-600">Dashboard</p><h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Technician Dashboard</h1><p className="mt-1 text-sm text-gray-500">A compact overview of your laboratory work.</p></div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <DashboardMetric label="Lab orders" value={labTests.data?.total} loading={labTests.loading} hint="All accessible lab orders" icon={FlaskConical} />
+            <DashboardMetric label="Needs attention" value={labTests.error ? null : needsAttention.length} loading={labTests.loading} hint="Pending or in progress among the first five returned orders" icon={ClipboardList} />
+            <DashboardMetric label="My submitted reports" value={reportError ? null : reports.data?.total} loading={reports.loading || profileStatus === 'loading'} hint={reportError ? 'Unavailable until your report summary can load' : 'Reports linked to your technician profile'} icon={FileCheck2} />
           </div>
-
-          {error && (
-            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
-              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {techStats.map(stat => (
-              <div key={stat.label} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 border border-gray-100">
-                <p className="text-gray-600 text-sm mb-2">{stat.label}</p>
-                <div className="flex items-center justify-between">
-                  {loading ? (
-                    <div className="w-20 h-10 bg-gray-200 rounded animate-pulse"></div>
-                  ) : (
-                    <p className="text-2xl sm:text-4xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  )}
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{
-                    backgroundColor: `${stat.color}20`
-                  }}>
-                    <stat.icon className="w-5 h-5 sm:w-6 sm:h-6" style={{
-                      color: stat.color
-                    }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {reportError && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Your submitted-report total is unavailable: {reportError}</p>}
+          <DashboardPanel title="Needs attention" description="Pending and in-progress work from the first five orders returned by the worklist." loading={labTests.loading} error={labTests.error} action={{ to: '/technician/lab-tests', label: 'Open Lab Tests' }}>
+            {needsAttention.length
+              ? <p className="py-2 text-sm text-gray-700"><span className="font-semibold text-gray-900">{needsAttention.length}</span> {needsAttention.length === 1 ? 'order needs' : 'orders need'} attention. Open Lab Tests to review, filter, and process them.</p>
+              : <p className="py-2 text-sm text-gray-500">No pending or in-progress work was found in the current five-order snapshot.</p>}
+          </DashboardPanel>
         </main>
       </div>
     </div>

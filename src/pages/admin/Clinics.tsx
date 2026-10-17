@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
@@ -449,10 +450,10 @@ export function Clinics() {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <PageContent>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <p className="text-gray-600 text-sm mb-2">Dashboard / Clinics</p>
+              <p className="text-gray-600 text-sm mb-1">Dashboard / Clinics</p>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Mobile Clinics
               </h1>
@@ -468,7 +469,7 @@ export function Clinics() {
           </div>
 
           {/* Search and Filter */}
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex gap-4">
               <div className="flex-1 relative">
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -508,7 +509,7 @@ export function Clinics() {
 
           {/* Error State */}
           {listError && (
-            <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {listError}
               <button type="button" onClick={() => void loadClinics()} disabled={isLoading} className="ml-3 underline">Retry</button>
             </div>
@@ -547,7 +548,7 @@ export function Clinics() {
               )}
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Schedule Clinic Modal */}

@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
@@ -410,20 +411,20 @@ export function Clinics() {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <PageContent>
           {/* Header */}
-          <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Mobile Clinics</p>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Mobile Clinics</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Available Mobile Clinics
             </h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-gray-600 mt-1">
               Find and explore mobile clinics scheduled near your area
             </p>
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* Search */}
               <div className="relative">
@@ -533,7 +534,7 @@ export function Clinics() {
 
           {/* Error State */}
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -577,7 +578,7 @@ export function Clinics() {
               ) : null}
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Clinic Details Modal */}

@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
@@ -200,9 +201,9 @@ export function LabResults() {
       />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-6">
-            <p className="text-gray-600 text-sm mb-2">
+        <PageContent>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">
               Dashboard / Lab Results
             </p>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -210,9 +211,9 @@ export function LabResults() {
             </h1>
           </div>
 
-          {fileError && !selectedResult && <p role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
+          {fileError && !selectedResult && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
           {error && (
-            <div className="mb-4 flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               <span>{error}</span>
               <button
                 type="button"
@@ -326,7 +327,7 @@ export function LabResults() {
               />
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {selectedResult && (

@@ -1,91 +1,27 @@
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useUserProfile } from '../../hooks/useUserProfile';
+import { useAuth } from '../../hooks/useAuth';
 import { getAge } from '../../utils/profileValidation';
-
-interface PatientProfile {
-  firstName: string;
-  lastName: string;
-  nicNumber: string;
-  dateOfBirth: string;
-  bloodGroup: string;
-}
-
-// Helper function to get initials from name
-const getInitials = (firstName: string, lastName: string): string => {
-  const firstInitial = firstName ? firstName.charAt(0).toUpperCase() : '';
-  const lastInitial = lastName ? lastName.charAt(0).toUpperCase() : '';
-  return `${firstInitial}${lastInitial}` || 'NA';
-};
+import type { PatientProfile } from '../../types/user';
+import { DashboardPanel } from '../dashboard/DashboardWidgets';
 
 export function PatientCard() {
-  const navigate = useNavigate();
-  const { profile: currentProfile, status, refetchProfile } = useUserProfile();
-  const profile = currentProfile as PatientProfile | null;
-  const loading = status === 'loading';
-  const profileMissing = status === 'not-found';
-  const profileError = status === 'error';
-
-  const fullName = profile ? `${profile.firstName} ${profile.lastName}`.trim() : 'Loading...';
-  const initials = profile ? getInitials(profile.firstName, profile.lastName) : '...';
-  const age = getAge(profile?.dateOfBirth) ?? '-';
-  const nic = profile?.nicNumber || '-';
-  const bloodType = profile?.bloodGroup || '-';
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6 border border-gray-100">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 sm:gap-6 animate-pulse">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-200 rounded-full flex-shrink-0"></div>
-          <div className="flex-1">
-            <div className="h-6 bg-gray-200 rounded w-48 mb-3"></div>
-            <div className="flex flex-wrap gap-4">
-              <div className="h-4 bg-gray-200 rounded w-32"></div>
-              <div className="h-4 bg-gray-200 rounded w-20"></div>
-              <div className="h-4 bg-gray-200 rounded w-28"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const { user } = useAuth();
+  const { profile: currentProfile, status, error, refetchProfile, getUserInitials } = useUserProfile();
+  const profile = currentProfile?.user?.id === user?.id ? currentProfile as PatientProfile | null : null;
+  const identityError = status === 'ready' && currentProfile && !profile ? 'Your health summary could not be verified for this account.' : null;
+  const name = profile ? [profile.firstName, profile.lastName].filter(Boolean).join(' ') || user?.username : '';
+  const fields = [
+    ['Age', getAge(profile?.dateOfBirth)?.toString() || 'Not provided'],
+    ['Blood group', profile?.bloodGroup?.trim() || 'Not provided'],
+    ['Allergies', profile?.allergies?.trim() || 'Not provided'],
+    ['Chronic conditions', profile?.chronicDiseases?.trim() || 'Not provided'],
+  ];
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4 sm:p-6 mb-4 sm:mb-6 border border-gray-100">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 sm:gap-6">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#38a3a5] rounded-full flex items-center justify-center text-white text-lg sm:text-2xl font-bold flex-shrink-0">
-          {initials}
-        </div>
-        <div className="flex-1">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3">
-            {profileError ? 'Unable to load profile' : profileMissing ? 'Profile incomplete' : fullName}
-          </h2>
-          <div className="flex flex-wrap gap-4 sm:gap-6 text-gray-600 text-sm sm:text-base">
-            <div>
-              <span className="font-medium">NIC:</span> {nic}
-            </div>
-            <div>
-              <span className="font-medium">Age:</span> {age}
-            </div>
-            <div>
-              <span className="font-medium">Blood Type:</span> {bloodType}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <button
-            onClick={() => profileError ? void refetchProfile() : navigate('/patient/profile')}
-            className="px-4 sm:px-6 py-2 sm:py-3 text-[#38a3a5] border-2 border-[#38a3a5] rounded-lg font-medium hover:bg-[#38a3a5] hover:text-white transition-colors text-sm sm:text-base"
-          >
-            {profileError ? 'Retry' : profileMissing ? 'Complete Profile' : 'Update Info'}
-          </button>
-          <button 
-            onClick={() => navigate('/patient/clinics')}
-            className="px-4 sm:px-6 py-2 sm:py-3 bg-[#38a3a5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors text-sm sm:text-base"
-          >
-            Book Appointment
-          </button>
-        </div>
-      </div>
-    </div>
+    <DashboardPanel title="Health summary" description="Information saved in your patient profile." loading={status === 'loading'} error={status === 'error' ? error || 'Your profile could not be loaded.' : identityError} onRetry={() => void refetchProfile()} action={profile ? { to: '/patient/profile', label: 'Update health information' } : undefined}>
+      {!profile ? <div className="py-2"><p className="text-sm text-gray-600">Complete your profile to keep your personal and medical information available.</p><Link to="/patient/profile" className="mt-3 inline-flex rounded-lg bg-[#38A3A5] px-4 py-2 text-sm font-medium text-white hover:bg-[#2d8284]">Complete profile</Link></div>
+        : <><div className="mb-4 flex min-w-0 items-center gap-3"><div aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#38A3A5]/10 text-base font-semibold text-[#2d8284]">{getUserInitials()}</div><p className="min-w-0 break-words font-semibold text-gray-900">{name}</p></div><dl className="grid gap-x-4 gap-y-4 sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-medium text-gray-500">{label}</dt><dd className="mt-1 whitespace-pre-line break-words text-sm text-gray-900">{value}</dd></div>)}</dl></>}
+    </DashboardPanel>
   );
 }

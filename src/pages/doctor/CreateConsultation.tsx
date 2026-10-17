@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -258,11 +259,11 @@ export function CreateConsultation() {
       />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 lg:p-6">
+        <PageContent>
           <p className="text-gray-500 text-xs uppercase tracking-wide font-medium">
             Dashboard / Patient Queue / Create Consultation
           </p>
-        </main>
+        </PageContent>
       </div>
 
       {/* Create Consultation modal */}

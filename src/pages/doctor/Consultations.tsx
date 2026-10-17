@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
@@ -444,8 +445,8 @@ export default function Consultations() {
       />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 lg:p-6">
-          <div className="mb-6 flex justify-between items-center">
+        <PageContent>
+          <div className="flex justify-between items-center">
             <div>
               <p className="text-gray-600 text-sm mb-1">Dashboard / Consultations</p>
               <div className="flex items-center gap-3">
@@ -489,7 +490,7 @@ export default function Consultations() {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -638,7 +639,7 @@ export default function Consultations() {
               />
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Detail Modal */}

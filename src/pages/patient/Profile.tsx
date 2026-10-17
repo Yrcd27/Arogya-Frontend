@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { profileAPI } from '../../services/api';
@@ -204,20 +205,20 @@ export function Profile() {
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <PageContent>
           {profileStatus === 'loading' ? <div className="py-24 text-center text-gray-500">Loading profile...</div> : <>
-          <div className="mb-4 sm:mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Profile</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Patient Profile
             </h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-gray-600 mt-1">
               {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
             </p>
           </div>
 
           {!hasProfile && !isEditing && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
@@ -227,12 +228,12 @@ export function Profile() {
           )}
 
           {success && (
-            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+            <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
               <CheckCircleIcon className="h-5 w-5" />{success}
             </div>
           )}
           {error && !isEditing && (
-            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
               <AlertCircleIcon className="h-5 w-5" />{error}
             </div>
           )}
@@ -501,7 +502,7 @@ export function Profile() {
               ]}
             />}
           </>}
-        </main>
+        </PageContent>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { PageContent } from '../../components/PageContent';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
@@ -409,14 +410,14 @@ export function LabTests() {
       />
       <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 lg:p-6">
-          <div className="mb-6">
+        <PageContent>
+          <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Lab Tests</p>
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Lab Tests</h1>
           </div>
 
           {/* Status Filter Tabs */}
-          <div className="bg-white rounded-xl shadow-sm mb-6 p-4">
+          <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex flex-wrap gap-2">
               {Object.entries(statusCounts).map(([status, count]) => (
                 <button
@@ -435,7 +436,7 @@ export function LabTests() {
           </div>
 
           {/* Search Bar */}
-          <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -463,7 +464,7 @@ export function LabTests() {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -578,7 +579,7 @@ export function LabTests() {
               />
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Test Result Details Modal */}
