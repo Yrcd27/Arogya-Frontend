@@ -225,7 +225,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
               </div>
             )}
 
-            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'edit-result-files-error' : undefined} className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[#38A3A5] ${totalFileCount >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
+            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'edit-result-files-error' : undefined} className={`form-control-focus border-2 border-dashed rounded-lg p-4 text-center transition-colors ${totalFileCount >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
               <input
                 {...fieldProps('files')}
                 type="file"
@@ -235,7 +235,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
                 disabled={loading || outcomeUnknown || totalFileCount >= MAX_TEST_RESULT_FILES}
                 className="sr-only peer"
               />
-              <label htmlFor="edit-result-files" className={`block rounded peer-focus-visible:ring-2 peer-focus-visible:ring-[#38A3A5] ${loading || totalFileCount >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              <label htmlFor="edit-result-files" className={`form-control-focus block rounded ${loading || totalFileCount >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600">
                   {totalFileCount >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Click to add more files'}

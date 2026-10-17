@@ -210,7 +210,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
             <label htmlFor="submit-result-files" className="block text-sm font-medium text-gray-700 mb-2">
               Upload Files (Optional, up to {MAX_TEST_RESULT_FILES})
             </label>
-            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'submit-result-files-error' : undefined} className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[#38A3A5] ${files.length >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
+            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'submit-result-files-error' : undefined} className={`form-control-focus border-2 border-dashed rounded-lg p-4 text-center transition-colors ${files.length >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
               <input
                 {...fieldProps('files')}
                 type="file"
@@ -220,7 +220,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
                 disabled={loading || outcomeUnknown || files.length >= MAX_TEST_RESULT_FILES}
                 className="sr-only peer"
               />
-              <label htmlFor="submit-result-files" className={`block rounded peer-focus-visible:ring-2 peer-focus-visible:ring-[#38A3A5] ${loading || files.length >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              <label htmlFor="submit-result-files" className={`form-control-focus block rounded ${loading || files.length >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600">
                   {files.length >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Choose files to upload'}

@@ -223,14 +223,3 @@ Arogya's frontend integrates with the following services:
 
 The backend microservices are accessed through the API Gateway. The chatbot is integrated separately.
 
----
-
-<div align="center">
-
-### Arogya Mobile Clinics
-
-**Accessible Healthcare | Connected Communities | Better Care**
-
-Built with React, TypeScript, Vite and Tailwind CSS.
-
-</div>
