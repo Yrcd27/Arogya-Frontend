@@ -2,6 +2,19 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, MenuIcon, SearchIcon } from 'lucide-react';
 import { HeaderLanguageSelector } from './LanguageSelectors';
+import { useAuth } from '../hooks/useAuth';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { isPositiveId } from '../utils/clinicalValidation';
+import {
+  SEARCH_PLACEHOLDERS,
+  clearSearchCache,
+  loadSearchData,
+  matchesTerms,
+  parseSearchTerms,
+  searchRoleData,
+  type SearchData,
+  type SearchResult,
+} from '../utils/headerSearch';
 
 type DashboardRole = 'patient' | 'doctor' | 'technician' | 'admin';
 
@@ -36,23 +49,64 @@ interface DashboardHeaderProps {
   onToggleSidebar?: () => void;
 }
 
+const resultLinkClass = 'flex min-h-10 items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-[#2d8284] focus-visible:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#38A3A5]';
+const groupHeadingClass = 'px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400';
+
 export function DashboardHeader({ role, onToggleSidebar }: DashboardHeaderProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [data, setData] = useState<SearchData | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsId = useId();
   const location = useLocation();
   const navigate = useNavigate();
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const results = terms.length ? pages[role].filter(page =>
-    terms.every(term => `${page.label} ${page.keywords}`.toLowerCase().includes(term))) : [];
+  const { user, sessionKey } = useAuth();
+  const { profile } = useUserProfile();
+  const userId = user?.id;
+  const profileId = profile?.id;
+  const terms = parseSearchTerms(query);
   const showResults = isOpen && terms.length > 0;
+  const shouldLoadData = showResults && isPositiveId(userId);
+
+  const pageResults = terms.length
+    ? pages[role].filter(page => matchesTerms(`${page.label} ${page.keywords}`, terms))
+    : [];
+  const dataResults = data && terms.length ? searchRoleData(role, data, terms) : [];
+  const dataGroups = dataResults.reduce<{ name: string; items: SearchResult[] }[]>((groups, result) => {
+    const group = groups.find(candidate => candidate.name === result.group);
+    if (group) group.items.push(result);
+    else groups.push({ name: result.group, items: [result] });
+    return groups;
+  }, []);
+  const total = pageResults.length + dataResults.length;
+  const firstTarget = pageResults[0]?.path ?? dataResults[0]?.to;
+  const statusText = dataLoading && !data
+    ? `Searching... ${pageResults.length ? `${pageResults.length} matching ${pageResults.length === 1 ? 'page' : 'pages'} so far.` : ''}`
+    : `${total ? `${total} ${total === 1 ? 'match' : 'matches'}` : 'No matches found.'}${data?.unavailable.length ? ` Could not load: ${data.unavailable.join(', ')}.` : ''}`;
 
   useEffect(() => {
     setQuery('');
     setIsOpen(false);
   }, [location.key, role]);
+
+  useEffect(() => {
+    clearSearchCache();
+    setData(null);
+  }, [sessionKey, userId]);
+
+  useEffect(() => {
+    if (!shouldLoadData || userId === undefined) return;
+    let current = true;
+    setDataLoading(true);
+    void loadSearchData(role, userId, profileId).then(result => {
+      if (!current) return;
+      setData(result);
+      setDataLoading(false);
+    });
+    return () => { current = false; };
+  }, [shouldLoadData, role, userId, profileId, sessionKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -62,6 +116,24 @@ export function DashboardHeader({ role, onToggleSidebar }: DashboardHeaderProps)
     document.addEventListener('pointerdown', dismiss);
     return () => document.removeEventListener('pointerdown', dismiss);
   }, [isOpen]);
+
+  const closeSearch = () => {
+    setIsOpen(false);
+    setQuery('');
+  };
+
+  const moveFocus = (direction: 1 | -1) => {
+    const links = Array.from(searchRef.current?.querySelectorAll<HTMLAnchorElement>('a[data-search-result]') ?? []);
+    if (!links.length) return;
+    const index = links.indexOf(document.activeElement as HTMLAnchorElement);
+    if (index === -1) {
+      if (direction === 1) links[0].focus();
+      return;
+    }
+    const next = index + direction;
+    if (next < 0) inputRef.current?.focus();
+    else if (next < links.length) links[next].focus();
+  };
 
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
@@ -76,37 +148,58 @@ export function DashboardHeader({ role, onToggleSidebar }: DashboardHeaderProps)
             event.preventDefault();
             inputRef.current?.focus();
             setIsOpen(false);
+          } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && event.target instanceof HTMLAnchorElement) {
+            event.preventDefault();
+            moveFocus(event.key === 'ArrowDown' ? 1 : -1);
           }
         }}>
-          <form role="search" aria-label="Search dashboard pages" onSubmit={event => {
+          <form role="search" aria-label="Search dashboard" onSubmit={event => {
             event.preventDefault();
-            if (results[0]) {
-              setIsOpen(false);
-              setQuery('');
-              navigate(results[0].path);
+            if (firstTarget) {
+              closeSearch();
+              navigate(firstTarget);
             }
           }}>
-            <label htmlFor={resultsId + '-input'} className="sr-only">Search pages</label>
+            <label htmlFor={resultsId + '-input'} className="sr-only">Search</label>
             <SearchIcon aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <input ref={inputRef} id={resultsId + '-input'} type="search" value={query} autoComplete="off" maxLength={100} placeholder="Search pages..." aria-controls={showResults ? resultsId : undefined} className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500" onChange={event => {
+            <input ref={inputRef} id={resultsId + '-input'} type="search" value={query} autoComplete="off" maxLength={100} placeholder={SEARCH_PLACEHOLDERS[role]} aria-controls={showResults ? resultsId : undefined} className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-500" onChange={event => {
               setQuery(event.target.value);
               setIsOpen(true);
             }} onFocus={() => setIsOpen(true)} onKeyDown={event => {
-              if (event.key === 'ArrowDown' && results.length) {
+              if (event.key === 'ArrowDown' && total) {
                 event.preventDefault();
                 setIsOpen(true);
-                window.requestAnimationFrame(() => searchRef.current?.querySelector<HTMLAnchorElement>('a')?.focus());
+                moveFocus(1);
               }
             }} />
           </form>
           {showResults && (
-            <div id={resultsId} className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
-              <p role="status" className="px-2 py-1 text-xs text-gray-500">{results.length ? `${results.length} matching ${results.length === 1 ? 'page' : 'pages'}` : 'No matching pages.'}</p>
-              <ul aria-label="Matching pages">
-                {results.map(page => <li key={page.path}><Link to={page.path} onClick={() => { setIsOpen(false); setQuery(''); }} className="flex min-h-10 items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-medium text-gray-700 hover:bg-teal-50 hover:text-[#2d8284] focus-visible:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#38A3A5]">
-                  <span>{page.label}</span><ArrowRightIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
-                </Link></li>)}
-              </ul>
+            <div id={resultsId} className="absolute left-0 right-0 top-full mt-2 max-h-[70vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
+              <p role="status" className="px-2 py-1 text-xs text-gray-500">{statusText}</p>
+              {pageResults.length > 0 && (
+                <section aria-label="Matching pages">
+                  <h3 className={groupHeadingClass}>Pages</h3>
+                  <ul>
+                    {pageResults.map(page => <li key={page.path}><Link to={page.path} data-search-result="" onClick={closeSearch} className={resultLinkClass + ' font-medium'}>
+                      <span>{page.label}</span><ArrowRightIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
+                    </Link></li>)}
+                  </ul>
+                </section>
+              )}
+              {dataGroups.map(group => (
+                <section key={group.name} aria-label={group.name}>
+                  <h3 className={groupHeadingClass}>{group.name}</h3>
+                  <ul>
+                    {group.items.map(result => <li key={result.key}><Link to={result.to} data-search-result="" onClick={closeSearch} className={resultLinkClass}>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{result.label}</span>
+                        <span className="block truncate text-xs text-gray-500">{result.detail}</span>
+                      </span>
+                      <ArrowRightIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
+                    </Link></li>)}
+                  </ul>
+                </section>
+              ))}
             </div>
           )}
         </div>

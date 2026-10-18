@@ -2,6 +2,7 @@ import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
 import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
+import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { SearchIcon, MapPinIcon, CalendarIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
@@ -99,6 +100,7 @@ export function Clinics() {
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState('');
+  useLinkedSearch(setSearchTerm);
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });

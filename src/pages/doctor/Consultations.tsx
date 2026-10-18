@@ -1,6 +1,6 @@
 import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
@@ -35,6 +35,8 @@ const isEmptyConsultationsResponse = (error: unknown) =>
 
 export default function Consultations() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedConsultationId = searchParams.get('open');
   const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -57,6 +59,7 @@ export default function Consultations() {
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
   const [consultationToCancel, setConsultationToCancel] = useState<{ id: number; session: number; fromDetails: boolean } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
+  const openConsultationRef = useRef<(consultation: Consultation) => Promise<void>>(async () => undefined);
   const detailRequestRef = useRef(0);
   const listRequestRef = useRef(0);
   const listLoadingRef = useRef(false);
@@ -441,6 +444,27 @@ export default function Consultations() {
       if (requestId === detailRequestRef.current && currentSessionRef.current === requestSession) setLoadingLabTests(false);
     }
   };
+
+  openConsultationRef.current = handleConsultationClick;
+
+  useEffect(() => {
+    if (linkedConsultationId === null || loading || !user) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+    const id = Number(linkedConsultationId);
+    if (!isPositiveId(id)) return;
+    const known = consultations.find(item => item.id === id);
+    if (known) {
+      void openConsultationRef.current(known);
+      return;
+    }
+    consultationAPI.get(id)
+      .then(found => {
+        if (found.id === id && found.doctorId === user.id) void openConsultationRef.current(found);
+      })
+      .catch(() => undefined);
+  }, [linkedConsultationId, loading, user, consultations, searchParams, setSearchParams]);
 
   const totalPages = Math.max(1, Math.ceil((totalElements ?? 0) / pageSize));
   const safePage = Math.min(currentPage, totalPages);

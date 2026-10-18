@@ -2,6 +2,7 @@ import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
 import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
+import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
 import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, XCircle, CheckIcon } from 'lucide-react';
@@ -44,6 +45,7 @@ export function Clinics() {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [doctorCounts, setDoctorCounts] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  useLinkedSearch(setSearchTerm);
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);

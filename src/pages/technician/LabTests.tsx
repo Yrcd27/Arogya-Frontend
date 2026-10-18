@@ -1,5 +1,6 @@
 import { PageContent } from '../../components/PageContent';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Header } from '../../components/technician/Header';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { SubmitTestResultModal } from '../../components/technician/SubmitTestResultModal';
@@ -32,6 +33,7 @@ export function LabTests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  useLinkedSearch(setSearchTerm);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);

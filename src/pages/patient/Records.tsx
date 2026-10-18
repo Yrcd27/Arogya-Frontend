@@ -1,5 +1,6 @@
 import { PageContent } from '../../components/PageContent';
 import { useState, useEffect, useRef } from 'react';
+import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
@@ -22,6 +23,7 @@ export function Records() {
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  useLinkedSearch(setSearchTerm);
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [loadError, setLoadError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
