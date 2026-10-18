@@ -19,6 +19,8 @@ const ROUTE_TITLES: Record<string, string> = {
   '/admin/dashboard': 'Arogya | Administrator Dashboard',
   '/admin/profile': 'Arogya | Administrator Profile',
   '/admin/clinics': 'Arogya | Manage Mobile Clinics',
+  '/admin/doctors': 'Arogya | Doctors',
+  '/admin/technicians': 'Arogya | Technicians',
   '/technician/dashboard': 'Arogya | Technician Dashboard',
   '/technician/profile': 'Arogya | Technician Profile',
   '/technician/lab-tests': 'Arogya | Diagnostic Lab Tests',

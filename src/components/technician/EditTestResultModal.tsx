@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Upload, FileText } from 'lucide-react';
+import { X, XCircle, Upload, FileText } from 'lucide-react';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 import { medicalRecordsAPI, MAX_TEST_RESULT_FILES, validateTestResultUpload, type TestResult } from '../../services/medicalRecordsService';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
@@ -27,6 +28,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
   const [testResultDescription, setTestResultDescription] = useState(testResult.testResultDescription);
   const [technicianNotes, setTechnicianNotes] = useState(testResult.technicianNotes || '');
   const [keptFileIds, setKeptFileIds] = useState<number[]>(testResult.files.map(f => f.id));
+  const [fileToRemove, setFileToRemove] = useState<{ id: number; context: string } | null>(null);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -73,9 +75,13 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
 
   const removeExistingFile = (fileId: number) => {
     if (savingRef.current || outcomeUnknownRef.current) return;
+    if (!fileToRemove || fileToRemove.id !== fileId || fileToRemove.context !== currentContextRef.current
+      || initialContextRef.current !== contextKey || !keptFileIds.includes(fileId)
+      || !testResult.files.some(file => file.id === fileId)) return;
     setKeptFileIds(prev => prev.filter(id => id !== fileId));
     setSelectionError('');
     setFieldErrors(previous => ({ ...previous, files: undefined }));
+    setFileToRemove(null);
   };
 
   const removeNewFile = (index: number) => {
@@ -87,7 +93,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (savingRef.current || outcomeUnknownRef.current) return;
+    if (savingRef.current || outcomeUnknownRef.current || fileToRemove) return;
     const form = e.currentTarget as HTMLFormElement;
     setError('');
     if (initialContextRef.current !== contextKey || !isPositiveId(user?.id) || !isPositiveId(testResult.id) || !isPositiveId(testResult.labTestId) || !isPositiveId(testResult.patientId)) {
@@ -150,6 +156,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
   const keptFiles = testResult.files.filter(f => keptFileIds.includes(f.id));
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={closeModal}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
@@ -215,17 +222,19 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
                     <button
                       type="button"
                       disabled={loading || outcomeUnknown}
-                      onClick={() => removeExistingFile(file.id)}
-                      className="text-red-600 hover:text-red-700 flex-shrink-0"
+                      onClick={() => setFileToRemove({ id: file.id, context: contextKey })}
+                      aria-label={`Remove ${file.fileName}`}
+                      title="Remove Attachment"
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Remove
+                      <XCircle aria-hidden="true" className="h-5 w-5" />
                     </button>
                   </div>
                 ))}
               </div>
             )}
 
-            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'edit-result-files-error' : undefined} className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[#38A3A5] ${totalFileCount >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
+            <div role="group" aria-label="Result attachments" tabIndex={-1} aria-invalid={!!fieldErrors.files} aria-describedby={fieldErrors.files ? 'edit-result-files-error' : undefined} className={`form-control-focus border-2 border-dashed rounded-lg p-4 text-center transition-colors ${totalFileCount >= MAX_TEST_RESULT_FILES ? 'border-gray-200 opacity-50' : 'border-gray-300 hover:border-[#38A3A5]'}`}>
               <input
                 {...fieldProps('files')}
                 type="file"
@@ -235,7 +244,7 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
                 disabled={loading || outcomeUnknown || totalFileCount >= MAX_TEST_RESULT_FILES}
                 className="sr-only peer"
               />
-              <label htmlFor="edit-result-files" className={`block rounded peer-focus-visible:ring-2 peer-focus-visible:ring-[#38A3A5] ${loading || totalFileCount >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+              <label htmlFor="edit-result-files" className={`form-control-focus block rounded ${loading || totalFileCount >= MAX_TEST_RESULT_FILES ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                 <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600">
                   {totalFileCount >= MAX_TEST_RESULT_FILES ? `Maximum of ${MAX_TEST_RESULT_FILES} files reached` : 'Click to add more files'}
@@ -287,5 +296,16 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
         </form>
       </div>
     </div>
+    <ConfirmDialog
+      isOpen={fileToRemove !== null && fileToRemove.context === contextKey}
+      title="Remove Attachment?"
+      message={`Remove "${testResult.files.find(file => file.id === fileToRemove?.id)?.fileName ?? 'this attachment'}" from this result? The file will be deleted when you select Update Result.`}
+      confirmLabel="Remove Attachment"
+      cancelLabel="Keep Attachment"
+      loading={loading}
+      onCancel={() => setFileToRemove(null)}
+      onConfirm={() => { if (fileToRemove) removeExistingFile(fileToRemove.id); }}
+    />
+    </>
   );
 }

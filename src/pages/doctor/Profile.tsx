@@ -1,3 +1,6 @@
+import { Select } from '../../components/Select';
+import { PageContent } from '../../components/PageContent';
+import { DatePicker } from '../../components/DatePicker';
 import React, { useState, useEffect, useRef } from 'react';
 import { SaveIcon, AlertCircleIcon, CheckCircleIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/doctor/Header';
@@ -64,7 +67,7 @@ const Profile: React.FC = () => {
   const savedProfile = useRef<DoctorProfile | null>(null);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
   const loading = profileStatus === 'loading';
 
   useEffect(() => {
@@ -110,10 +113,12 @@ const Profile: React.FC = () => {
 
   const cancelEditing = () => {
     if (savingRef.current) return;
-    if (savedProfile.current) setProfile(savedProfile.current);
-    setError('');
-    setFieldErrors({});
-    setIsEditing(false);
+    confirmDiscard(() => {
+      if (savedProfile.current) setProfile(savedProfile.current);
+      setError('');
+      setFieldErrors({});
+      setIsEditing(false);
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -232,11 +237,11 @@ const Profile: React.FC = () => {
         />
         <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
           <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          <PageContent>
             <div className="flex items-center justify-center h-full">
               <div className="text-gray-500">Loading profile...</div>
             </div>
-          </main>
+          </PageContent>
         </div>
       </div>
     );
@@ -250,16 +255,16 @@ const Profile: React.FC = () => {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-          <div className="mb-4 sm:mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+        <PageContent scrollable>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Profile</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {isNewProfile ? 'Complete Your Doctor Profile' : 'Doctor Profile'}
             </h1>
           </div>
 
           {isNewProfile && !isEditing && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
@@ -269,18 +274,18 @@ const Profile: React.FC = () => {
           )}
 
           {error && !isEditing && (
-            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
               <AlertCircleIcon className="h-5 w-5" />{error}
             </div>
           )}
 
           {success && !isEditing && (
-            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+            <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
               <CheckCircleIcon className="h-5 w-5" />{success}
             </div>
           )}
 
-          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
+          {isEditing ? <div className="w-full bg-white rounded-xl shadow-sm p-6">
             {error && (
               <div role="alert" className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
@@ -336,13 +341,12 @@ const Profile: React.FC = () => {
                   <label htmlFor="doctor-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                     Date of Birth *
                   </label>
-                  <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
-                    type="date"
+                  <DatePicker {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                     name="dateOfBirth"
                     value={profile.dateOfBirth}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                    showToday={false}
                   />
                   {fieldError('dateOfBirth')}
                 </div>
@@ -403,7 +407,7 @@ const Profile: React.FC = () => {
                   <label htmlFor="doctor-specialization" className="block text-sm font-medium text-gray-700 mb-2">
                     Specialization *
                   </label>
-                  <select {...fieldProps('specialization')}
+                  <Select {...fieldProps('specialization')}
                     name="specialization"
                     value={profile.specialization}
                     onChange={handleInputChange}
@@ -413,7 +417,7 @@ const Profile: React.FC = () => {
                     <option value="">Select specialization</option>
                     {profile.specialization && !PROFILE_OPTIONS.specialization.some(option => option === profile.specialization) && <option value={profile.specialization}>{profile.specialization} (current value)</option>}
                     {PROFILE_OPTIONS.specialization.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  </Select>
                   {fieldError('specialization')}
                 </div>
 
@@ -485,7 +489,7 @@ const Profile: React.FC = () => {
               { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] },
             ]}
           />}
-        </main>
+        </PageContent>
       </div>
     </div>
   );

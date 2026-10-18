@@ -1,94 +1,41 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { HospitalIcon, FileTextIcon, FlaskConicalIcon, UserIcon, ArrowRightIcon } from 'lucide-react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
+import { EmptyState } from '../../components/EmptyState';
 import { PatientCard } from '../../components/patient/PatientCard';
 import { SummaryCards } from '../../components/patient/SummaryCards';
+import { ClinicList, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
+import { StatusBadge } from '../../components/StatusBadge';
+import { useDashboardData } from '../../hooks/useDashboardData';
+import { availableClinics } from '../../utils/dashboard';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const { clinics, consultations, reports, patientQueues } = useDashboardData({ role: 'patient' });
+  const available = availableClinics(clinics.data ?? []);
 
-  const quickNav = [
-    {
-      to: '/patient/clinics',
-      title: 'Mobile Clinics & Appointments',
-      desc: 'Browse schedule and join clinic queue',
-      icon: HospitalIcon,
-      action: 'Book Appointment'
-    },
-    {
-      to: '/patient/records',
-      title: 'Prescriptions',
-      desc: 'View medical consultations and prescriptions',
-      icon: FileTextIcon,
-      action: 'View Prescriptions'
-    },
-    {
-      to: '/patient/lab-results',
-      title: 'Lab Results',
-      desc: 'Check diagnostic test status and reports',
-      icon: FlaskConicalIcon,
-      action: 'View Lab Results'
-    },
-    {
-      to: '/patient/profile',
-      title: 'My Profile',
-      desc: 'Update personal info and medical history',
-      icon: UserIcon,
-      action: 'Manage Profile'
-    }
-  ];
-
-  return <div className="min-h-screen bg-gray-50">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-      />
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className={'flex min-h-screen flex-col transition-all duration-300 ' + (isSidebarOpen ? 'md:ml-64' : 'md:ml-0')}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6">
-          <div className="mb-4">
-            <p className="text-gray-600 text-sm mb-1">Dashboard</p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              Patient Dashboard
-            </h1>
-          </div>
+        <main className="min-w-0 flex-1 space-y-5 p-4 sm:p-6">
+          <div><p className="mb-1 text-sm text-gray-600">Dashboard</p><h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Patient Dashboard</h1><p className="mt-1 text-sm text-gray-500">Your health information, clinic participation, and medical records.</p></div>
+          <SummaryCards consultationCount={consultations.data?.total} reportCount={reports.data?.total} clinicCount={clinics.data ? available.length : undefined} consultationsLoading={consultations.loading} reportsLoading={reports.loading} clinicsLoading={clinics.loading} />
           <PatientCard />
-          <SummaryCards />
-
-          {/* Quick Access Services Navigation */}
-          <section className="mt-6 sm:mt-8">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4">
-              Patient Services
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {quickNav.map(item => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className="flex flex-col justify-between p-4 sm:p-5 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-[#38a3a5] hover:shadow-md transition-all group"
-                >
-                  <div>
-                    <div className="w-10 h-10 rounded-lg bg-[#38a3a5]/10 text-[#38a3a5] flex items-center justify-center mb-3 group-hover:bg-[#38a3a5] group-hover:text-white transition-colors">
-                      <item.icon className="w-5 h-5" />
-                    </div>
-                    <h3 className="font-semibold text-gray-900 text-base mb-1">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-gray-500 mb-4">
-                      {item.desc}
-                    </p>
-                  </div>
-                  <div className="flex items-center text-xs font-semibold text-[#38a3a5] group-hover:translate-x-1 transition-transform">
-                    <span>{item.action}</span>
-                    <ArrowRightIcon className="w-3.5 h-3.5 ml-1" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
+          <div className="grid items-start gap-5 xl:grid-cols-2">
+            <DashboardPanel title="Your queue participation" description="Previously joined queues available on this device. Open Mobile Clinics to check another clinic." loading={patientQueues.loading} error={patientQueues.error} onRetry={patientQueues.reload} action={{ to: '/patient/clinics', label: 'Check clinic queues' }}>
+            {!!patientQueues.data?.unverified && <p role="status" className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Some previous queue joins could not be verified. Check your queue before trying to join again.</p>}
+            {!patientQueues.data?.tokens.length ? <EmptyState title="No confirmed queue tokens" description="No active queue tokens could be confirmed from your previous joins on this device." />
+              : <ul className="divide-y divide-gray-100">{patientQueues.data.tokens.map(token => <li key={token.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-1 last:pb-0"><div className="min-w-0"><p className="break-words font-medium text-gray-900">{clinics.data?.find(clinic => clinic.id === Number(token.clinicId))?.clinicName || 'Clinic #' + token.clinicId}</p><p className="mt-1 text-sm text-gray-600">Token #{token.tokenNumber}{token.status === 'PENDING' ? ' · Position ' + token.position : ' · Currently being served'}</p></div><StatusBadge status={token.status} /></li>)}</ul>}
+            </DashboardPanel>
+            <DashboardPanel title="Upcoming mobile clinics" description="Available scheduled clinics, not confirmed appointments." loading={clinics.loading} error={clinics.error} onRetry={clinics.reload} action={{ to: '/patient/clinics', label: 'Find a clinic and join its queue' }}>
+              <ClinicList clinics={available} />
+              {available.length > 5 && <p className="mt-3 text-xs text-gray-500">Showing 5 of {available.length} available clinics.</p>}
+            </DashboardPanel>
+          </div>
         </main>
       </div>
-    </div>;
+    </div>
+  );
 }

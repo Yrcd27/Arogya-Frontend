@@ -25,7 +25,7 @@ const displayValue = (value: ProfileDetail['value']) => {
 
 export function ProfileView({ role, name, sections, incomplete = false, onEdit }: ProfileViewProps) {
   return (
-    <section className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+    <section className="w-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
       <div className="flex flex-col gap-4 border-b border-gray-100 bg-[#f7fbfb] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#38A3A5] text-lg font-bold text-white" aria-hidden="true">

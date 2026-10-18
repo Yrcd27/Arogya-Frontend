@@ -1,3 +1,5 @@
+import { PageContent } from '../../components/PageContent';
+import { DatePicker } from '../../components/DatePicker';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/admin/Header';
@@ -33,7 +35,7 @@ const Profile: React.FC = () => {
   const savingRef = useRef(false);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
 
   useEffect(() => {
     if (currentProfile) {
@@ -65,7 +67,9 @@ const Profile: React.FC = () => {
   };
   const cancelEditing = () => {
     if (savingRef.current) return;
-    setProfile(savedProfile.current); setError(''); setFieldErrors({}); setIsEditing(false);
+    confirmDiscard(() => {
+      setProfile(savedProfile.current); setError(''); setFieldErrors({}); setIsEditing(false);
+    });
   };
 
   const fieldProps = (field: AdminField) => ({
@@ -143,24 +147,24 @@ const Profile: React.FC = () => {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <PageContent>
           {profileStatus === 'loading' ? <div className="py-24 text-center text-gray-500">Loading profile...</div> : <>
-            <div className="mb-5 sm:mb-7">
-              <p className="mb-2 text-sm text-gray-600">Dashboard / Profile</p>
+            <div>
+              <p className="mb-1 text-sm text-gray-600">Dashboard / Profile</p>
               <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">{isNewProfile ? 'Complete Your Admin Profile' : 'Admin Profile'}</h1>
             </div>
             {isNewProfile && !isEditing && (
-              <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <AlertCircleIcon className="mt-0.5 h-5 w-5 shrink-0" />Your profile is not complete yet. Select Complete Profile to add your details.
               </div>
             )}
             {error && (
-              <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+              <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
                 <AlertCircleIcon className="h-5 w-5" />{error}
               </div>
             )}
             {success && (
-              <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+              <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
                 <CheckCircleIcon className="h-5 w-5" />{success}
               </div>
             )}
@@ -181,22 +185,33 @@ const Profile: React.FC = () => {
                     ] as const).map(([label, name, placeholder]) => (
                       <div key={name}>
                         <label htmlFor={`admin-${name}`} className="mb-2 block text-sm font-medium text-gray-700">{label} *</label>
-                        <input
-                          {...fieldProps(name)}
-                          type={name === 'dateOfBirth' ? 'date' : name === 'phoneNumber' ? 'tel' : 'text'}
-                          name={name}
-                          value={profile[name]}
-                          onChange={handleInputChange}
-                          required
-                          min={name === 'dateOfBirth' ? MIN_BIRTH_DATE : undefined}
-                          max={name === 'dateOfBirth' ? localDateString() : undefined}
-                          inputMode={name === 'phoneNumber' ? 'tel' : undefined}
-                          autoComplete={name === 'phoneNumber' ? 'tel' : undefined}
-                          autoCapitalize={name === 'nicNumber' ? 'characters' : undefined}
-                          spellCheck={name === 'nicNumber' ? false : undefined}
-                          placeholder={placeholder}
-                          className={inputClass}
-                        />
+                        {name === 'dateOfBirth' ? (
+                          <DatePicker
+                            {...fieldProps(name)}
+                            name={name}
+                            value={profile[name]}
+                            onChange={handleInputChange}
+                            required
+                            min={MIN_BIRTH_DATE}
+                            max={localDateString()}
+                            showToday={false}
+                          />
+                        ) : (
+                          <input
+                            {...fieldProps(name)}
+                            type={name === 'phoneNumber' ? 'tel' : 'text'}
+                            name={name}
+                            value={profile[name]}
+                            onChange={handleInputChange}
+                            required
+                            inputMode={name === 'phoneNumber' ? 'tel' : undefined}
+                            autoComplete={name === 'phoneNumber' ? 'tel' : undefined}
+                            autoCapitalize={name === 'nicNumber' ? 'characters' : undefined}
+                            spellCheck={name === 'nicNumber' ? false : undefined}
+                            placeholder={placeholder}
+                            className={inputClass}
+                          />
+                        )}
                         {fieldError(name)}
                       </div>
                     ))}
@@ -222,7 +237,7 @@ const Profile: React.FC = () => {
               ]}
             />}
           </>}
-        </main>
+        </PageContent>
       </div>
     </div>
   );

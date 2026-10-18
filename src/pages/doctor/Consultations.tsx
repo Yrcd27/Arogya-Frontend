@@ -1,9 +1,11 @@
+import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
 import { PaginationFooter } from '../../components/PaginationFooter';
 import { toast } from 'react-toastify';
@@ -12,7 +14,7 @@ import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
 import { ApiError } from '../../services/httpClient';
-import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { FileText, FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
@@ -33,10 +35,12 @@ const isEmptyConsultationsResponse = (error: unknown) =>
 
 export default function Consultations() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedConsultationId = searchParams.get('open');
   const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [patients, setPatients] = useState<Record<number, PatientInfo>>({});
   const [clinics, setClinics] = useState<Record<number, ClinicInfo>>({});
@@ -53,7 +57,9 @@ export default function Consultations() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
+  const [consultationToCancel, setConsultationToCancel] = useState<{ id: number; session: number; fromDetails: boolean } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
+  const openConsultationRef = useRef<(consultation: Consultation) => Promise<void>>(async () => undefined);
   const detailRequestRef = useRef(0);
   const listRequestRef = useRef(0);
   const listLoadingRef = useRef(false);
@@ -90,6 +96,7 @@ export default function Consultations() {
     setSelectedConsultation(null);
     setEditingConsultation(null);
     setConfirmAction(null);
+    setConsultationToCancel(null);
     void loadConsultationsRef.current(1);
     return () => {
       currentSessionRef.current = -1;
@@ -213,6 +220,7 @@ export default function Consultations() {
     } catch (err) {
       if (currentSessionRef.current !== submittedSession) return false;
       toast.error(err instanceof Error ? err.message : `Failed to ${operation} consultation`);
+      if (operation === 'cancel') throw err instanceof Error ? err : new Error('Failed to cancel consultation');
       return false;
     } finally {
       if (currentSessionRef.current === submittedSession) {
@@ -223,7 +231,12 @@ export default function Consultations() {
   };
 
   const handleComplete = (id: number) => changeStatus(id, 'complete');
-  const handleCancel = (id: number) => changeStatus(id, 'cancel');
+  const handleCancel = (id: number, fromDetails = false) => {
+    if (!canMutate(id)) return;
+    const consultation = consultations.find(item => item.id === id);
+    if (consultation?.status !== 'SCHEDULED' && consultation?.status !== 'IN_PROGRESS') return;
+    setConsultationToCancel({ id, session: sessionKey, fromDetails });
+  };
 
   const openEdit = (c: Consultation) => {
     if (!canMutate(c.id)) return;
@@ -432,6 +445,27 @@ export default function Consultations() {
     }
   };
 
+  openConsultationRef.current = handleConsultationClick;
+
+  useEffect(() => {
+    if (linkedConsultationId === null || loading || !user) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+    const id = Number(linkedConsultationId);
+    if (!isPositiveId(id)) return;
+    const known = consultations.find(item => item.id === id);
+    if (known) {
+      void openConsultationRef.current(known);
+      return;
+    }
+    consultationAPI.get(id)
+      .then(found => {
+        if (found.id === id && found.doctorId === user.id) void openConsultationRef.current(found);
+      })
+      .catch(() => undefined);
+  }, [linkedConsultationId, loading, user, consultations, searchParams, setSearchParams]);
+
   const totalPages = Math.max(1, Math.ceil((totalElements ?? 0) / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const paginatedConsultations = consultations;
@@ -442,10 +476,10 @@ export default function Consultations() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 lg:p-6">
-          <div className="mb-6 flex justify-between items-center">
+        <PageContent fill={!loading && !error && consultations.length === 0}>
+          <div className="flex justify-between items-center">
             <div>
               <p className="text-gray-600 text-sm mb-1">Dashboard / Consultations</p>
               <div className="flex items-center gap-3">
@@ -489,7 +523,7 @@ export default function Consultations() {
           </div>
 
           {error && (
-            <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -499,12 +533,8 @@ export default function Consultations() {
               <div className="text-gray-600">Loading consultations...</div>
             </div>
           ) : error ? null : consultations.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm">
-              <EmptyState 
-                title="No consultations"
-                description="Your consultation history will appear here"
-              />
-            </div>
+            <EmptyState variant="page" icon={<FileText />} title="No consultations yet"
+              description="Your consultation records will appear here when available." />
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
@@ -587,11 +617,12 @@ export default function Consultations() {
                                     e.stopPropagation();
                                     handleCancel(c.id);
                                   }}
-                                  className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                                   title="Cancel consultation"
+                                  aria-label={`Cancel consultation #${c.id}`}
                                   disabled={actionPending || savingEdit}
                                 >
-                                  <XCircle className="w-4 h-4" />
+                                  <XCircle aria-hidden="true" className="h-5 w-5" />
                                 </button>
                               )}
                               <button
@@ -638,7 +669,7 @@ export default function Consultations() {
               />
             </div>
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Detail Modal */}
@@ -728,9 +759,8 @@ export default function Consultations() {
                   </button>
                 </div>
               ) : !selectedConsultation || !('labTests' in selectedConsultation) || selectedConsultation.labTests.length === 0 ? (
-                <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
-                  No lab tests requested for this consultation
-                </div>
+                <EmptyState icon={<FlaskConical />} title="No lab tests requested"
+                  description="No lab tests were requested for this consultation." headingLevel={5} />
               ) : (
                 <div className="space-y-3">
                   {selectedConsultation.labTests.map((test) => (
@@ -783,9 +813,7 @@ export default function Consultations() {
                 <button
                   className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
                   disabled={actionPending || savingEdit || loading}
-                  onClick={async () => {
-                    if (await handleCancel(selectedConsultation.id)) closeConsultationDetails();
-                  }}
+                  onClick={() => handleCancel(selectedConsultation.id, true)}
                 >
                   Cancel Consultation
                 </button>
@@ -906,6 +934,29 @@ export default function Consultations() {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={consultationToCancel !== null && consultationToCancel.session === sessionKey}
+        title="Cancel Consultation?"
+        message={`Cancel consultation #${consultationToCancel?.id ?? ''}? Its status will be changed to cancelled.`}
+        confirmLabel="Cancel Consultation"
+        cancelLabel="Keep Consultation"
+        loading={actionPending}
+        onCancel={() => { if (!actionRef.current) setConsultationToCancel(null); }}
+        onConfirm={async () => {
+          if (!consultationToCancel || consultationToCancel.session !== currentSessionRef.current) return;
+          const consultation = consultations.find(item => item.id === consultationToCancel.id);
+          if (consultation?.status !== 'SCHEDULED' && consultation?.status !== 'IN_PROGRESS') {
+            setConsultationToCancel(null);
+            return;
+          }
+          if (await changeStatus(consultationToCancel.id, 'cancel')) {
+            if (currentSessionRef.current !== consultationToCancel.session) return;
+            if (consultationToCancel.fromDetails) closeConsultationDetails();
+            setConsultationToCancel(null);
+          }
+        }}
+      />
+
       <ConfirmModal
         isOpen={confirmAction !== null}
         title={confirmAction?.type === 'bulk' ? 'Delete selected consultations?' : 'Delete consultation?'}
@@ -917,9 +968,9 @@ export default function Consultations() {
         confirmLabel="Delete"
         loading={confirmAction?.type === 'bulk' ? bulkDeleting : deletingId !== null}
         onCancel={() => { if (!actionRef.current) setConfirmAction(null); }}
-        onConfirm={() => {
-          if (confirmAction?.type === 'single') confirmSingleDelete(confirmAction.id);
-          else if (confirmAction?.type === 'bulk') confirmBulkDelete();
+        onConfirm={async () => {
+          if (confirmAction?.type === 'single') await confirmSingleDelete(confirmAction.id);
+          else if (confirmAction?.type === 'bulk') await confirmBulkDelete();
         }}
       />
     </div>

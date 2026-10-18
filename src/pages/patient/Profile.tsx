@@ -1,3 +1,6 @@
+import { Select } from '../../components/Select';
+import { DatePicker } from '../../components/DatePicker';
+import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { profileAPI } from '../../services/api';
@@ -33,7 +36,7 @@ export function Profile() {
   const savedFormData = useRef(formData);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
 
   useEffect(() => {
     const profile = currentProfile as PatientProfile | null;
@@ -79,10 +82,12 @@ export function Profile() {
 
   const cancelEditing = () => {
     if (savingRef.current) return;
-    setFormData(savedFormData.current);
-    setError('');
-    setFieldErrors({});
-    setIsEditing(false);
+    confirmDiscard(() => {
+      setFormData(savedFormData.current);
+      setError('');
+      setFieldErrors({});
+      setIsEditing(false);
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -204,20 +209,20 @@ export function Profile() {
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <PageContent>
           {profileStatus === 'loading' ? <div className="py-24 text-center text-gray-500">Loading profile...</div> : <>
-          <div className="mb-4 sm:mb-6">
-            <p className="text-gray-600 text-sm mb-2">Dashboard / Profile</p>
+          <div>
+            <p className="text-gray-600 text-sm mb-1">Dashboard / Profile</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               Patient Profile
             </h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-gray-600 mt-1">
               {hasProfile ? 'Update your profile information' : 'Complete your profile to get started'}
             </p>
           </div>
 
           {!hasProfile && !isEditing && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 sm:px-6 sm:py-4">
               <AlertCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Your profile isn't complete yet</p>
@@ -227,17 +232,17 @@ export function Profile() {
           )}
 
           {success && (
-            <div role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+            <div role="status" className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
               <CheckCircleIcon className="h-5 w-5" />{success}
             </div>
           )}
           {error && !isEditing && (
-            <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
               <AlertCircleIcon className="h-5 w-5" />{error}
             </div>
           )}
 
-          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
+          {isEditing ? <div className="w-full bg-white rounded-xl shadow-sm p-6">
             <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-6">
                 {/* Success/Error Messages */}
                 {success && (
@@ -313,12 +318,11 @@ export function Profile() {
                       <label htmlFor="patient-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
-                      <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
-                        type="date"
+                      <DatePicker {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        showToday={false}
                         disabled={loading}
                       />
                       {fieldError('dateOfBirth')}
@@ -365,7 +369,7 @@ export function Profile() {
                       <label htmlFor="patient-gender" className="block text-sm font-medium text-gray-900 mb-2">
                         Gender
                       </label>
-                      <select {...fieldProps('gender')}
+                      <Select {...fieldProps('gender')}
                         name="gender"
                         value={formData.gender}
                         onChange={handleInputChange}
@@ -375,14 +379,14 @@ export function Profile() {
                         <option value="">Not specified</option>
                         {formData.gender && !PROFILE_OPTIONS.gender.some(option => option === formData.gender) && <option value={formData.gender}>{formData.gender} (current value)</option>}
                         {PROFILE_OPTIONS.gender.map(option => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      </Select>
                       {fieldError('gender')}
                     </div>
                     <div>
                       <label htmlFor="patient-bloodGroup" className="block text-sm font-medium text-gray-900 mb-2">
                         Blood Group
                       </label>
-                      <select {...fieldProps('bloodGroup')}
+                      <Select {...fieldProps('bloodGroup')}
                         name="bloodGroup"
                         value={formData.bloodGroup}
                         onChange={handleInputChange}
@@ -392,7 +396,7 @@ export function Profile() {
                         <option value="">Not specified</option>
                         {formData.bloodGroup && !PROFILE_OPTIONS.bloodGroup.some(option => option === formData.bloodGroup) && <option value={formData.bloodGroup}>{formData.bloodGroup} (current value)</option>}
                         {PROFILE_OPTIONS.bloodGroup.map(option => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      </Select>
                       {fieldError('bloodGroup')}
                     </div>
                   </div>
@@ -501,7 +505,7 @@ export function Profile() {
               ]}
             />}
           </>}
-        </main>
+        </PageContent>
       </div>
     </div>
   );

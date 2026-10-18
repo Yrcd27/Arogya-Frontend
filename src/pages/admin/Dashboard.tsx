@@ -1,89 +1,44 @@
 import { useState } from 'react';
+import { CalendarDays, Hospital, Stethoscope } from 'lucide-react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { UsersIcon, CalendarIcon, UserCheckIcon, AlertCircleIcon } from 'lucide-react';
+import { EmptyState } from '../../components/EmptyState';
+import { ClinicList, DashboardMetric, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { operationalClinics } from '../../utils/dashboard';
+import { localDateString } from '../../utils/profileValidation';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const { stats, failedFields, loading, error } = useDashboardData();
-
-  const fmt = (value: number, failed: boolean) => (failed ? '—' : value.toLocaleString());
-
-  const dashboardStats = [
-    {
-      label: 'Total Patients',
-      value: loading ? '...' : fmt(stats.totalPatients, failedFields.totalPatients),
-      icon: UsersIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Total Clinics',
-      value: loading ? '...' : fmt(stats.totalClinics, failedFields.totalClinics),
-      icon: CalendarIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Total Doctors',
-      value: loading ? '...' : fmt(stats.totalDoctors, failedFields.totalDoctors),
-      icon: UserCheckIcon,
-      color: '#38A3A5'
-    },
-    {
-      label: 'Scheduled Clinics',
-      value: loading ? '...' : fmt(stats.scheduledClinics, failedFields.scheduledClinics),
-      icon: CalendarIcon,
-      color: '#38A3A5'
-    }
-  ];
+  const { clinics, assignments } = useDashboardData({ role: 'admin' });
+  const today = localDateString();
+  const schedule = operationalClinics(clinics.data ?? []);
+  const refreshSchedule = () => { clinics.reload(); assignments.reload(); };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className={'flex min-h-screen flex-col transition-all duration-300 ' + (isSidebarOpen ? 'md:ml-64' : 'md:ml-0')}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-gray-600 text-sm mb-1">Dashboard</p>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Admin Dashboard
-              </h1>
-            </div>
+        <main className="min-w-0 flex-1 space-y-5 p-4 sm:p-6">
+          <div><p className="mb-1 text-sm text-gray-600">Dashboard</p><h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Admin Dashboard</h1><p className="mt-1 text-sm text-gray-500">Clinic operations, schedules, and doctor coverage.</p></div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <DashboardMetric label="Today's clinics" value={clinics.data ? schedule.filter(clinic => clinic.scheduledDate === today).length : null} loading={clinics.loading} hint="Scheduled or in progress today" icon={CalendarDays} />
+            <DashboardMetric label="Clinics in progress" value={clinics.data?.filter(clinic => clinic.status === 'IN_PROGRESS').length} loading={clinics.loading} hint="Current status reported by clinics" icon={Hospital} />
+            <DashboardMetric label="Upcoming clinics" value={clinics.data ? schedule.filter(clinic => clinic.status === 'SCHEDULED').length : null} loading={clinics.loading} hint="Scheduled from today onward" icon={Stethoscope} />
           </div>
-          {error && (
-            <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
-              <AlertCircleIcon className="h-4 w-4 flex-shrink-0" />
-              {error}
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-            {dashboardStats.map(stat => (
-              <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6">
-                <p className="text-gray-600 text-sm mb-2">{stat.label}</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    {loading ? (
-                      <div className="w-20 h-10 bg-gray-200 rounded animate-pulse mb-1"></div>
-                    ) : (
-                      <p className="text-2xl lg:text-4xl font-bold text-gray-900 mb-1">
-                        {stat.value}
-                      </p>
-                    )}
-                  </div>
-                  <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-lg flex items-center justify-center" style={{
-                    backgroundColor: `${stat.color}20`
-                  }}>
-                    <stat.icon className="w-5 h-5 lg:w-6 lg:h-6" style={{
-                      color: stat.color
-                    }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <DashboardPanel title="Clinic schedule" description="In-progress clinics first, followed by the next scheduled visits." loading={clinics.loading} error={clinics.error} onRetry={clinics.reload} action={{ to: '/admin/clinics', label: 'Manage clinic schedules' }}>
+              <ClinicList clinics={schedule} />
+              {schedule.length > 5 && <p className="mt-3 text-xs text-gray-500">Showing 5 of {schedule.length} active and upcoming clinics.</p>}
+            </DashboardPanel>
+            <DashboardPanel title="Doctor assignments" description="Coverage for the clinics in the schedule preview." loading={clinics.loading || assignments.loading} error={clinics.error || assignments.error} onRetry={refreshSchedule}>
+              {!schedule.length ? <EmptyState icon={<Stethoscope />} title="No upcoming assignments" description="There are no upcoming clinic assignments to display." />
+                : <ul className="divide-y divide-gray-100">{schedule.slice(0, 5).map(clinic => {
+                  const doctors = Array.from(new Map((assignments.data ?? []).filter(row => row.clinic?.id === clinic.id).map(row => [row.doctorRefId, row])).values());
+                  return <li key={clinic.id} className="py-3 first:pt-1 last:pb-0"><p className="break-words font-medium text-gray-900">{clinic.clinicName}</p><p className={'mt-1 text-sm ' + (doctors.length ? 'text-gray-600' : 'text-amber-700')}>{doctors.length ? doctors.length + (doctors.length === 1 ? ' doctor assigned' : ' doctors assigned') : 'No doctors assigned'}</p>{doctors.length > 0 && <p className="mt-1 break-words text-xs leading-5 text-gray-500">{doctors.map(doctor => doctor.doctorName || 'Doctor #' + doctor.doctorRefId).join(', ')}</p>}</li>;
+                })}</ul>}
+            </DashboardPanel>
           </div>
         </main>
       </div>

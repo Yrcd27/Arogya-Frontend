@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, Outlet, Route, RouterProvider } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
@@ -13,6 +13,8 @@ import { Clinics as PatientClinics } from './pages/patient/Clinics';
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
 import AdminProfile from './pages/admin/Profile';
 import { Clinics as AdminClinics } from './pages/admin/Clinics';
+import { Doctors as AdminDoctors } from './pages/admin/Doctors';
+import { Technicians as AdminTechnicians } from './pages/admin/Technicians';
 import { Dashboard as TechnicianDashboard } from './pages/technician/Dashboard';
 import TechnicianProfile from './pages/technician/Profile';
 import { LabTests as TechnicianLabTests } from './pages/technician/LabTests';
@@ -24,13 +26,24 @@ import Consultations from './pages/doctor/Consultations';
 import { NotFound } from './pages/NotFound';
 import { LanguageProvider } from './context/LanguageContext';
 import { PageTitleUpdater } from './components/PageTitleUpdater';
+import { UnsavedChangesProvider } from './context/UnsavedChangesProvider';
 
-export function AppRouter() {
+function AppLayout() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <>
       <PageTitleUpdater />
       <LanguageProvider>
-        <Routes>
+        <UnsavedChangesProvider>
+          <Outlet />
+        </UnsavedChangesProvider>
+      </LanguageProvider>
+    </>
+  );
+}
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppLayout />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
@@ -56,6 +69,8 @@ export function AppRouter() {
         <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/profile" element={<ProtectedRoute requiredRole="admin"><AdminProfile /></ProtectedRoute>} />
         <Route path="/admin/clinics" element={<ProtectedRoute requiredRole="admin"><AdminClinics /></ProtectedRoute>} />
+        <Route path="/admin/doctors" element={<ProtectedRoute requiredRole="admin"><AdminDoctors /></ProtectedRoute>} />
+        <Route path="/admin/technicians" element={<ProtectedRoute requiredRole="admin"><AdminTechnicians /></ProtectedRoute>} />
         
         {/* Technician Routes */}
         <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />
@@ -63,8 +78,13 @@ export function AppRouter() {
         <Route path="/technician/lab-tests" element={<ProtectedRoute requiredRole="technician"><TechnicianLabTests /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </LanguageProvider>
-    </BrowserRouter>
+    </Route>
+  ),
+  { future: { v7_relativeSplatPath: true } }
+);
+
+export function AppRouter() {
+  return (
+    <RouterProvider router={router} future={{ v7_startTransition: true }} />
   );
 }

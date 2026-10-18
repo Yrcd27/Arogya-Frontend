@@ -5,10 +5,14 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
 } from 'react';
 import { CheckIcon, ChevronDownIcon, GlobeIcon, LoaderCircleIcon } from 'lucide-react';
 import { specificLanguages, type LanguageCode } from '../config/languages';
 import { useLanguage } from '../hooks/useLanguage';
+import { DropdownMenu } from './DropdownMenu';
+import { revealDropdownOption } from '../utils/dropdown';
 
 type SelectorVariant = 'landing' | 'header';
 
@@ -23,6 +27,22 @@ function LanguageFlag({ countryCode }: { countryCode: string }) {
       aria-hidden="true"
     />
   );
+}
+
+function LanguageMenu({ variant, triggerRef, menuId, children, onDismiss, onKeyDown }: {
+  variant: SelectorVariant;
+  triggerRef: RefObject<HTMLButtonElement>;
+  menuId: string;
+  children: ReactNode;
+  onDismiss: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
+}) {
+  if (variant === 'landing') {
+    return <div id={menuId} role="menu" aria-label="Choose language" onKeyDown={onKeyDown}
+      className="absolute bottom-full right-0 z-[9999] mb-2 w-48 overflow-hidden rounded-xl border border-white/20 bg-[rgba(20,48,49,0.94)] p-1 text-white shadow-[0_16px_32px_rgba(8,24,25,0.28)] backdrop-blur-xl">{children}</div>;
+  }
+  return <DropdownMenu anchorRef={triggerRef} id={menuId} role="menu" label="Choose language"
+    width={192} onDismiss={onDismiss} onKeyDown={onKeyDown} className="notranslate">{children}</DropdownMenu>;
 }
 
 function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
@@ -41,9 +61,10 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
   const closeMenu = useCallback((restoreFocus = false) => {
     setIsOpen(false);
     if (restoreFocus) {
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
+      window.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
     }
   }, []);
+  const dismissMenu = useCallback(() => closeMenu(), [closeMenu]);
 
   const openMenu = useCallback(() => {
     preloadGoogleWidget?.();
@@ -54,9 +75,15 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
 
   useEffect(() => {
     if (!isOpen) return;
-    const focusId = window.requestAnimationFrame(() => optionRefs.current[activeIndex]?.focus());
+    const focusId = window.requestAnimationFrame(() => {
+      const option = optionRefs.current[activeIndex];
+      option?.focus({ preventScroll: true });
+      const list = option?.closest<HTMLElement>('.arogya-dropdown-options');
+      if (list && option) revealDropdownOption(list, option);
+    });
     const handleOutsideClick = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)
+        && !document.getElementById(menuId)?.contains(event.target as Node)) {
         closeMenu();
       }
     };
@@ -65,7 +92,7 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
       window.cancelAnimationFrame(focusId);
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [activeIndex, closeMenu, isOpen]);
+  }, [activeIndex, closeMenu, isOpen, menuId]);
 
   const selectLanguage = useCallback(async (nextLanguage: LanguageCode) => {
     if (isBusy) return;
@@ -81,7 +108,13 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeMenu(true);
+      return;
+    }
+    if (event.key === 'Tab') {
+      triggerRef.current?.focus({ preventScroll: true });
+      closeMenu();
       return;
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -101,9 +134,6 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
   const triggerClasses = variant === 'landing'
     ? 'h-11 w-56 rounded-xl border border-white/30 bg-slate-950/45 px-3 text-white shadow-lg backdrop-blur-sm hover:bg-slate-950/55 focus-visible:ring-white/80'
     : 'h-9 w-9 rounded-lg text-[#2d8284] hover:bg-gray-100 focus-visible:ring-[#38A3A5]';
-  const menuClasses = variant === 'landing'
-    ? 'bottom-full right-0 mb-2 border-white/20 bg-[rgba(20,48,49,0.94)] text-white shadow-[0_16px_32px_rgba(8,24,25,0.28)] backdrop-blur-xl'
-    : 'right-0 top-full mt-2 border-[#38A3A5]/25 bg-white text-[#2d8284] shadow-[0_12px_24px_rgba(15,44,45,0.14)]';
 
   return (
     <div ref={containerRef} className="relative notranslate">
@@ -147,13 +177,8 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
       </button>
 
       {isOpen && (
-        <div
-          id={menuId}
-          role="menu"
-          aria-label="Choose language"
-          className={`absolute z-[9999] w-48 overflow-hidden rounded-xl border p-1 ${menuClasses}`}
-          onKeyDown={handleMenuKeyDown}
-        >
+        <LanguageMenu variant={variant} triggerRef={triggerRef} menuId={menuId} onDismiss={dismissMenu} onKeyDown={handleMenuKeyDown}>
+          <div className="arogya-dropdown-options">
           {specificLanguages.map((option, index) => {
             const isSelected = option.value === language;
             const optionClasses = variant === 'landing'
@@ -177,11 +202,12 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
                 onClick={() => void selectLanguage(option.value)}
               >
                 <LanguageFlag countryCode={option.countryCode} />
-                <span className="flex-1">{option.label}</span>
+                <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
                 {isSelected && <CheckIcon className="h-4 w-4" aria-hidden="true" />}
               </button>
             );
           })}
+          </div>
 
           {status === 'error' && error && (
             <div className={`mt-1 border-t px-2 py-2 text-xs ${variant === 'landing' ? 'border-white/15 text-white' : 'border-gray-100 text-gray-600'}`} role="alert">
@@ -197,7 +223,7 @@ function SharedLanguageSelector({ variant }: LanguageSelectorProps) {
               )}
             </div>
           )}
-        </div>
+        </LanguageMenu>
       )}
     </div>
   );

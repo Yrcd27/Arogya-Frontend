@@ -511,7 +511,7 @@ export function ForgotPassword() {
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       onFocus={(e) => e.currentTarget.select()}
-                      className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-gray-300 focus:border-[#38A3A5] focus:ring-2 focus:ring-[#38A3A5]/20 text-gray-900 transition-all bg-gray-50 focus:bg-white"
+                      className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-gray-300 text-gray-900 transition-all bg-gray-50 focus:bg-white"
                       disabled={loading}
                     />
                   ))}

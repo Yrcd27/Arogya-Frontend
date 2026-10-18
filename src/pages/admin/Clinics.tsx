@@ -1,10 +1,15 @@
+import { Select } from '../../components/Select';
+import { PageContent } from '../../components/PageContent';
+import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
+import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { SearchIcon, PlusIcon, MapPinIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, XCircle, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import {
   CLINIC_FIELDS,
@@ -22,6 +27,10 @@ import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../
 import { localDateString } from '../../utils/profileValidation';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { useAuth } from '../../hooks/useAuth';
+import { ClinicCard } from '../../components/clinic/ClinicCard';
+import { DoctorSearch } from '../../components/clinic/DoctorSearch';
+import { DatePicker } from '../../components/DatePicker';
+import { TimePicker } from '../../components/TimePicker';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -31,11 +40,12 @@ export function Clinics() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingClinic, setEditingClinic] = useState<Clinic | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [doctorCounts, setDoctorCounts] = useState<Record<number, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  useLinkedSearch(setSearchTerm);
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
@@ -72,16 +82,18 @@ export function Clinics() {
 
   // Doctor search and selection state
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [selectedDoctors, setSelectedDoctors] = useState<SelectedDoctor[]>([]);
-  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [doctorToRemove, setDoctorToRemove] = useState<{ doctor: SelectedDoctor; session: number; clinicId: number | null } | null>(null);
+  const [confirmingCancellation, setConfirmingCancellation] = useState(false);
+  const clinicFormRef = useRef<HTMLFormElement>(null);
 
   // Load clinics on component mount
   useEffect(() => {
     void loadClinicsRef.current();
     void loadDoctorsRef.current();
     setIsModalOpen(false);
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     return () => {
       listRequestRef.current += 1;
@@ -89,21 +101,6 @@ export function Clinics() {
       assignmentRequestRef.current += 1;
     };
   }, [sessionKey]);
-
-  // Filter doctors based on search term
-  useEffect(() => {
-    if (doctorSearchTerm.trim()) {
-      const filtered = doctors.filter(doctor =>
-        doctor.name.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase()) ||
-        doctor.specialization.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase())
-      );
-      setFilteredDoctors(filtered);
-      setShowDoctorDropdown(true);
-    } else {
-      setFilteredDoctors([]);
-      setShowDoctorDropdown(false);
-    }
-  }, [doctorSearchTerm, doctors]);
 
   // Batch doctor count fetching with concurrency control to prevent triggering API Gateway rate limiting (HTTP 429)
   const loadDoctorCountsInBatches = async (clinicList: Clinic[], requestId: number, requestSession: number) => {
@@ -220,15 +217,17 @@ export function Clinics() {
         specialization: doctor.specialization
       }]);
     
-    setDoctorSearchTerm('');
-    setShowDoctorDropdown(false);
     setFieldErrors(previous => ({ ...previous, doctorIds: undefined }));
   };
 
   const handleRemoveDoctor = (doctorId: number) => {
     if (savingRef.current || assignmentsLoadingRef.current || isEditMode && !assignmentsReadyRef.current) return;
+    if (!isModalOpen || !doctorToRemove || doctorToRemove.doctor.doctorId !== doctorId
+      || doctorToRemove.session !== currentSessionRef.current || doctorToRemove.clinicId !== editingClinicIdRef.current
+      || !selectedDoctors.some(doctor => doctor.doctorId === doctorId)) return;
     setSelectedDoctors(prev => prev.filter(doctor => doctor.doctorId !== doctorId));
     setFieldErrors(previous => ({ ...previous, doctorIds: previous.doctorIds && selectedDoctors.length <= 1 ? 'At least one doctor must be assigned to the clinic.' : undefined }));
+    setDoctorToRemove(null);
   };
 
   const validateForm = () => {
@@ -246,7 +245,7 @@ export function Clinics() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (savingRef.current || assignmentsLoadingRef.current) return;
+    if (savingRef.current || assignmentsLoadingRef.current || doctorToRemove || confirmingCancellation) return;
     const form = e.currentTarget as HTMLFormElement;
     setError(null);
 
@@ -260,6 +259,22 @@ export function Clinics() {
       return;
     }
 
+    if (isEditMode && editingClinic?.status !== 'CANCELLED' && formData.status === 'CANCELLED') {
+      setConfirmingCancellation(true);
+      return;
+    }
+    await saveClinic();
+  };
+
+  const saveClinic = async () => {
+    if (savingRef.current || assignmentsLoadingRef.current || currentSessionRef.current !== sessionKey) return;
+    const form = clinicFormRef.current;
+    if (!form || !isModalOpen || !isPositiveId(user?.id)
+      || isEditMode && (!editingClinic || editingClinicIdRef.current !== editingClinic.id)) return;
+    if (!validateForm()) {
+      focusFirstInvalidField(form);
+      return;
+    }
     const requestSession = sessionKey;
     savingRef.current = true;
     setSaving(true);
@@ -310,6 +325,8 @@ export function Clinics() {
   };
 
   const resetForm = () => {
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     editingClinicIdRef.current = null;
     assignmentsReadyRef.current = false;
@@ -327,7 +344,6 @@ export function Clinics() {
       status: 'SCHEDULED'
     });
     setSelectedDoctors([]);
-    setDoctorSearchTerm('');
     setError(null);
     setIsEditMode(false);
     setEditingClinic(null);
@@ -336,6 +352,8 @@ export function Clinics() {
 
   const closeModal = () => {
     if (savingRef.current) return;
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     editingClinicIdRef.current = null;
     setIsModalOpen(false);
@@ -449,10 +467,10 @@ export function Clinics() {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <PageContent fill={!isLoading && !listError && filteredClinics.length === 0}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <p className="text-gray-600 text-sm mb-2">Dashboard / Clinics</p>
+              <p className="text-gray-600 text-sm mb-1">Dashboard / Clinics</p>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Mobile Clinics
               </h1>
@@ -468,7 +486,7 @@ export function Clinics() {
           </div>
 
           {/* Search and Filter */}
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <div className="flex gap-4">
               <div className="flex-1 relative">
                 <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -481,7 +499,7 @@ export function Clinics() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                 />
               </div>
-              <select 
+              <Select 
                 aria-label="Filter clinics by status"
                 value={statusFilter}
                 onChange={e => {
@@ -494,7 +512,7 @@ export function Clinics() {
                 <option>IN_PROGRESS</option>
                 <option>COMPLETED</option>
                 <option>CANCELLED</option>
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -508,46 +526,59 @@ export function Clinics() {
 
           {/* Error State */}
           {listError && (
-            <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               {listError}
               <button type="button" onClick={() => void loadClinics()} disabled={isLoading} className="ml-3 underline">Retry</button>
             </div>
           )}
 
           {/* Clinics Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredClinics.map(clinic => (
-              <ClinicCard 
-                key={`${clinic.id}-${refreshTrigger}`}
-                clinic={clinic} 
-                doctorCount={doctorCounts[clinic.id] ?? 0}
-                onEdit={handleEdit}
-                onDelete={(clinic) => setClinicToDelete(clinic)}
-              />
-            ))}
-          </div>
+          {filteredClinics.length > 0 && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {filteredClinics.map(clinic => {
+              const doctorCount = doctorCounts[clinic.id] ?? 0;
+              return (
+                <ClinicCard
+                  key={`${clinic.id}-${refreshTrigger}`}
+                  clinic={clinic}
+                  additionalInfo={
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <UsersIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span>{doctorCount} {doctorCount === 1 ? 'doctor assigned' : 'doctors assigned'}</span>
+                    </div>
+                  }
+                  footer={
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(clinic)}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#38A3A5] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d8284]"
+                      >
+                        <EditIcon aria-hidden="true" className="h-4 w-4" />
+                        Edit Clinic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClinicToDelete(clinic)}
+                        aria-label={`Delete ${clinic.clinicName}`}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <TrashIcon aria-hidden="true" className="h-4 w-4" />
+                      </button>
+                    </div>
+                  }
+                />
+              );
+            })}
+          </div>}
 
           {/* Empty State */}
           {!isLoading && !listError && filteredClinics.length === 0 && (
-            <div className="text-center py-12">
-              <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No clinics found</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm || statusFilter !== 'All Status' 
-                  ? 'Try adjusting your search criteria' 
-                  : 'Get started by scheduling your first mobile clinic'}
-              </p>
-              {!searchTerm && statusFilter === 'All Status' && (
-                <button 
-                  onClick={openCreate}
-                  className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
-                >
-                  Schedule Clinic
-                </button>
-              )}
-            </div>
+            <EmptyState variant="page" surface icon={<CalendarIcon />}
+              title={clinics.length === 0 ? 'No clinics scheduled' : 'No matching clinics'}
+              description={searchTerm || statusFilter !== 'All Status' ? 'Try adjusting your search or status filter.' : 'Get started by scheduling your first mobile clinic.'}
+              action={!searchTerm && statusFilter === 'All Status' ? { label: 'Schedule Clinic', onClick: openCreate } : undefined} />
           )}
-        </main>
+        </PageContent>
       </div>
 
       {/* Schedule Clinic Modal */}
@@ -576,7 +607,7 @@ export function Clinics() {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
+              <form ref={clinicFormRef} onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
                 {/* Clinic Name */}
                 <div>
                   <label htmlFor="clinic-clinicName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -602,7 +633,7 @@ export function Clinics() {
                     <label htmlFor="clinic-province" className="block text-sm font-medium text-gray-700 mb-1">
                       Province *
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('province')}
                       name="province"
                       value={formData.province}
@@ -614,7 +645,7 @@ export function Clinics() {
                       {Object.keys(PROVINCES_DISTRICTS).map(province => (
                         <option key={province} value={province}>{province}</option>
                       ))}
-                    </select>
+                    </Select>
                     {fieldError('province')}
                   </div>
 
@@ -622,7 +653,7 @@ export function Clinics() {
                     <label htmlFor="clinic-district" className="block text-sm font-medium text-gray-700 mb-1">
                       District *
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('district')}
                       name="district"
                       value={formData.district}
@@ -635,7 +666,7 @@ export function Clinics() {
                       {getDistrictOptions(formData.province).map(district => (
                         <option key={district} value={district}>{district}</option>
                       ))}
-                    </select>
+                    </Select>
                     {fieldError('district')}
                   </div>
                 </div>
@@ -664,14 +695,12 @@ export function Clinics() {
                     <label htmlFor="clinic-scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Date *
                     </label>
-                    <input
+                    <DatePicker
                       {...fieldProps('scheduledDate')}
-                      type="date"
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
                       min={isEditMode ? undefined : localDateString()}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
                     {fieldError('scheduledDate')}
@@ -681,14 +710,12 @@ export function Clinics() {
                     <label htmlFor="clinic-scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Time *
                     </label>
-                    <input
+                    <TimePicker
                       {...fieldProps('scheduledTime')}
-                      type="time"
                       step={1}
                       name="scheduledTime"
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
                     {fieldError('scheduledTime')}
@@ -701,7 +728,7 @@ export function Clinics() {
                     <label htmlFor="clinic-status" className="block text-sm font-medium text-gray-700 mb-1">
                       Status
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('status')}
                       name="status"
                       value={formData.status}
@@ -712,7 +739,7 @@ export function Clinics() {
                       <option value="IN_PROGRESS">IN_PROGRESS</option>
                       <option value="COMPLETED">COMPLETED</option>
                       <option value="CANCELLED">CANCELLED</option>
-                    </select>
+                    </Select>
                     {fieldError('status')}
                   </div>
                 )}
@@ -753,38 +780,15 @@ export function Clinics() {
                       <button type="button" disabled={saving || doctorsLoading} onClick={() => void loadDoctors()} className="ml-2 underline">Retry doctor search</button>
                     </div>}
                     {/* Doctor Search */}
-                    <div className="relative mb-3">
-                      <input
+                    <div className="mb-3">
+                      <DoctorSearch
                         {...fieldProps('doctorIds')}
-                        type="text"
                         disabled={saving || assignmentsLoading || doctorLookupFailed || doctorsLoading || !!doctorsError}
-                        value={doctorSearchTerm}
-                        onChange={e => { if (!savingRef.current) setDoctorSearchTerm(e.target.value); }}
+                        doctors={doctors}
+                        selectedDoctorIds={selectedDoctors.map(doctor => doctor.doctorId)}
+                        onSelect={handleDoctorSelect}
                         placeholder="Search doctors by name or specialization..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       />
-                      
-                      {/* Doctor Dropdown */}
-                      {showDoctorDropdown && !doctorsLoading && !doctorsError && !doctorLookupFailed && (
-                        <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
-                          {filteredDoctors.length > 0 ? (
-                            filteredDoctors.map(doctor => (
-                              <button
-                                key={doctor.doctorId}
-                                type="button"
-                                disabled={saving || doctorsLoading || doctorLookupFailed}
-                                onClick={() => handleDoctorSelect(doctor)}
-                                className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
-                              >
-                                <div className="font-medium">{doctor.name}</div>
-                                <div className="text-sm text-gray-600">{doctor.specialization}</div>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-gray-500">No doctors found</div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     {/* Selected Doctors */}
@@ -805,10 +809,11 @@ export function Clinics() {
                                 type="button"
                                 disabled={saving || assignmentsLoading || doctorLookupFailed}
                                 aria-label={`Remove ${doctor.name} from this clinic`}
-                                onClick={() => handleRemoveDoctor(doctor.doctorId)}
-                                className="text-red-600 hover:text-red-800"
+                                title="Remove Doctor"
+                                onClick={() => setDoctorToRemove({ doctor, session: sessionKey, clinicId: editingClinicIdRef.current })}
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                <XIcon className="w-4 h-4" />
+                                <XCircle aria-hidden="true" className="h-5 w-5" />
                               </button>
                             </div>
                           ))}
@@ -845,6 +850,31 @@ export function Clinics() {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={isModalOpen && doctorToRemove !== null && doctorToRemove.session === sessionKey}
+        title="Remove Doctor?"
+        message={`Remove ${doctorToRemove?.doctor.name ?? 'this doctor'} from this clinic's selected doctors? The assignment changes when you save the clinic.`}
+        confirmLabel="Remove Doctor"
+        cancelLabel="Keep Doctor"
+        loading={saving || assignmentsLoading}
+        onCancel={() => setDoctorToRemove(null)}
+        onConfirm={() => { if (doctorToRemove) handleRemoveDoctor(doctorToRemove.doctor.doctorId); }}
+      />
+
+      <ConfirmDialog
+        isOpen={isModalOpen && confirmingCancellation}
+        title="Cancel Clinic?"
+        message={`Save changes and mark "${editingClinic?.clinicName ?? formData.clinicName}" as cancelled?`}
+        confirmLabel="Cancel Clinic"
+        cancelLabel="Keep Editing"
+        loading={saving}
+        onCancel={() => setConfirmingCancellation(false)}
+        onConfirm={async () => {
+          await saveClinic();
+          if (currentSessionRef.current === sessionKey) setConfirmingCancellation(false);
+        }}
+      />
+
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={clinicToDelete !== null}
@@ -860,107 +890,3 @@ export function Clinics() {
   );
 }
 
-// Clinic Card Component
-function ClinicCard({ 
-  clinic, 
-  doctorCount,
-  onEdit, 
-  onDelete 
-}: { 
-  clinic: Clinic; 
-  doctorCount: number;
-  onEdit: (clinic: Clinic) => void;
-  onDelete: (clinic: Clinic) => void;
-}) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'SCHEDULED':
-        return 'bg-blue-100 text-blue-600';
-      case 'IN_PROGRESS':
-        return 'bg-[#38A3A5] bg-opacity-20 text-[#38A3A5]';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-600';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-600';
-      default:
-        return 'bg-gray-200 text-gray-600';
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (timeStr: string) => {
-    return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-bold text-gray-900 mb-1">
-            {clinic.clinicName}
-          </h3>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <MapPinIcon className="w-4 h-4" />
-            <span>{clinic.district}</span>
-            {clinic.province && <span>• {clinic.province}</span>}
-          </div>
-          {clinic.location && (
-            <p className="text-sm text-gray-500 mt-1">{clinic.location}</p>
-          )}
-        </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(clinic.status)}`}>
-          {clinic.status}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="w-4 h-4 text-gray-400" />
-          <div>
-            <p className="text-xs text-gray-600">Date & Time</p>
-            <p className="text-sm font-medium text-gray-900">
-              {formatDate(clinic.scheduledDate)}
-            </p>
-            <p className="text-xs text-gray-600">{formatTime(clinic.scheduledTime)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <UsersIcon className="w-4 h-4 text-gray-400" />
-          <div>
-            <p className="text-xs text-gray-600">Assigned Doctors</p>
-            <p className="text-sm font-medium text-gray-900">
-              {doctorCount} {doctorCount === 1 ? 'Doctor' : 'Doctors'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        <button 
-          onClick={() => onEdit(clinic)}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border-2 border-[#38A3A5] text-[#38A3A5] rounded-lg font-medium hover:bg-[#38A3A5] hover:text-white transition-colors"
-        >
-          <EditIcon className="w-4 h-4" />
-          Edit
-        </button>
-        <button 
-          onClick={() => onDelete(clinic)}
-          className="px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-500 hover:text-white transition-colors"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
