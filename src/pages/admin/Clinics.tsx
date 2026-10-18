@@ -4,10 +4,11 @@ import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, CheckIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, XCircle, CheckIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import {
   CLINIC_FIELDS,
@@ -78,12 +79,17 @@ export function Clinics() {
   // Doctor search and selection state
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctors, setSelectedDoctors] = useState<SelectedDoctor[]>([]);
+  const [doctorToRemove, setDoctorToRemove] = useState<{ doctor: SelectedDoctor; session: number; clinicId: number | null } | null>(null);
+  const [confirmingCancellation, setConfirmingCancellation] = useState(false);
+  const clinicFormRef = useRef<HTMLFormElement>(null);
 
   // Load clinics on component mount
   useEffect(() => {
     void loadClinicsRef.current();
     void loadDoctorsRef.current();
     setIsModalOpen(false);
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     return () => {
       listRequestRef.current += 1;
@@ -212,8 +218,12 @@ export function Clinics() {
 
   const handleRemoveDoctor = (doctorId: number) => {
     if (savingRef.current || assignmentsLoadingRef.current || isEditMode && !assignmentsReadyRef.current) return;
+    if (!isModalOpen || !doctorToRemove || doctorToRemove.doctor.doctorId !== doctorId
+      || doctorToRemove.session !== currentSessionRef.current || doctorToRemove.clinicId !== editingClinicIdRef.current
+      || !selectedDoctors.some(doctor => doctor.doctorId === doctorId)) return;
     setSelectedDoctors(prev => prev.filter(doctor => doctor.doctorId !== doctorId));
     setFieldErrors(previous => ({ ...previous, doctorIds: previous.doctorIds && selectedDoctors.length <= 1 ? 'At least one doctor must be assigned to the clinic.' : undefined }));
+    setDoctorToRemove(null);
   };
 
   const validateForm = () => {
@@ -231,7 +241,7 @@ export function Clinics() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (savingRef.current || assignmentsLoadingRef.current) return;
+    if (savingRef.current || assignmentsLoadingRef.current || doctorToRemove || confirmingCancellation) return;
     const form = e.currentTarget as HTMLFormElement;
     setError(null);
 
@@ -245,6 +255,22 @@ export function Clinics() {
       return;
     }
 
+    if (isEditMode && editingClinic?.status !== 'CANCELLED' && formData.status === 'CANCELLED') {
+      setConfirmingCancellation(true);
+      return;
+    }
+    await saveClinic();
+  };
+
+  const saveClinic = async () => {
+    if (savingRef.current || assignmentsLoadingRef.current || currentSessionRef.current !== sessionKey) return;
+    const form = clinicFormRef.current;
+    if (!form || !isModalOpen || !isPositiveId(user?.id)
+      || isEditMode && (!editingClinic || editingClinicIdRef.current !== editingClinic.id)) return;
+    if (!validateForm()) {
+      focusFirstInvalidField(form);
+      return;
+    }
     const requestSession = sessionKey;
     savingRef.current = true;
     setSaving(true);
@@ -295,6 +321,8 @@ export function Clinics() {
   };
 
   const resetForm = () => {
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     editingClinicIdRef.current = null;
     assignmentsReadyRef.current = false;
@@ -320,6 +348,8 @@ export function Clinics() {
 
   const closeModal = () => {
     if (savingRef.current) return;
+    setDoctorToRemove(null);
+    setConfirmingCancellation(false);
     assignmentRequestRef.current += 1;
     editingClinicIdRef.current = null;
     setIsModalOpen(false);
@@ -573,7 +603,7 @@ export function Clinics() {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
+              <form ref={clinicFormRef} onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
                 {/* Clinic Name */}
                 <div>
                   <label htmlFor="clinic-clinicName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -779,10 +809,11 @@ export function Clinics() {
                                 type="button"
                                 disabled={saving || assignmentsLoading || doctorLookupFailed}
                                 aria-label={`Remove ${doctor.name} from this clinic`}
-                                onClick={() => handleRemoveDoctor(doctor.doctorId)}
-                                className="text-red-600 hover:text-red-800"
+                                title="Remove Doctor"
+                                onClick={() => setDoctorToRemove({ doctor, session: sessionKey, clinicId: editingClinicIdRef.current })}
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                <XIcon className="w-4 h-4" />
+                                <XCircle aria-hidden="true" className="h-5 w-5" />
                               </button>
                             </div>
                           ))}
@@ -818,6 +849,31 @@ export function Clinics() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={isModalOpen && doctorToRemove !== null && doctorToRemove.session === sessionKey}
+        title="Remove Doctor?"
+        message={`Remove ${doctorToRemove?.doctor.name ?? 'this doctor'} from this clinic's selected doctors? The assignment changes when you save the clinic.`}
+        confirmLabel="Remove Doctor"
+        cancelLabel="Keep Doctor"
+        loading={saving || assignmentsLoading}
+        onCancel={() => setDoctorToRemove(null)}
+        onConfirm={() => { if (doctorToRemove) handleRemoveDoctor(doctorToRemove.doctor.doctorId); }}
+      />
+
+      <ConfirmDialog
+        isOpen={isModalOpen && confirmingCancellation}
+        title="Cancel Clinic?"
+        message={`Save changes and mark "${editingClinic?.clinicName ?? formData.clinicName}" as cancelled?`}
+        confirmLabel="Cancel Clinic"
+        cancelLabel="Keep Editing"
+        loading={saving}
+        onCancel={() => setConfirmingCancellation(false)}
+        onConfirm={async () => {
+          await saveClinic();
+          if (currentSessionRef.current === sessionKey) setConfirmingCancellation(false);
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal

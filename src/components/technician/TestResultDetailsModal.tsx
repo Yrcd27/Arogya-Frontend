@@ -330,7 +330,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
             setDeleteError(null);
           }
         }}
-        onConfirm={() => void confirmDelete()}
+        onConfirm={confirmDelete}
       />
     </div>
   );

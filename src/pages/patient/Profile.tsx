@@ -239,7 +239,7 @@ export function Profile() {
             </div>
           )}
 
-          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
+          {isEditing ? <div className="w-full bg-white rounded-xl shadow-sm p-6">
             <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-6">
                 {/* Success/Error Messages */}
                 {success && (

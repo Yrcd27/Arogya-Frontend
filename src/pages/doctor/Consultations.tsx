@@ -5,6 +5,7 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
 import { PaginationFooter } from '../../components/PaginationFooter';
 import { toast } from 'react-toastify';
@@ -54,6 +55,7 @@ export default function Consultations() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'single'; id: number } | { type: 'bulk' } | null>(null);
+  const [consultationToCancel, setConsultationToCancel] = useState<{ id: number; session: number; fromDetails: boolean } | null>(null);
   const loadConsultationsRef = useRef<(displayPage: number, size?: number) => Promise<void>>(async () => undefined);
   const detailRequestRef = useRef(0);
   const listRequestRef = useRef(0);
@@ -91,6 +93,7 @@ export default function Consultations() {
     setSelectedConsultation(null);
     setEditingConsultation(null);
     setConfirmAction(null);
+    setConsultationToCancel(null);
     void loadConsultationsRef.current(1);
     return () => {
       currentSessionRef.current = -1;
@@ -214,6 +217,7 @@ export default function Consultations() {
     } catch (err) {
       if (currentSessionRef.current !== submittedSession) return false;
       toast.error(err instanceof Error ? err.message : `Failed to ${operation} consultation`);
+      if (operation === 'cancel') throw err instanceof Error ? err : new Error('Failed to cancel consultation');
       return false;
     } finally {
       if (currentSessionRef.current === submittedSession) {
@@ -224,7 +228,12 @@ export default function Consultations() {
   };
 
   const handleComplete = (id: number) => changeStatus(id, 'complete');
-  const handleCancel = (id: number) => changeStatus(id, 'cancel');
+  const handleCancel = (id: number, fromDetails = false) => {
+    if (!canMutate(id)) return;
+    const consultation = consultations.find(item => item.id === id);
+    if (consultation?.status !== 'SCHEDULED' && consultation?.status !== 'IN_PROGRESS') return;
+    setConsultationToCancel({ id, session: sessionKey, fromDetails });
+  };
 
   const openEdit = (c: Consultation) => {
     if (!canMutate(c.id)) return;
@@ -584,11 +593,12 @@ export default function Consultations() {
                                     e.stopPropagation();
                                     handleCancel(c.id);
                                   }}
-                                  className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
                                   title="Cancel consultation"
+                                  aria-label={`Cancel consultation #${c.id}`}
                                   disabled={actionPending || savingEdit}
                                 >
-                                  <XCircle className="w-4 h-4" />
+                                  <XCircle aria-hidden="true" className="h-5 w-5" />
                                 </button>
                               )}
                               <button
@@ -779,9 +789,7 @@ export default function Consultations() {
                 <button
                   className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
                   disabled={actionPending || savingEdit || loading}
-                  onClick={async () => {
-                    if (await handleCancel(selectedConsultation.id)) closeConsultationDetails();
-                  }}
+                  onClick={() => handleCancel(selectedConsultation.id, true)}
                 >
                   Cancel Consultation
                 </button>
@@ -902,6 +910,29 @@ export default function Consultations() {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={consultationToCancel !== null && consultationToCancel.session === sessionKey}
+        title="Cancel Consultation?"
+        message={`Cancel consultation #${consultationToCancel?.id ?? ''}? Its status will be changed to cancelled.`}
+        confirmLabel="Cancel Consultation"
+        cancelLabel="Keep Consultation"
+        loading={actionPending}
+        onCancel={() => { if (!actionRef.current) setConsultationToCancel(null); }}
+        onConfirm={async () => {
+          if (!consultationToCancel || consultationToCancel.session !== currentSessionRef.current) return;
+          const consultation = consultations.find(item => item.id === consultationToCancel.id);
+          if (consultation?.status !== 'SCHEDULED' && consultation?.status !== 'IN_PROGRESS') {
+            setConsultationToCancel(null);
+            return;
+          }
+          if (await changeStatus(consultationToCancel.id, 'cancel')) {
+            if (currentSessionRef.current !== consultationToCancel.session) return;
+            if (consultationToCancel.fromDetails) closeConsultationDetails();
+            setConsultationToCancel(null);
+          }
+        }}
+      />
+
       <ConfirmModal
         isOpen={confirmAction !== null}
         title={confirmAction?.type === 'bulk' ? 'Delete selected consultations?' : 'Delete consultation?'}
@@ -913,9 +944,9 @@ export default function Consultations() {
         confirmLabel="Delete"
         loading={confirmAction?.type === 'bulk' ? bulkDeleting : deletingId !== null}
         onCancel={() => { if (!actionRef.current) setConfirmAction(null); }}
-        onConfirm={() => {
-          if (confirmAction?.type === 'single') confirmSingleDelete(confirmAction.id);
-          else if (confirmAction?.type === 'bulk') confirmBulkDelete();
+        onConfirm={async () => {
+          if (confirmAction?.type === 'single') await confirmSingleDelete(confirmAction.id);
+          else if (confirmAction?.type === 'bulk') await confirmBulkDelete();
         }}
       />
     </div>

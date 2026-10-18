@@ -396,6 +396,8 @@ export function Queue() {
   const calledMetric = verifiedContextRef.current === contextKey && servingState !== 'checking' && servingState !== 'error'
     ? (verifiedServingToken ? 1 : 0)
     : null;
+  const hasEmptyQueueState = validClinic && !queueIsLoading && !error && filteredTokens.length === 0;
+  const shouldFillAvailableSpace = !selectedClinicId || hasEmptyQueueState;
   const primaryActionClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#38A3A5] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d8284] disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
@@ -403,7 +405,7 @@ export function Queue() {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className={'flex min-h-screen flex-col transition-all duration-300 ' + (isSidebarOpen ? 'md:ml-64' : 'md:ml-0')}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent className="flex flex-col">
+        <PageContent fill={shouldFillAvailableSpace} className="flex flex-col">
           <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Patient Queue</p>
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Patient Queue</h1>
@@ -537,7 +539,7 @@ export function Queue() {
               {clinicsLoading ? 'Loading your assigned clinics...' : 'Choose an available clinic from your assignments above.'}
             </div>
           ) : (
-            <section aria-labelledby="waiting-queue-title" aria-busy={queueIsLoading} className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <section aria-labelledby="waiting-queue-title" aria-busy={queueIsLoading} className={`min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm${hasEmptyQueueState ? ' flex min-h-0 flex-1 flex-col' : ''}`}>
               <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
                 <h2 id="waiting-queue-title" className="text-base font-semibold text-gray-900">Waiting patients</h2>
                 <button
@@ -564,7 +566,7 @@ export function Queue() {
                   <button type="button" onClick={() => void loadQueue(selectedClinicId)} disabled={actionLoadingId !== null} className={primaryActionClass + ' mt-4'}>Try again</button>
                 </div>
               ) : filteredTokens.length === 0 ? (
-                <EmptyState icon={<ClipboardList />} title={queueTokens.length === 0 ? 'No patients waiting' : 'No matching patients'}
+                <EmptyState variant="page" surface={false} headingLevel={3} icon={<ClipboardList />} title={queueTokens.length === 0 ? 'No patients waiting' : 'No matching patients'}
                   description={queueTokens.length === 0 ? 'New waiting patients will appear here. Refresh to check for updates.' : 'Try another patient name or token number.'}
                   action={queueTokens.length > 0 ? { label: 'Clear search', onClick: () => setSearchTerm('') } : undefined} />
               ) : (

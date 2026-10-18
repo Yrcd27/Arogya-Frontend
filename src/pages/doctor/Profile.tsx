@@ -282,7 +282,7 @@ const Profile: React.FC = () => {
             </div>
           )}
 
-          {isEditing ? <div className="max-w-5xl bg-white rounded-xl shadow-sm p-6">
+          {isEditing ? <div className="w-full bg-white rounded-xl shadow-sm p-6">
             {error && (
               <div role="alert" className="mb-6 flex items-center p-4 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircleIcon className="h-5 w-5 text-red-600 mr-2" />
