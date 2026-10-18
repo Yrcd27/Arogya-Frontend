@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LogOutIcon, XIcon, type LucideIcon } from 'lucide-react';
-import arogyaLogo from '../assests/logo/arogya_logo.jpg.jpeg';
+import arogyaLogo from '../assests/logo/arogya_logo.png';
 
 export interface SidebarProps {
   isOpen?: boolean;
@@ -30,13 +30,13 @@ export function DashboardSidebar({ isOpen = true, onClose, navItems, onLogout }:
       >
         <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-3 pt-5">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="h-14 w-14 shrink-0 overflow-hidden">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center">
               <img
                 src={arogyaLogo}
                 alt="Arogya Mobile Clinics logo"
-                width={56}
-                height={56}
-                className="h-full w-full scale-[1.35] object-contain"
+                width={45}
+                height={45}
+                className="h-[45px] w-[45px] object-contain"
               />
             </div>
             <div className="min-w-0">

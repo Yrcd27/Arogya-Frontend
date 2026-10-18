@@ -1,9 +1,10 @@
 import { consultationAPI, type Consultation } from '../services/consultationService';
 import { labTestAPI } from '../services/labTestService';
 import { ApiError } from '../services/httpClient';
-import type { Clinic, ClinicDoctor } from '../types/clinic';
+import type { Clinic } from '../types/clinic';
+import type { DoctorProfile, TechnicianProfile } from '../types/user';
 import type { LabTest } from '../types/labTest';
-import { assignedClinics, availableClinics, dashboardDate, loadDashboardAssignments, loadDashboardClinics } from './dashboard';
+import { assignedClinics, availableClinics, dashboardDate, loadDashboardAssignments, loadDashboardClinics, loadDoctorProfiles, loadTechnicianProfiles } from './dashboard';
 
 export type SearchRole = 'patient' | 'doctor' | 'technician' | 'admin';
 
@@ -19,7 +20,8 @@ export interface SearchData {
   clinics: Clinic[];
   consultations: Consultation[];
   labTests: LabTest[];
-  assignments: ClinicDoctor[];
+  doctors: DoctorProfile[];
+  technicians: TechnicianProfile[];
   unavailable: string[];
 }
 
@@ -27,7 +29,7 @@ export const SEARCH_PLACEHOLDERS: Record<SearchRole, string> = {
   patient: 'Search clinics, prescriptions, pages...',
   doctor: 'Search clinics, consultations, pages...',
   technician: 'Search lab tests, pages...',
-  admin: 'Search clinics, doctors, pages...',
+  admin: 'Search clinics, doctors, technicians, pages...',
 };
 
 const CACHE_TTL_MS = 60_000;
@@ -74,7 +76,7 @@ async function loadOwnConsultations(field: 'patientId' | 'doctorId', userId: num
 
 async function fetchSearchData(role: SearchRole, userId: number, profileId?: number): Promise<SearchData> {
   const unavailable: string[] = [];
-  const data: SearchData = { clinics: [], consultations: [], labTests: [], assignments: [], unavailable };
+  const data: SearchData = { clinics: [], consultations: [], labTests: [], doctors: [], technicians: [], unavailable };
 
   if (role === 'patient') {
     const [clinics, consultations] = await Promise.all([
@@ -99,12 +101,14 @@ async function fetchSearchData(role: SearchRole, userId: number, profileId?: num
     const labTests = await settle('lab tests', async () => (await labTestAPI.list({ page: 0, size: 200 })).items, unavailable);
     data.labTests = labTests ?? [];
   } else {
-    const [clinics, assignments] = await Promise.all([
+    const [clinics, doctors, technicians] = await Promise.all([
       settle('clinics', loadDashboardClinics, unavailable),
-      settle('doctors', loadDashboardAssignments, unavailable),
+      settle('doctors', loadDoctorProfiles, unavailable),
+      settle('technicians', loadTechnicianProfiles, unavailable),
     ]);
     data.clinics = clinics ?? [];
-    data.assignments = assignments ?? [];
+    data.doctors = doctors ?? [];
+    data.technicians = technicians ?? [];
   }
   return data;
 }
@@ -137,6 +141,15 @@ function clinicText(clinic: Clinic): string {
 
 function clinicDetail(clinic: Clinic): string {
   return [clinic.district, dashboardDate(clinic.scheduledDate), clinic.status.replace('_', ' ').toLowerCase()].filter(Boolean).join(' · ');
+}
+
+function staffName(profile: DoctorProfile | TechnicianProfile, prefix = ''): string {
+  const name = `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim() || profile.user?.username || profile.user?.email || 'Unnamed';
+  return prefix && !/^dr\.?\s/i.test(name) ? prefix + name : name;
+}
+
+function staffText(profile: DoctorProfile | TechnicianProfile, speciality?: string): string {
+  return [staffName(profile), speciality, profile.licenseNumber, profile.phoneNumber, profile.user?.email, profile.user?.username].filter(Boolean).join(' ');
 }
 
 export function searchRoleData(role: SearchRole, data: SearchData, terms: readonly string[]): SearchResult[] {
@@ -180,12 +193,15 @@ export function searchRoleData(role: SearchRole, data: SearchData, terms: readon
       key: `clinic-${clinic.id}`, group: 'Clinics', label: clinic.clinicName, detail: clinicDetail(clinic),
       to: linkedSearchPath('/admin/clinics', clinic.clinicName),
     })), terms));
-    results.push(...limit(data.assignments.filter(row => row.clinic && matchesTerms(
-      `${row.doctorName} ${row.specialization} ${row.clinic.clinicName}`, terms,
-    )).map(row => ({
-      key: `assignment-${row.id}`, group: 'Doctors', label: row.doctorName,
-      detail: `${row.specialization || 'Doctor'} · assigned to ${row.clinic?.clinicName ?? 'a clinic'}`,
-      to: linkedSearchPath('/admin/clinics', row.clinic?.clinicName ?? ''),
+    results.push(...limit(data.doctors.filter(doctor => matchesTerms(staffText(doctor, doctor.specialization), terms)).map(doctor => ({
+      key: `doctor-${doctor.id}`, group: 'Doctors', label: staffName(doctor, 'Dr. '),
+      detail: [doctor.specialization, doctor.user?.email].filter(Boolean).join(' · ') || 'Doctor',
+      to: linkedSearchPath('/admin/doctors', staffName(doctor)),
+    })), terms));
+    results.push(...limit(data.technicians.filter(tech => matchesTerms(staffText(tech, tech.technicianField), terms)).map(tech => ({
+      key: `technician-${tech.id}`, group: 'Technicians', label: staffName(tech),
+      detail: [tech.technicianField, tech.user?.email].filter(Boolean).join(' · ') || 'Technician',
+      to: linkedSearchPath('/admin/technicians', staffName(tech)),
     })), terms));
   }
   return results;

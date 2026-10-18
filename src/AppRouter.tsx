@@ -13,6 +13,8 @@ import { Clinics as PatientClinics } from './pages/patient/Clinics';
 import { Dashboard as AdminDashboard } from './pages/admin/Dashboard';
 import AdminProfile from './pages/admin/Profile';
 import { Clinics as AdminClinics } from './pages/admin/Clinics';
+import { Doctors as AdminDoctors } from './pages/admin/Doctors';
+import { Technicians as AdminTechnicians } from './pages/admin/Technicians';
 import { Dashboard as TechnicianDashboard } from './pages/technician/Dashboard';
 import TechnicianProfile from './pages/technician/Profile';
 import { LabTests as TechnicianLabTests } from './pages/technician/LabTests';
@@ -67,6 +69,8 @@ const router = createBrowserRouter(
         <Route path="/admin/dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/profile" element={<ProtectedRoute requiredRole="admin"><AdminProfile /></ProtectedRoute>} />
         <Route path="/admin/clinics" element={<ProtectedRoute requiredRole="admin"><AdminClinics /></ProtectedRoute>} />
+        <Route path="/admin/doctors" element={<ProtectedRoute requiredRole="admin"><AdminDoctors /></ProtectedRoute>} />
+        <Route path="/admin/technicians" element={<ProtectedRoute requiredRole="admin"><AdminTechnicians /></ProtectedRoute>} />
         
         {/* Technician Routes */}
         <Route path="/technician/dashboard" element={<ProtectedRoute requiredRole="technician"><TechnicianDashboard /></ProtectedRoute>} />

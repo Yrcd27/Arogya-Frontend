@@ -40,7 +40,9 @@ const pages: Record<DashboardRole, readonly { label: string; path: string; keywo
   admin: [
     { label: 'Dashboard', path: '/admin/dashboard', keywords: 'home summary' },
     { label: 'My Profile', path: '/admin/profile', keywords: 'personal information details edit' },
-    { label: 'Clinics', path: '/admin/clinics', keywords: 'schedules assignments doctors create edit' },
+    { label: 'Clinics', path: '/admin/clinics', keywords: 'schedules assignments create edit' },
+    { label: 'Doctors', path: '/admin/doctors', keywords: 'staff specialization license profiles directory' },
+    { label: 'Technicians', path: '/admin/technicians', keywords: 'staff lab laboratory license profiles directory' },
   ],
 };
 

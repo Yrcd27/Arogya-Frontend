@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HomeIcon, CalendarIcon, UserIcon } from 'lucide-react';
+import { HomeIcon, CalendarIcon, UserIcon, StethoscopeIcon, FlaskConicalIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogoutConfirmModal } from '../LogoutConfirmModal';
 import { DashboardSidebar, type SidebarProps } from '../DashboardSidebar';
@@ -22,6 +22,14 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
     icon: CalendarIcon,
     label: 'Clinics',
     path: '/admin/clinics'
+  }, {
+    icon: StethoscopeIcon,
+    label: 'Doctors',
+    path: '/admin/doctors'
+  }, {
+    icon: FlaskConicalIcon,
+    label: 'Technicians',
+    path: '/admin/technicians'
   }];
 
   return (

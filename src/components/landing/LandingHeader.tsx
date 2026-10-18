@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MenuIcon, XIcon } from 'lucide-react';
-import arogyaLogo from '../../assests/logo/arogya_logo.jpg.jpeg';
+import arogyaLogo from '../../assests/logo/arogya_logo.png';
 
 const NAV_LINKS = [
   { href: '#home', label: 'Home' },
@@ -67,13 +67,13 @@ export function LandingHeader() {
         }`}
       >
         <div className="flex items-center gap-2">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center">
             <img
               src={arogyaLogo}
               alt="Arogya Mobile Clinics logo"
-              width={56}
-              height={56}
-              className="h-full w-full scale-[1.35] object-contain"
+              width={45}
+              height={45}
+              className="h-[45px] w-[45px] object-contain"
             />
           </div>
           <div>

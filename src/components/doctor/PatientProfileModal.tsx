@@ -173,7 +173,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                   {profile.allergies && (
                     <div>
                       <label className="text-sm font-medium text-gray-500">Allergies</label>
-                      <p className="text-gray-900 whitespace-pre-wrap bg-red-50 p-3 rounded-lg border border-red-200 mt-1">
+                      <p className="mt-1 whitespace-pre-wrap rounded-lg border border-[#bde6e7] bg-[#f3fbfb] p-3 text-gray-800">
                         {profile.allergies}
                       </p>
                     </div>
@@ -182,7 +182,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
                   {profile.chronicDiseases && (
                     <div>
                       <label className="text-sm font-medium text-gray-500">Chronic Conditions</label>
-                      <p className="text-gray-900 whitespace-pre-wrap bg-yellow-50 p-3 rounded-lg border border-yellow-200 mt-1">
+                      <p className="mt-1 whitespace-pre-wrap rounded-lg border border-[#bde6e7] bg-[#f3fbfb] p-3 text-gray-800">
                         {profile.chronicDiseases}
                       </p>
                     </div>

@@ -3,7 +3,9 @@ import { consultationAPI, type Consultation } from '../services/consultationServ
 import { medicalRecordsAPI } from '../services/medicalRecordsService';
 import { queueAPI, type QueueTokenResponse } from '../services/queueService';
 import { ApiError } from '../services/httpClient';
+import { profileAPI } from '../services/userService';
 import type { Clinic, ClinicDoctor } from '../types/clinic';
+import type { DoctorProfile, TechnicianProfile } from '../types/user';
 import { isPositiveId } from './clinicalValidation';
 import { getAvailableClinics, isValidClinicDate } from './clinic';
 import { localDateString } from './profileValidation';
@@ -49,6 +51,25 @@ export async function loadDashboardAssignments(): Promise<ClinicDoctor[]> {
     throw new Error('Doctor assignments could not be verified. Please try again.');
   }
   return assignments;
+}
+
+async function loadStaffProfiles<T>(load: () => Promise<T[]>, label: string): Promise<T[]> {
+  try {
+    const profiles = await load();
+    if (!Array.isArray(profiles)) throw new Error(`${label} could not be verified. Please try again.`);
+    return profiles;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return [];
+    throw error;
+  }
+}
+
+export function loadDoctorProfiles(): Promise<DoctorProfile[]> {
+  return loadStaffProfiles(() => profileAPI.getAllDoctors(), 'Doctor profiles');
+}
+
+export function loadTechnicianProfiles(): Promise<TechnicianProfile[]> {
+  return loadStaffProfiles(() => profileAPI.getAllTechnicians(), 'Technician profiles');
 }
 
 export async function loadConsultationPreview(role: 'doctor' | 'patient', userId: number): Promise<DashboardPage<Consultation>> {
