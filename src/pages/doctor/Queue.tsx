@@ -6,7 +6,8 @@ import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { PatientProfileModal } from '../../components/doctor/PatientProfileModal';
 import { StatusBadge } from '../../components/StatusBadge';
-import { SearchIcon, PhoneCallIcon, XIcon } from 'lucide-react';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
+import { ClipboardCheck, ClipboardList, SearchIcon, PhoneCallIcon, XCircle, Loader2, RefreshCw, UsersRound } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useAuth } from '../../hooks/useAuth';
@@ -70,10 +71,12 @@ export function Queue() {
   const [nameById, setNameById] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [queueContext, setQueueContext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [tokenToCancel, setTokenToCancel] = useState<{ token: QueueTokenResponse; context: string } | null>(null);
   const loadQueueRef = useRef<(clinicId: number) => Promise<void>>(async () => undefined);
   const queueRequestRef = useRef(0);
   const actionRef = useRef(false);
@@ -130,6 +133,10 @@ export function Queue() {
     setRecentlyDone([]);
     setNameById({});
     setLoading(false);
+    setQueueContext(null);
+    setTokenToCancel(null);
+    setIsProfileModalOpen(false);
+    setSelectedPatientId(null);
     if (selectedClinicId && validClinic) {
       void loadQueueRef.current(selectedClinicId);
     }
@@ -229,7 +236,10 @@ export function Queue() {
       setError(e instanceof Error ? e.message : 'Failed to load queue');
       setQueueTokens([]);
     } finally {
-      if (requestId === queueRequestRef.current && currentContextRef.current === requestContext) setLoading(false);
+      if (requestId === queueRequestRef.current && currentContextRef.current === requestContext) {
+        setLoading(false);
+        setQueueContext(requestContext);
+      }
     }
   };
 
@@ -333,7 +343,11 @@ export function Queue() {
       if (current.id !== token.id || current.status !== 'PENDING' || Number(current.clinicId) !== selectedClinicId || String(current.patientId) !== String(token.patientId)) {
         throw new Error('This token is no longer waiting in the selected clinic. Reload the queue before cancelling.');
       }
-      await queueAPI.updateStatus(token.id, 'CANCELLED');
+      const updated = await queueAPI.updateStatus(token.id, 'CANCELLED');
+      if (updated.id !== token.id || Number(updated.clinicId) !== selectedClinicId
+        || String(updated.patientId) !== String(token.patientId) || updated.status !== 'CANCELLED') {
+        throw new Error('Cancellation was not confirmed. Reload the queue to check the token before trying again.');
+      }
       if (currentContextRef.current !== requestContext) return;
       setQueueTokens(prev => prev.filter(t => t.id !== token.id));
       if (servingToken?.id === token.id) {
@@ -342,9 +356,11 @@ export function Queue() {
         if (selectedClinicId && user?.id) clearStoredServingTokenId(user.id, selectedClinicId);
       }
       toast.success(`Token #${token.tokenNumber} cancelled`);
+      setTokenToCancel(null);
     } catch (e) {
       if (currentContextRef.current !== requestContext) return;
       toast.error(e instanceof Error ? e.message : 'Failed to cancel token');
+      throw e;
     } finally {
       actionRef.current = false;
       setActionLoadingId(null);
@@ -371,27 +387,36 @@ export function Queue() {
       })
     : queueTokens;
 
+  const queueIsLoading = loading || queueContext !== contextKey;
+  const waitingCount = queueTokens.filter(token => token.status === 'PENDING').length;
+  const verifiedServingToken = validClinic && verifiedContextRef.current === contextKey && servingState === 'serving' ? servingToken : null;
+  const waitingMetric = !queueIsLoading && !error ? waitingCount : null;
+  const calledMetric = verifiedContextRef.current === contextKey && servingState !== 'checking' && servingState !== 'error'
+    ? (verifiedServingToken ? 1 : 0)
+    : null;
+  const primaryActionClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#38A3A5] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d8284] disabled:cursor-not-allowed disabled:opacity-50';
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={'flex min-h-screen flex-col transition-all duration-300 ' + (isSidebarOpen ? 'md:ml-64' : 'md:ml-0')}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent className="flex flex-col">
           <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Patient Queue</p>
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Patient Queue</h1>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label htmlFor="doctor-queue-clinic" className="block text-sm font-medium text-gray-700 mb-2">Select Clinic</label>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="min-w-0">
+                <label htmlFor="doctor-queue-clinic" className="mb-2 block text-sm font-medium text-gray-700">Select Clinic</label>
                 <select
                   id="doctor-queue-clinic"
                   value={selectedClinicId ?? ''}
                   onChange={(e) => selectClinic(e.target.value ? Number(e.target.value) : null)}
                   disabled={clinicsLoading || clinics.length === 0 || actionLoadingId !== null}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm disabled:opacity-60"
                 >
                   <option value="">
                     {clinicsLoading
@@ -400,36 +425,44 @@ export function Queue() {
                         ? 'You are not assigned to any clinics yet.'
                         : 'Choose clinic...'}
                   </option>
-                  {clinics.map(c => (
-                    <option key={c.id} value={c.id}>{c.clinicName}</option>
+                  {clinics.map(clinic => (
+                    <option key={clinic.id} value={clinic.id}>{clinic.clinicName}</option>
                   ))}
                 </select>
               </div>
-              <div className="md:col-span-2 flex items-end">
-                <div className="flex-1 relative">
-                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="min-w-0 lg:col-span-2">
+                <label htmlFor="doctor-queue-search" className="mb-2 block text-sm font-medium text-gray-700">Search patients</label>
+                <div className="relative">
+                  <SearchIcon aria-hidden="true" className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                   <input
-                    type="text"
-                  placeholder="Search by patient name or token number..."
-                  aria-label="Search patient queue"
+                    id="doctor-queue-search"
+                    type="search"
+                    placeholder="Search by patient name or token number..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    disabled={!selectedClinicId}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
+                    disabled={!validClinic}
+                    className="h-10 w-full rounded-lg border border-gray-300 pl-10 pr-3 text-sm disabled:bg-gray-50 disabled:opacity-60"
                   />
                 </div>
               </div>
             </div>
-            {error && (
-              <div className="mt-3 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded">{error}</div>
+            {error && !validClinic && (
+              <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
             )}
-            {servingState === 'error' && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
+            {validClinic && servingState === 'checking' && (
+              <p role="status" className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                Checking your current patient before enabling Call Patient...
+              </p>
+            )}
+            {validClinic && servingState === 'error' && (
+              <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <span>{servingVerificationError || 'Unable to verify the current patient. Retry before calling another patient.'}</span>
                 <button
                   type="button"
                   onClick={() => setServingRetryKey(key => key + 1)}
-                  className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800"
+                  disabled={actionLoadingId !== null}
+                  className="min-h-10 rounded-lg px-3 py-2 font-medium underline underline-offset-2 disabled:opacity-50"
                 >
                   Retry verification
                 </button>
@@ -437,147 +470,211 @@ export function Queue() {
             )}
           </div>
 
-          {/* Now serving */}
-          {servingToken && (
-            <div className="bg-[#e6f6f6] border border-[#38A3A5] rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#38A3A5] text-white rounded-full flex items-center justify-center font-semibold">
-                  {servingToken.tokenNumber}
-                </div>
+          {validClinic && (
+            <section aria-label="Queue overview" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="flex min-h-24 items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e6f6f6] text-[#2d8284]">
+                  <UsersRound aria-hidden="true" className="h-5 w-5" />
+                </span>
                 <div>
-                  <p className="text-sm text-gray-500">Now serving</p>
-                  {nameById[String(servingToken.patientId)] ? (
-                    <p className="font-medium text-gray-900">{nameById[String(servingToken.patientId)]}</p>
-                  ) : (
-                    <span className="inline-block h-5 w-28 bg-gray-200 rounded animate-pulse" />
-                  )}
+                  <p className="text-sm font-medium text-gray-600">Waiting</p>
+                  <p className="mt-0.5 text-2xl font-semibold leading-none text-gray-900">{waitingMetric ?? '—'}</p>
+                  <p className="mt-1 text-xs text-gray-500">Current clinic queue</p>
                 </div>
               </div>
-              <button
-                className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors"
-                disabled={servingState !== 'serving' || !validClinic || actionLoadingId !== null}
-                onClick={() => goToConsultation(servingToken)}
-              >
-                Start Consultation
-              </button>
-            </div>
+              <div className="flex min-h-24 items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e6f6f6] text-[#2d8284]">
+                  <PhoneCallIcon aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Called</p>
+                  <p className="mt-0.5 text-2xl font-semibold leading-none text-gray-900">{calledMetric ?? '—'}</p>
+                  <p className="mt-1 text-xs text-gray-500">Currently serving</p>
+                </div>
+              </div>
+              <div className="flex min-h-24 items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e6f6f6] text-[#2d8284]">
+                  <ClipboardCheck aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Completed</p>
+                  <p className="mt-0.5 text-2xl font-semibold leading-none text-gray-900">{recentlyDone.length}</p>
+                  <p className="mt-1 text-xs text-gray-500">This session</p>
+                </div>
+              </div>
+            </section>
           )}
 
-          {loading ? (
-            <div className="bg-white rounded-xl shadow-sm p-12 flex flex-col items-center justify-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#38A3A5] mb-4"></div>
-              <p className="text-gray-600">Loading queue...</p>
+          {validClinic && (
+            <section aria-label="Now serving" className="flex flex-col gap-3 rounded-xl border border-[#38A3A5]/40 bg-[#e6f6f6] p-4 sm:flex-row sm:items-center sm:justify-between">
+              {verifiedServingToken ? (
+                <>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span aria-label={'Token ' + verifiedServingToken.tokenNumber} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#38A3A5] text-sm font-semibold text-white">
+                      {verifiedServingToken.tokenNumber}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-[#2d8284]">Now serving</p>
+                      <p className="break-words font-semibold text-gray-900">{nameById[String(verifiedServingToken.patientId)] || 'Patient #' + verifiedServingToken.patientId}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={primaryActionClass + ' shrink-0'}
+                    disabled={actionLoadingId !== null}
+                    onClick={() => goToConsultation(verifiedServingToken)}
+                  >
+                    Start Consultation
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <PhoneCallIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-[#2d8284]" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Now serving</p>
+                    <p className="text-sm text-gray-600">
+                      {servingState === 'checking'
+                        ? 'Checking the current patient...'
+                        : servingState === 'error'
+                          ? 'Current patient status needs verification.'
+                          : 'No patient is currently being served.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {!selectedClinicId ? (
+            <section className="flex flex-1 flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-10 text-center shadow-sm">
+              <ClipboardList aria-hidden="true" className="mb-3 h-10 w-10 text-[#38A3A5]" />
+              <h2 className="text-base font-semibold text-gray-900">Select a Clinic to View Patient Queue</h2>
+              <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">Choose a clinic above to view waiting patients and manage consultations.</p>
+            </section>
+          ) : !validClinic ? (
+            <div role="status" className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
+              {clinicsLoading ? 'Loading your assigned clinics...' : 'Choose an available clinic from your assignments above.'}
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Queue #</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Issued</th>
-                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                  {filteredTokens.map(t => (
-                    <tr key={t.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="w-8 h-8 bg-[#38A3A5] text-white rounded-full flex items-center justify-center font-semibold">
-                          {t.tokenNumber}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {nameById[String(t.patientId)] ? (
-                          <div className="text-sm font-medium text-gray-900">{nameById[String(t.patientId)]}</div>
-                        ) : (
-                          <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-600">{new Date(t.issuedAt).toLocaleString()}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            className="px-3 py-2 text-gray-500 hover:text-[#2d8284] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm"
-                            onClick={() => {
-                              setSelectedPatientId(t.patientId);
-                              setIsProfileModalOpen(true);
-                            }}
-                          >
-                            Profile
-                          </button>
-                          <button
-                            className="flex items-center gap-1.5 px-3 py-2 bg-[#38A3A5] text-white rounded-lg text-sm font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50"
-                            onClick={() => callNext(t)}
-                            disabled={actionLoadingId !== null || servingState !== 'none' || !validClinic}
-                            title={servingState === 'error' || servingState === 'checking' ? 'Verify the current patient before calling another patient' : servingToken ? 'Finish the current consultation first' : 'Call this patient'}
-                          >
-                            <PhoneCallIcon className="w-3.5 h-3.5" />
-                            Call
-                          </button>
-                          <button
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
-                            onClick={() => cancelToken(t)}
-                            disabled={actionLoadingId !== null || !validClinic}
-                            aria-label={`Cancel token ${t.tokenNumber}`}
-                            title="Cancel this token"
-                          >
-                            <XIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                    {selectedClinicId && filteredTokens.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                          {queueTokens.length === 0 ? 'No patients waiting in queue' : 'No patients match your search'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <section aria-labelledby="waiting-queue-title" aria-busy={queueIsLoading} className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
+                <h2 id="waiting-queue-title" className="text-base font-semibold text-gray-900">Waiting patients</h2>
+                <button
+                  type="button"
+                  onClick={() => void loadQueue(selectedClinicId)}
+                  disabled={queueIsLoading || actionLoadingId !== null}
+                  aria-label="Refresh patient queue"
+                  title="Refresh patient queue"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#2d8284] disabled:opacity-40"
+                >
+                  <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                </button>
               </div>
-            </div>
+
+              {queueIsLoading ? (
+                <div role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-gray-600">
+                  <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[#38A3A5] motion-reduce:animate-none" />
+                  Loading patient queue...
+                </div>
+              ) : error ? (
+                <div role="alert" className="p-6 text-center">
+                  <p className="font-medium text-gray-900">Unable to load the patient queue</p>
+                  <p className="mt-1 break-words text-sm text-red-700">{error}</p>
+                  <button type="button" onClick={() => void loadQueue(selectedClinicId)} disabled={actionLoadingId !== null} className={primaryActionClass + ' mt-4'}>Try again</button>
+                </div>
+              ) : filteredTokens.length === 0 ? (
+                <div className="px-5 py-8 text-center">
+                  <ClipboardList aria-hidden="true" className="mx-auto mb-3 h-8 w-8 text-gray-400" />
+                  <h3 className="text-sm font-semibold text-gray-900">{queueTokens.length === 0 ? 'No patients waiting' : 'No matching patients'}</h3>
+                  <p className="mt-1 text-sm text-gray-500">{queueTokens.length === 0 ? 'New waiting patients will appear here. Refresh to check for updates.' : 'Try another patient name or token number.'}</p>
+                  {queueTokens.length > 0 && <button type="button" onClick={() => setSearchTerm('')} className="mt-3 min-h-10 rounded-lg px-3 py-2 text-sm font-medium text-[#2d8284] hover:bg-[#e6f6f6]">Clear search</button>}
+                </div>
+              ) : (
+                <div role="region" aria-label="Patient queue table" tabIndex={0} className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#38A3A5]">
+                  <table className="w-full min-w-[680px] text-left text-sm">
+                    <caption className="sr-only">Waiting patient queue for {clinics.find(clinic => clinic.id === selectedClinicId)?.clinicName}</caption>
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 font-medium sm:px-5">Queue Token</th>
+                        <th scope="col" className="px-4 py-3 font-medium">Patient</th>
+                        <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                        <th scope="col" className="px-4 py-3 font-medium">Issued Time</th>
+                        <th scope="col" className="px-4 py-3 text-right font-medium sm:px-5">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredTokens.map(token => (
+                        <tr key={token.id} className="hover:bg-gray-50/70">
+                          <td className="px-4 py-3 sm:px-5">
+                            <span aria-label={'Token ' + token.tokenNumber} className="inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-[#e6f6f6] px-2 text-sm font-semibold text-[#2d8284]">{token.tokenNumber}</span>
+                          </td>
+                          <td className="max-w-52 break-words px-4 py-3 font-medium text-gray-900">{nameById[String(token.patientId)] || 'Patient #' + token.patientId}</td>
+                          <td className="whitespace-nowrap px-4 py-3"><StatusBadge status={token.status} /></td>
+                          <td className="px-4 py-3 text-gray-600">
+                            <time dateTime={token.issuedAt} className="whitespace-nowrap">{new Date(token.issuedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
+                            <span className="mt-0.5 block whitespace-nowrap text-xs text-gray-500">{new Date(token.issuedAt).toLocaleDateString()}</span>
+                          </td>
+                          <td className="px-4 py-3 sm:px-5">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                className="min-h-10 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#2d8284]"
+                                aria-label={'View profile for ' + (nameById[String(token.patientId)] || 'patient #' + token.patientId)}
+                                onClick={() => { setSelectedPatientId(token.patientId); setIsProfileModalOpen(true); }}
+                              >Profile</button>
+                              <button
+                                type="button"
+                                className={primaryActionClass + ' whitespace-nowrap'}
+                                onClick={() => void callNext(token)}
+                                disabled={actionLoadingId !== null || servingState !== 'none' || !validClinic || verifiedContextRef.current !== contextKey || token.status !== 'PENDING'}
+                                title={servingState === 'error' || servingState === 'checking' ? 'Verify the current patient before calling another patient' : servingToken ? 'Finish the current consultation first' : 'Call this patient'}
+                              >
+                                {actionLoadingId === token.id && !tokenToCancel ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <PhoneCallIcon aria-hidden="true" className="h-4 w-4" />}
+                                {actionLoadingId === token.id && !tokenToCancel ? 'Calling...' : 'Call Patient'}
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                onClick={() => setTokenToCancel({ token, context: contextKey })}
+                                disabled={actionLoadingId !== null || !validClinic || token.status !== 'PENDING'}
+                                aria-label={'Cancel token #' + token.tokenNumber}
+                                title="Cancel Token"
+                              ><XCircle aria-hidden="true" className="h-5 w-5" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
           )}
 
-          {recentlyDone.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Completed this session</h3>
-              <div className="space-y-2">
-                {recentlyDone.map(t => (
-                  <div key={t.id} className="flex items-center justify-between p-3 rounded bg-green-50 border border-green-200">
-                    <div className="text-sm text-gray-800">
-                      <span className="font-medium">Token #{t.tokenNumber}</span>
-                      {nameById[String(t.patientId)] && (
-                        <span className="ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
-                      )}
-                    </div>
-                    <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">COMPLETED</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </PageContent>
       </div>
+
+      <ConfirmDialog
+        isOpen={tokenToCancel !== null && tokenToCancel.context === contextKey}
+        title="Cancel Queue Token?"
+        message={'Are you sure you want to cancel token #' + (tokenToCancel?.token.tokenNumber ?? '') + ' for this patient? This action may affect their place in the queue.'}
+        cancelLabel="Keep Token"
+        confirmLabel="Cancel Token"
+        loading={actionLoadingId !== null}
+        onCancel={() => { if (!actionRef.current) setTokenToCancel(null); }}
+        onConfirm={async () => {
+          if (!tokenToCancel || tokenToCancel.context !== currentContextRef.current) return;
+          await cancelToken(tokenToCancel.token);
+        }}
+      />
 
       {isProfileModalOpen && selectedPatientId && (
         <PatientProfileModal
           patientId={Number(selectedPatientId)}
-          onClose={() => {
-            setIsProfileModalOpen(false);
-            setSelectedPatientId(null);
-          }}
+          onClose={() => { setIsProfileModalOpen(false); setSelectedPatientId(null); }}
         />
       )}
     </div>
   );
 }
+
