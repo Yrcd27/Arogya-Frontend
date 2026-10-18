@@ -8,6 +8,47 @@
   --teal-accent: #38a3a5;
 }
 
+.arogya-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 2.75rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: white;
+  text-align: left;
+}
+
+.arogya-select-trigger[aria-invalid="true"] { border-color: #f87171; }
+.arogya-select-trigger:disabled { cursor: not-allowed; opacity: 0.6; background-color: #f9fafb; }
+
+.arogya-dropdown-options {
+  --dropdown-option-height: 2.5rem;
+  max-height: calc(5 * var(--dropdown-option-height));
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.arogya-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: var(--dropdown-option-height, 2.5rem);
+  flex-shrink: 0;
+  padding: 0 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.arogya-dropdown-option[aria-disabled="true"] { cursor: not-allowed; opacity: 0.5; }
+
 /* One focus outline replaces native outlines and component-level Tailwind rings. */
 :is(input:not([type="hidden"], .sr-only), textarea, select, [role="textbox"], [role="combobox"], [contenteditable="true"], .form-control-focus):not(:disabled, [aria-disabled="true"]):focus,
 :is(button, [role="button"], [role="checkbox"], [role="radio"], [role="switch"], [role="listbox"], [role="option"], [role="menuitemradio"]):not(:disabled, [aria-disabled="true"]):focus-visible,

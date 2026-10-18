@@ -25,7 +25,7 @@ export function LabResults() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [totalResults, setTotalResults] = useState(0);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedResult, setSelectedResult] = useState<TestResult | null>(null);
   const [previewFile, setPreviewFile] = useState<TestResultFile | null>(null);
@@ -199,9 +199,9 @@ export function LabResults() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!loading && !error && testResults.length === 0}>
           <div>
             <p className="text-gray-600 text-sm mb-1">
               Dashboard / Lab Results
@@ -230,12 +230,8 @@ export function LabResults() {
               <div className="text-gray-600">Loading test results...</div>
             </div>
           ) : error ? null : testResults.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm">
-              <EmptyState 
-                title="No lab results yet"
-                description="Your lab test results will appear here once ready"
-              />
-            </div>
+            <EmptyState variant="page" icon={<FlaskConicalIcon />} title="No lab results yet"
+              description="Your lab test results will appear here once they are ready." />
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">

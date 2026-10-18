@@ -4,7 +4,7 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { PaginationFooter } from '../../components/PaginationFooter';
-import { EyeIcon, XIcon } from 'lucide-react';
+import { EyeIcon, FileText, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -178,9 +178,9 @@ export function Records() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!loading && !loadError && records.length === 0}>
           <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Prescriptions</p>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -194,7 +194,7 @@ export function Records() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className={`bg-white rounded-xl shadow-sm overflow-hidden ${!loading && !loadError && records.length === 0 ? 'flex min-h-min flex-1 flex-col' : ''}`}>
             <div className="p-6 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row gap-4">
                 <input 
@@ -220,10 +220,9 @@ export function Records() {
                 <p className="mt-4">Loading prescriptions...</p>
               </div>
             ) : loadError ? null : filteredRecords.length === 0 ? (
-              <EmptyState 
-                title="No prescriptions"
-                description="Your prescriptions will appear here"
-              />
+              <EmptyState variant={records.length === 0 ? 'page' : 'section'} surface={false} icon={<FileText />}
+                title={records.length === 0 ? 'No prescriptions yet' : 'No matching prescriptions'}
+                description={records.length === 0 ? 'Your prescriptions will appear here when available.' : 'Try adjusting your search.'} />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">

@@ -5,6 +5,7 @@ import { ApiError } from '../../services/httpClient';
 import { medicalRecordsAPI, type TestResult, type TestResultFile } from '../../services/medicalRecordsService';
 import { labTestAPI } from '../../services/labTestService';
 import { FilePreviewModal } from '../FilePreviewModal';
+import { EmptyState } from '../EmptyState';
 import { ConfirmModal } from '../ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
@@ -282,8 +283,8 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
             </div>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <p className="text-gray-600 mb-4">No test result found for this lab test.</p>
+          <div className="text-center">
+            <EmptyState icon={<FileText />} title="No test result available" description="No test result was found for this lab test." headingLevel={4} />
             {labTest.status === 'COMPLETED' && (
               <>
                 <p className="text-sm text-gray-500 mb-4">This test is marked completed but its result is missing — you can reopen it to submit a new result.</p>

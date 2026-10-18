@@ -1,4 +1,6 @@
+import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
+import { EmptyState } from '../../components/EmptyState';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -411,7 +413,7 @@ export function Queue() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="min-w-0">
                 <label htmlFor="doctor-queue-clinic" className="mb-2 block text-sm font-medium text-gray-700">Select Clinic</label>
-                <select
+                <Select
                   id="doctor-queue-clinic"
                   value={selectedClinicId ?? ''}
                   onChange={(e) => selectClinic(e.target.value ? Number(e.target.value) : null)}
@@ -428,7 +430,7 @@ export function Queue() {
                   {clinics.map(clinic => (
                     <option key={clinic.id} value={clinic.id}>{clinic.clinicName}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="min-w-0 lg:col-span-2">
                 <label htmlFor="doctor-queue-search" className="mb-2 block text-sm font-medium text-gray-700">Search patients</label>
@@ -505,52 +507,31 @@ export function Queue() {
             </section>
           )}
 
-          {validClinic && (
+          {validClinic && verifiedServingToken && (
             <section aria-label="Now serving" className="flex flex-col gap-3 rounded-xl border border-[#38A3A5]/40 bg-[#e6f6f6] p-4 sm:flex-row sm:items-center sm:justify-between">
-              {verifiedServingToken ? (
-                <>
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span aria-label={'Token ' + verifiedServingToken.tokenNumber} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#38A3A5] text-sm font-semibold text-white">
-                      {verifiedServingToken.tokenNumber}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-[#2d8284]">Now serving</p>
-                      <p className="break-words font-semibold text-gray-900">{nameById[String(verifiedServingToken.patientId)] || 'Patient #' + verifiedServingToken.patientId}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={primaryActionClass + ' shrink-0'}
-                    disabled={actionLoadingId !== null}
-                    onClick={() => goToConsultation(verifiedServingToken)}
-                  >
-                    Start Consultation
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <PhoneCallIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-[#2d8284]" />
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Now serving</p>
-                    <p className="text-sm text-gray-600">
-                      {servingState === 'checking'
-                        ? 'Checking the current patient...'
-                        : servingState === 'error'
-                          ? 'Current patient status needs verification.'
-                          : 'No patient is currently being served.'}
-                    </p>
-                  </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <span aria-label={'Token ' + verifiedServingToken.tokenNumber} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#38A3A5] text-sm font-semibold text-white">
+                  {verifiedServingToken.tokenNumber}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[#2d8284]">Now serving</p>
+                  <p className="break-words font-semibold text-gray-900">{nameById[String(verifiedServingToken.patientId)] || 'Patient #' + verifiedServingToken.patientId}</p>
                 </div>
-              )}
+              </div>
+              <button
+                type="button"
+                className={primaryActionClass + ' shrink-0'}
+                disabled={actionLoadingId !== null}
+                onClick={() => goToConsultation(verifiedServingToken)}
+              >
+                Start Consultation
+              </button>
             </section>
           )}
 
           {!selectedClinicId ? (
-            <section className="flex flex-1 flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-10 text-center shadow-sm">
-              <ClipboardList aria-hidden="true" className="mb-3 h-10 w-10 text-[#38A3A5]" />
-              <h2 className="text-base font-semibold text-gray-900">Select a Clinic to View Patient Queue</h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">Choose a clinic above to view waiting patients and manage consultations.</p>
-            </section>
+            <EmptyState variant="page" icon={<ClipboardList />} title="Select a Clinic to View Patient Queue"
+              description="Choose a clinic above to view waiting patients and manage consultations." />
           ) : !validClinic ? (
             <div role="status" className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
               {clinicsLoading ? 'Loading your assigned clinics...' : 'Choose an available clinic from your assignments above.'}
@@ -583,12 +564,9 @@ export function Queue() {
                   <button type="button" onClick={() => void loadQueue(selectedClinicId)} disabled={actionLoadingId !== null} className={primaryActionClass + ' mt-4'}>Try again</button>
                 </div>
               ) : filteredTokens.length === 0 ? (
-                <div className="px-5 py-8 text-center">
-                  <ClipboardList aria-hidden="true" className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-                  <h3 className="text-sm font-semibold text-gray-900">{queueTokens.length === 0 ? 'No patients waiting' : 'No matching patients'}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{queueTokens.length === 0 ? 'New waiting patients will appear here. Refresh to check for updates.' : 'Try another patient name or token number.'}</p>
-                  {queueTokens.length > 0 && <button type="button" onClick={() => setSearchTerm('')} className="mt-3 min-h-10 rounded-lg px-3 py-2 text-sm font-medium text-[#2d8284] hover:bg-[#e6f6f6]">Clear search</button>}
-                </div>
+                <EmptyState icon={<ClipboardList />} title={queueTokens.length === 0 ? 'No patients waiting' : 'No matching patients'}
+                  description={queueTokens.length === 0 ? 'New waiting patients will appear here. Refresh to check for updates.' : 'Try another patient name or token number.'}
+                  action={queueTokens.length > 0 ? { label: 'Clear search', onClick: () => setSearchTerm('') } : undefined} />
               ) : (
                 <div role="region" aria-label="Patient queue table" tabIndex={0} className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#38A3A5]">
                   <table className="w-full min-w-[680px] text-left text-sm">

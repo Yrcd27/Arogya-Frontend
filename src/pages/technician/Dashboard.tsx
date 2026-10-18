@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ClipboardList, FileCheck2, FlaskConical } from 'lucide-react';
 import { Sidebar } from '../../components/technician/Sidebar';
 import { Header } from '../../components/technician/Header';
+import { EmptyState } from '../../components/EmptyState';
 import { DashboardMetric, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
 import { useDashboardData } from '../../hooks/useDashboardData';
 
@@ -30,7 +31,7 @@ export function Dashboard() {
           <DashboardPanel title="Needs attention" description="Pending and in-progress work from the first five orders returned by the worklist." loading={labTests.loading} error={labTests.error} action={{ to: '/technician/lab-tests', label: 'Open Lab Tests' }}>
             {needsAttention.length
               ? <p className="py-2 text-sm text-gray-700"><span className="font-semibold text-gray-900">{needsAttention.length}</span> {needsAttention.length === 1 ? 'order needs' : 'orders need'} attention. Open Lab Tests to review, filter, and process them.</p>
-              : <p className="py-2 text-sm text-gray-500">No pending or in-progress work was found in the current five-order snapshot.</p>}
+              : <EmptyState icon={<ClipboardList />} title="No work needs attention in this preview" description="No pending or in-progress work was found in the current five-order snapshot." />}
           </DashboardPanel>
         </main>
       </div>

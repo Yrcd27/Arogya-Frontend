@@ -1,3 +1,5 @@
+import { Select } from '../../components/Select';
+import { EmptyState } from '../../components/EmptyState';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, FileText, Hospital } from 'lucide-react';
@@ -41,14 +43,14 @@ export function Dashboard() {
             </DashboardPanel>
             <DashboardPanel title="Waiting queue" description="Pending patients at one of your assigned clinics." loading={clinicLoading} error={clinicError} onRetry={refreshClinics}>
               <label htmlFor="dashboard-doctor-clinic" className="mb-2 block text-sm font-medium text-gray-700">Clinic</label>
-              <select id="dashboard-doctor-clinic" value={selectedClinic ? clinicId ?? '' : ''} onChange={event => setClinicId(Number(event.target.value) || null)} disabled={!clinicReady || !myClinics.length} className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60">
+              <Select id="dashboard-doctor-clinic" value={selectedClinic ? clinicId ?? '' : ''} onChange={event => setClinicId(Number(event.target.value) || null)} disabled={!clinicReady || !myClinics.length} className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60">
                 <option value="" disabled>{!clinicReady ? 'Clinic assignments unavailable' : !myClinics.length ? 'No assigned clinics' : 'Select a clinic'}</option>
                 {myClinics.map(clinic => <option key={clinic.id} value={clinic.id}>{clinic.clinicName}</option>)}
-              </select>
+              </Select>
               {selectedClinic && <div aria-busy={waitingQueue.loading}>
                 {waitingQueue.loading ? <p role="status" className="py-3 text-sm text-gray-500">Loading waiting patients…</p>
                   : waitingQueue.error ? <div role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{waitingQueue.error}<button type="button" onClick={waitingQueue.reload} className="ml-2 font-medium underline">Try again</button></div>
-                  : waitingQueue.data ? <><p className="mb-2 text-sm text-gray-600"><span className="font-semibold text-gray-900">{waitingQueue.data.length}</span> waiting {waitingQueue.data.length === 1 ? 'patient' : 'patients'}</p>{waitingQueue.data.length > 0 && <ul className="divide-y divide-gray-100">{waitingQueue.data.slice(0, 3).map(token => <li key={token.id} className="flex items-center justify-between gap-3 py-2 text-sm"><span className="font-medium text-gray-900">Token #{token.tokenNumber}</span><span className="text-gray-500">Position {token.position}</span></li>)}</ul>}</> : null}
+                  : waitingQueue.data ? waitingQueue.data.length === 0 ? <EmptyState title="No patients waiting" description="There are no patients waiting in this clinic queue." /> : <><p className="mb-2 text-sm text-gray-600"><span className="font-semibold text-gray-900">{waitingQueue.data.length}</span> waiting {waitingQueue.data.length === 1 ? 'patient' : 'patients'}</p>{waitingQueue.data.length > 0 && <ul className="divide-y divide-gray-100">{waitingQueue.data.slice(0, 3).map(token => <li key={token.id} className="flex items-center justify-between gap-3 py-2 text-sm"><span className="font-medium text-gray-900">Token #{token.tokenNumber}</span><span className="text-gray-500">Position {token.position}</span></li>)}</ul>}</> : null}
                 <p className="mt-3 text-xs leading-5 text-gray-500">Currently serving patients are managed on the queue page.</p>
                 <div className="mt-3 flex flex-wrap items-center gap-3"><Link to={'/doctor/queue?clinicId=' + selectedClinic.id} className="inline-flex rounded-lg bg-[#38A3A5] px-4 py-2 text-sm font-medium text-white hover:bg-[#2d8284]">Open clinic queue</Link><button type="button" onClick={waitingQueue.reload} disabled={waitingQueue.loading} className="rounded text-sm font-medium text-[#2d8284] hover:underline disabled:opacity-50">Refresh queue</button></div>
               </div>}

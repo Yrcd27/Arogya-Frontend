@@ -1,4 +1,6 @@
+import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
+import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
@@ -6,6 +8,7 @@ import { SearchIcon, MapPinIcon, CalendarIcon, UsersIcon, XIcon, HospitalIcon } 
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
+import { useUserProfile } from '../../hooks/useUserProfile';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS, type ClinicFilters } from '../../types/clinic';
@@ -60,13 +63,15 @@ const findActiveQueueToken = async (tokens: QueueTokenResponse[], clinicId: numb
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
+  const { profile: currentPatientProfile, status: patientProfileStatus } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const [clinicDoctors, setClinicDoctors] = useState<ClinicDoctor[]>([]);
   const [clinicDoctorsError, setClinicDoctorsError] = useState(false);
+  const [clinicDoctorsLoading, setClinicDoctorsLoading] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [queueTokens, setQueueTokens] = useState<import('../../services/queueService').QueueTokenResponse[]>([]);
@@ -198,6 +203,8 @@ export function Clinics() {
 
   const loadClinicDoctors = async (clinicId: number) => {
     const requestSession = currentSessionRef.current;
+    setClinicDoctorsLoading(true);
+    setClinicDoctorsError(false);
     try {
       const doctors = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinicId);
       if (selectedClinicRef.current !== clinicId || currentSessionRef.current !== requestSession) return;
@@ -208,6 +215,8 @@ export function Clinics() {
       console.error('Failed to load clinic doctors:', error);
       setClinicDoctors([]);
       setClinicDoctorsError(true);
+    } finally {
+      if (selectedClinicRef.current === clinicId && currentSessionRef.current === requestSession) setClinicDoctorsLoading(false);
     }
   };
 
@@ -323,6 +332,12 @@ export function Clinics() {
     selectedClinicRef.current = clinic.id;
     setSelectedClinic(clinic);
 
+    if (!hasCompletedPatientProfile) {
+      setJoinError(patientProfileJoinMessage);
+      setIsQueueModalOpen(true);
+      return;
+    }
+
     if (!isPositiveId(clinic.id) || !clinics.some(item => item.id === clinic.id) || clinic.status !== 'SCHEDULED'
       || !isPositiveId(user?.id) || patientId !== String(user?.id) || patientFetchError) {
       setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
@@ -401,6 +416,23 @@ export function Clinics() {
   const activeQueueToken = queueTokens.find(
     token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
   );
+  const hasCompletedPatientProfile = patientProfileStatus === 'ready'
+    && isPositiveId(currentPatientProfile?.id)
+    && currentPatientProfile?.user?.id === user?.id;
+  const patientProfileNeedsCompletion = patientProfileStatus === 'not-found'
+    || patientProfileStatus === 'ready' && !hasCompletedPatientProfile;
+  const patientProfileJoinMessage = patientProfileStatus === 'loading'
+    ? 'Your patient profile is still being checked. Please wait before joining a queue.'
+    : patientProfileNeedsCompletion
+      ? 'Complete your patient profile before joining a clinic queue.'
+      : 'Your patient profile could not be verified. Please try again later.';
+  const profileJoinButtonLabel = patientProfileStatus === 'loading'
+    ? 'Checking Profile...'
+    : patientProfileNeedsCompletion
+      ? 'Complete Profile to Join'
+      : patientProfileStatus === 'error'
+        ? 'Profile Unavailable'
+        : 'Join Queue';
 
   const clinicFilters: ClinicFilters = {
     searchTerm,
@@ -467,7 +499,7 @@ export function Clinics() {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!isLoading && !error && filtersValid && filteredAndSortedClinics.length === 0}>
           {/* Header */}
           <div>
             <p className="text-gray-600 text-sm mb-1">Dashboard / Mobile Clinics</p>
@@ -496,7 +528,7 @@ export function Clinics() {
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex h-full flex-col justify-end">
                 <label htmlFor="clinic-filter-province" className="sr-only">Filter by province</label>
-                <select
+                <Select
                   {...filterProps('province')}
                   value={selectedProvince}
                   onChange={(e) => {
@@ -509,13 +541,13 @@ export function Clinics() {
                   {Object.keys(PROVINCES_DISTRICTS).map(province => (
                     <option key={province} value={province}>{province}</option>
                   ))}
-                </select>
+                </Select>
                 {filterError('province')}
               </div>
 
               <div className="flex h-full flex-col justify-end">
                 <label htmlFor="clinic-filter-district" className="sr-only">Filter by district</label>
-                <select
+                <Select
                   {...filterProps('district')}
                   value={selectedDistrict}
                   onChange={(e) => setSelectedDistrict(e.target.value)}
@@ -526,7 +558,7 @@ export function Clinics() {
                   {getDistrictOptions(selectedProvince).map(district => (
                     <option key={district} value={district}>{district}</option>
                   ))}
-                </select>
+                </Select>
                 {filterError('district')}
               </div>
 
@@ -589,7 +621,7 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          {!isLoading && !error && filtersValid && (
+          {!isLoading && !error && filtersValid && filteredAndSortedClinics.length > 0 && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {filteredAndSortedClinics.map(clinic => {
                 const alreadyJoined = joinedClinicIds.has(clinic.id);
@@ -601,7 +633,7 @@ export function Clinics() {
                     ? 'Checking Queue...'
                     : membershipUnavailable
                       ? 'Queue Status Unavailable'
-                      : 'Join Queue';
+                      : profileJoinButtonLabel;
 
                 return (
                   <ClinicCard
@@ -620,8 +652,8 @@ export function Clinics() {
                         <button
                           type="button"
                           onClick={() => joinQueueForClinic(clinic)}
-                          disabled={alreadyJoined || membershipLoading || membershipUnavailable || joinLoading}
-                          title={membershipUnavailable ? 'Unable to verify your queue status. Please try again later.' : undefined}
+                          disabled={alreadyJoined || membershipLoading || membershipUnavailable || joinLoading || !hasCompletedPatientProfile}
+                          title={membershipUnavailable ? 'Unable to verify your queue status. Please try again later.' : !hasCompletedPatientProfile ? patientProfileJoinMessage : undefined}
                           className="min-h-10 rounded-lg bg-[#38A3A5] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2d8284] disabled:cursor-not-allowed disabled:bg-gray-300"
                         >
                           {queueButtonLabel}
@@ -636,26 +668,10 @@ export function Clinics() {
 
           {/* Empty State */}
           {!isLoading && !error && filtersValid && filteredAndSortedClinics.length === 0 && (
-            <div className="text-center py-12">
-              <HospitalIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {clinics.length === 0 ? 'No clinics scheduled' : 'No clinics match your filters'}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                {clinics.length === 0 
-                  ? 'There are no mobile clinics scheduled at the moment. Please check back later.'
-                  : 'Try adjusting your search criteria or filters to find more clinics.'
-                }
-              </p>
-              {searchTerm || selectedProvince || selectedDistrict || dateRange.start || dateRange.end ? (
-                <button 
-                  onClick={clearFilters}
-                  className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
-                >
-                  Clear Filters
-                </button>
-              ) : null}
-            </div>
+            <EmptyState variant="page" surface icon={<HospitalIcon />}
+              title={clinics.length === 0 ? 'No clinics scheduled' : 'No clinics match your filters'}
+              description={clinics.length === 0 ? 'There are no mobile clinics scheduled at the moment. Please check back later.' : 'Try adjusting your search criteria or filters to find more clinics.'}
+              action={searchTerm || selectedProvince || selectedDistrict || dateRange.start || dateRange.end ? { label: 'Clear Filters', onClick: clearFilters } : undefined} />
           )}
         </PageContent>
       </div>
@@ -718,11 +734,13 @@ export function Clinics() {
                   <div className="flex items-center gap-2 mb-4">
                     <UsersIcon className="w-5 h-5 text-[#38A3A5]" />
                     <h4 className="font-semibold text-gray-900">
-                      Available Doctors ({clinicDoctors.length})
+                      Available Doctors{!clinicDoctorsLoading && !clinicDoctorsError && ` (${clinicDoctors.length})`}
                     </h4>
                   </div>
 
-                  {clinicDoctors.length > 0 ? (
+                  {clinicDoctorsLoading ? (
+                    <p role="status" className="py-4 text-center text-sm text-gray-600">Loading assigned doctors...</p>
+                  ) : clinicDoctors.length > 0 ? (
                     <div className="space-y-3">
                       {clinicDoctors.map(doctor => (
                         <div key={doctor.id} className="bg-gray-50 rounded-lg p-4">
@@ -738,7 +756,7 @@ export function Clinics() {
                   ) : clinicDoctorsError ? (
                     <p className="text-red-500 italic">Couldn't load doctor information for this clinic. Please try again.</p>
                   ) : (
-                    <p className="text-gray-500 italic">No doctors assigned to this clinic yet.</p>
+                    <EmptyState icon={<UsersIcon />} title="No doctors assigned" description="No doctors have been assigned to this clinic yet." headingLevel={5} />
                   )}
                 </div>
 
@@ -754,7 +772,9 @@ export function Clinics() {
                 <div className="mt-6 space-y-4">
                   <h4 className="font-semibold text-gray-900">Queue Actions</h4>
                   <div className="text-sm text-gray-700">
-                    {patientFetchError ? (
+                    {!hasCompletedPatientProfile ? (
+                      <span className={patientProfileStatus === 'error' ? 'text-red-700' : 'text-amber-700'}>{patientProfileJoinMessage}</span>
+                    ) : patientFetchError ? (
                       <span className="text-red-700">Please complete your profile first, then try again.</span>
                     ) : patientId ? (
                       <span>
@@ -767,10 +787,10 @@ export function Clinics() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleJoinQueue}
-                      disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken}
-                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken || !queueStatusReady ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
+                      disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken || !hasCompletedPatientProfile}
+                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken || !queueStatusReady || !hasCompletedPatientProfile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
                     >
-                      {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
+                      {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : profileJoinButtonLabel}
                     </button>
                     <button
                       onClick={handleViewQueue}
@@ -832,7 +852,7 @@ export function Clinics() {
               {queueLoading ? (
                 <div className="text-center py-8 text-gray-500">Loading queue...</div>
               ) : queueError ? null : queueTokens.filter(t => t.status !== 'COMPLETED').length === 0 ? (
-                <p className="text-gray-500 italic text-center py-8">No one is waiting in this queue yet.</p>
+                <EmptyState title="No patients waiting" description="No one is waiting in this queue yet." />
               ) : (
                 <div className="space-y-2">
                   {queueTokens.filter(t => t.status !== 'COMPLETED').map(token => {
@@ -891,12 +911,12 @@ export function Clinics() {
               <div className="mt-6 pt-4 border-t flex gap-3">
                 <button
                   onClick={() => joinQueueForClinic(selectedClinic)}
-                  disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken}
+                  disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken || !hasCompletedPatientProfile}
                   className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors ${
-                    joinLoading || !queueStatusReady || patientFetchError || activeQueueToken ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#38A3A5] hover:bg-[#2d8284]'
+                    joinLoading || !queueStatusReady || patientFetchError || activeQueueToken || !hasCompletedPatientProfile ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#38A3A5] hover:bg-[#2d8284]'
                   }`}
                 >
-                  {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : 'Join Queue'}
+                  {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : profileJoinButtonLabel}
                 </button>
                 <button
                   onClick={closeQueueModal}

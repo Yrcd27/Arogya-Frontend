@@ -1,3 +1,4 @@
+import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
@@ -366,7 +367,7 @@ export function Profile() {
                       <label htmlFor="patient-gender" className="block text-sm font-medium text-gray-900 mb-2">
                         Gender
                       </label>
-                      <select {...fieldProps('gender')}
+                      <Select {...fieldProps('gender')}
                         name="gender"
                         value={formData.gender}
                         onChange={handleInputChange}
@@ -376,14 +377,14 @@ export function Profile() {
                         <option value="">Not specified</option>
                         {formData.gender && !PROFILE_OPTIONS.gender.some(option => option === formData.gender) && <option value={formData.gender}>{formData.gender} (current value)</option>}
                         {PROFILE_OPTIONS.gender.map(option => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      </Select>
                       {fieldError('gender')}
                     </div>
                     <div>
                       <label htmlFor="patient-bloodGroup" className="block text-sm font-medium text-gray-900 mb-2">
                         Blood Group
                       </label>
-                      <select {...fieldProps('bloodGroup')}
+                      <Select {...fieldProps('bloodGroup')}
                         name="bloodGroup"
                         value={formData.bloodGroup}
                         onChange={handleInputChange}
@@ -393,7 +394,7 @@ export function Profile() {
                         <option value="">Not specified</option>
                         {formData.bloodGroup && !PROFILE_OPTIONS.bloodGroup.some(option => option === formData.bloodGroup) && <option value={formData.bloodGroup}>{formData.bloodGroup} (current value)</option>}
                         {PROFILE_OPTIONS.bloodGroup.map(option => <option key={option} value={option}>{option}</option>)}
-                      </select>
+                      </Select>
                       {fieldError('bloodGroup')}
                     </div>
                   </div>

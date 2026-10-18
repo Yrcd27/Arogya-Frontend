@@ -1,4 +1,6 @@
+import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
+import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
@@ -24,6 +26,7 @@ import { localDateString } from '../../utils/profileValidation';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { useAuth } from '../../hooks/useAuth';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
+import { DoctorSearch } from '../../components/clinic/DoctorSearch';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -33,7 +36,7 @@ export function Clinics() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingClinic, setEditingClinic] = useState<Clinic | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [doctorCounts, setDoctorCounts] = useState<Record<number, number>>({});
@@ -74,10 +77,7 @@ export function Clinics() {
 
   // Doctor search and selection state
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [selectedDoctors, setSelectedDoctors] = useState<SelectedDoctor[]>([]);
-  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
 
   // Load clinics on component mount
   useEffect(() => {
@@ -91,21 +91,6 @@ export function Clinics() {
       assignmentRequestRef.current += 1;
     };
   }, [sessionKey]);
-
-  // Filter doctors based on search term
-  useEffect(() => {
-    if (doctorSearchTerm.trim()) {
-      const filtered = doctors.filter(doctor =>
-        doctor.name.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase()) ||
-        doctor.specialization.toLowerCase().includes(doctorSearchTerm.trim().toLowerCase())
-      );
-      setFilteredDoctors(filtered);
-      setShowDoctorDropdown(true);
-    } else {
-      setFilteredDoctors([]);
-      setShowDoctorDropdown(false);
-    }
-  }, [doctorSearchTerm, doctors]);
 
   // Batch doctor count fetching with concurrency control to prevent triggering API Gateway rate limiting (HTTP 429)
   const loadDoctorCountsInBatches = async (clinicList: Clinic[], requestId: number, requestSession: number) => {
@@ -222,8 +207,6 @@ export function Clinics() {
         specialization: doctor.specialization
       }]);
     
-    setDoctorSearchTerm('');
-    setShowDoctorDropdown(false);
     setFieldErrors(previous => ({ ...previous, doctorIds: undefined }));
   };
 
@@ -329,7 +312,6 @@ export function Clinics() {
       status: 'SCHEDULED'
     });
     setSelectedDoctors([]);
-    setDoctorSearchTerm('');
     setError(null);
     setIsEditMode(false);
     setEditingClinic(null);
@@ -451,7 +433,7 @@ export function Clinics() {
       />
       <div className={`flex flex-col min-h-screen transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!isLoading && !listError && filteredClinics.length === 0}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <p className="text-gray-600 text-sm mb-1">Dashboard / Clinics</p>
@@ -483,7 +465,7 @@ export function Clinics() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                 />
               </div>
-              <select 
+              <Select 
                 aria-label="Filter clinics by status"
                 value={statusFilter}
                 onChange={e => {
@@ -496,7 +478,7 @@ export function Clinics() {
                 <option>IN_PROGRESS</option>
                 <option>COMPLETED</option>
                 <option>CANCELLED</option>
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -517,7 +499,7 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {filteredClinics.length > 0 && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {filteredClinics.map(clinic => {
               const doctorCount = doctorCounts[clinic.id] ?? 0;
               return (
@@ -553,27 +535,14 @@ export function Clinics() {
                 />
               );
             })}
-          </div>
+          </div>}
 
           {/* Empty State */}
           {!isLoading && !listError && filteredClinics.length === 0 && (
-            <div className="text-center py-12">
-              <CalendarIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No clinics found</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm || statusFilter !== 'All Status' 
-                  ? 'Try adjusting your search criteria' 
-                  : 'Get started by scheduling your first mobile clinic'}
-              </p>
-              {!searchTerm && statusFilter === 'All Status' && (
-                <button 
-                  onClick={openCreate}
-                  className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
-                >
-                  Schedule Clinic
-                </button>
-              )}
-            </div>
+            <EmptyState variant="page" surface icon={<CalendarIcon />}
+              title={clinics.length === 0 ? 'No clinics scheduled' : 'No matching clinics'}
+              description={searchTerm || statusFilter !== 'All Status' ? 'Try adjusting your search or status filter.' : 'Get started by scheduling your first mobile clinic.'}
+              action={!searchTerm && statusFilter === 'All Status' ? { label: 'Schedule Clinic', onClick: openCreate } : undefined} />
           )}
         </PageContent>
       </div>
@@ -630,7 +599,7 @@ export function Clinics() {
                     <label htmlFor="clinic-province" className="block text-sm font-medium text-gray-700 mb-1">
                       Province *
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('province')}
                       name="province"
                       value={formData.province}
@@ -642,7 +611,7 @@ export function Clinics() {
                       {Object.keys(PROVINCES_DISTRICTS).map(province => (
                         <option key={province} value={province}>{province}</option>
                       ))}
-                    </select>
+                    </Select>
                     {fieldError('province')}
                   </div>
 
@@ -650,7 +619,7 @@ export function Clinics() {
                     <label htmlFor="clinic-district" className="block text-sm font-medium text-gray-700 mb-1">
                       District *
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('district')}
                       name="district"
                       value={formData.district}
@@ -663,7 +632,7 @@ export function Clinics() {
                       {getDistrictOptions(formData.province).map(district => (
                         <option key={district} value={district}>{district}</option>
                       ))}
-                    </select>
+                    </Select>
                     {fieldError('district')}
                   </div>
                 </div>
@@ -729,7 +698,7 @@ export function Clinics() {
                     <label htmlFor="clinic-status" className="block text-sm font-medium text-gray-700 mb-1">
                       Status
                     </label>
-                    <select
+                    <Select
                       {...fieldProps('status')}
                       name="status"
                       value={formData.status}
@@ -740,7 +709,7 @@ export function Clinics() {
                       <option value="IN_PROGRESS">IN_PROGRESS</option>
                       <option value="COMPLETED">COMPLETED</option>
                       <option value="CANCELLED">CANCELLED</option>
-                    </select>
+                    </Select>
                     {fieldError('status')}
                   </div>
                 )}
@@ -781,38 +750,15 @@ export function Clinics() {
                       <button type="button" disabled={saving || doctorsLoading} onClick={() => void loadDoctors()} className="ml-2 underline">Retry doctor search</button>
                     </div>}
                     {/* Doctor Search */}
-                    <div className="relative mb-3">
-                      <input
+                    <div className="mb-3">
+                      <DoctorSearch
                         {...fieldProps('doctorIds')}
-                        type="text"
                         disabled={saving || assignmentsLoading || doctorLookupFailed || doctorsLoading || !!doctorsError}
-                        value={doctorSearchTerm}
-                        onChange={e => { if (!savingRef.current) setDoctorSearchTerm(e.target.value); }}
+                        doctors={doctors}
+                        selectedDoctorIds={selectedDoctors.map(doctor => doctor.doctorId)}
+                        onSelect={handleDoctorSelect}
                         placeholder="Search doctors by name or specialization..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       />
-                      
-                      {/* Doctor Dropdown */}
-                      {showDoctorDropdown && !doctorsLoading && !doctorsError && !doctorLookupFailed && (
-                        <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
-                          {filteredDoctors.length > 0 ? (
-                            filteredDoctors.map(doctor => (
-                              <button
-                                key={doctor.doctorId}
-                                type="button"
-                                disabled={saving || doctorsLoading || doctorLookupFailed}
-                                onClick={() => handleDoctorSelect(doctor)}
-                                className="w-full px-3 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
-                              >
-                                <div className="font-medium">{doctor.name}</div>
-                                <div className="text-sm text-gray-600">{doctor.specialization}</div>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-gray-500">No doctors found</div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     {/* Selected Doctors */}

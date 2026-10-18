@@ -6,6 +6,7 @@ import type { PatientProfile } from '../../types/user';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { getAge } from '../../utils/profileValidation';
+import { EmptyState } from '../EmptyState';
 
 interface PatientProfileModalProps {
   patientId: number;
@@ -201,9 +202,7 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
             </div>
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-600">
-            No profile data available
-          </div>
+          <EmptyState icon={<User />} title="No profile data available" description="This patient's profile details are not available yet." headingLevel={4} />
         )}
       </div>
     </div>

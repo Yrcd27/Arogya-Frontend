@@ -1,3 +1,4 @@
+import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { SaveIcon, AlertCircleIcon, CheckCircleIcon, XIcon } from 'lucide-react';
@@ -404,7 +405,7 @@ const Profile: React.FC = () => {
                   <label htmlFor="doctor-specialization" className="block text-sm font-medium text-gray-700 mb-2">
                     Specialization *
                   </label>
-                  <select {...fieldProps('specialization')}
+                  <Select {...fieldProps('specialization')}
                     name="specialization"
                     value={profile.specialization}
                     onChange={handleInputChange}
@@ -414,7 +415,7 @@ const Profile: React.FC = () => {
                     <option value="">Select specialization</option>
                     {profile.specialization && !PROFILE_OPTIONS.specialization.some(option => option === profile.specialization) && <option value={profile.specialization}>{profile.specialization} (current value)</option>}
                     {PROFILE_OPTIONS.specialization.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  </Select>
                   {fieldError('specialization')}
                 </div>
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CalendarDays, Hospital, Stethoscope } from 'lucide-react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
+import { EmptyState } from '../../components/EmptyState';
 import { ClinicList, DashboardMetric, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { operationalClinics } from '../../utils/dashboard';
@@ -32,7 +33,7 @@ export function Dashboard() {
               {schedule.length > 5 && <p className="mt-3 text-xs text-gray-500">Showing 5 of {schedule.length} active and upcoming clinics.</p>}
             </DashboardPanel>
             <DashboardPanel title="Doctor assignments" description="Coverage for the clinics in the schedule preview." loading={clinics.loading || assignments.loading} error={clinics.error || assignments.error} onRetry={refreshSchedule}>
-              {!schedule.length ? <p className="py-3 text-sm text-gray-500">No upcoming assignments to display.</p>
+              {!schedule.length ? <EmptyState icon={<Stethoscope />} title="No upcoming assignments" description="There are no upcoming clinic assignments to display." />
                 : <ul className="divide-y divide-gray-100">{schedule.slice(0, 5).map(clinic => {
                   const doctors = Array.from(new Map((assignments.data ?? []).filter(row => row.clinic?.id === clinic.id).map(row => [row.doctorRefId, row])).values());
                   return <li key={clinic.id} className="py-3 first:pt-1 last:pb-0"><p className="break-words font-medium text-gray-900">{clinic.clinicName}</p><p className={'mt-1 text-sm ' + (doctors.length ? 'text-gray-600' : 'text-amber-700')}>{doctors.length ? doctors.length + (doctors.length === 1 ? ' doctor assigned' : ' doctors assigned') : 'No doctors assigned'}</p>{doctors.length > 0 && <p className="mt-1 break-words text-xs leading-5 text-gray-500">{doctors.map(doctor => doctor.doctorName || 'Doctor #' + doctor.doctorRefId).join(', ')}</p>}</li>;

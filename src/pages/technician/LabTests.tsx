@@ -10,7 +10,7 @@ import { medicalRecordsAPI, type TestResult } from '../../services/medicalRecord
 import { consultationAPI } from '../../services/consultationService';
 import { profileAPI, userAPI } from '../../services/userService';
 import { LabTest } from '../../types/labTest';
-import { Play, Search, UserRoundCheck } from 'lucide-react';
+import { FlaskConical, Play, Search, UserRoundCheck } from 'lucide-react';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { ApiError } from '../../services/httpClient';
 import { StatusBadge } from '../../components/StatusBadge';
@@ -18,6 +18,7 @@ import { PaginationFooter } from '../../components/PaginationFooter';
 import { EmptyState } from '../../components/EmptyState';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
+import { Select } from '../../components/Select';
 
 type ResultAvailability = 'checking' | 'present' | 'absent' | 'error';
 
@@ -28,7 +29,7 @@ export function LabTests() {
   const { profile, status: profileStatus } = useUserProfile();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -394,70 +395,61 @@ export function LabTests() {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!loading && !error && !(assignedToMeOnly && !canFilterAssignedToMe) && filteredTests.length === 0}>
           <div>
             <p className="mb-1 text-sm text-gray-600">Dashboard / Lab Tests</p>
             <h1 id="lab-tests-heading" className="text-2xl font-bold text-gray-900 sm:text-3xl">Lab Tests</h1>
           </div>
 
           <section aria-label="Lab test filters" className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(statusCounts).map(([status, count]) => (
-                <button
-                  key={status}
-                  aria-pressed={statusFilter === status}
-                  onClick={() => setStatusFilter(status)}
-                  className={[
-                    'rounded-full border px-2.5 py-1 text-sm font-medium leading-none transition-colors',
-                    statusFilter === status
-                      ? 'border-[#38A3A5] bg-[#38A3A5] text-white'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#38A3A5] hover:text-[#2d8284]',
-                  ].join(' ')}
-                >
-                  {status.replace('_', ' ')} ({count})
-                </button>
-              ))}
-            </div>
-
-            <div className="my-4 border-t border-gray-100" />
-
-            <div className="rounded-xl border border-gray-200 p-3 sm:p-4">
-              <div className="relative">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="relative min-w-0 flex-1">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="text"
+                  type="search"
                   aria-label="Search lab tests"
                   placeholder="Search by test name, patient, ID, or consultation ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-gray-300 bg-white py-1 pl-8 pr-3 text-sm focus:ring-0"
+                  className="h-11 w-full rounded-lg border border-gray-300 bg-white py-1 pl-10 pr-3 text-sm focus:border-transparent focus:ring-2 focus:ring-[#38A3A5]"
                 />
               </div>
+              <Select
+                aria-label="Filter lab tests by status"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="w-full shrink-0 sm:w-52"
+              >
+                <option value="ALL">All Status ({statusCounts.ALL})</option>
+                <option value="PENDING">Pending ({statusCounts.PENDING})</option>
+                <option value="IN_PROGRESS">In Progress ({statusCounts.IN_PROGRESS})</option>
+                <option value="COMPLETED">Completed ({statusCounts.COMPLETED})</option>
+              </Select>
+            </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-800">
-                  <UserRoundCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
-                  <span>Assigned to me</span>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={assignedToMeOnly}
-                  aria-label="Show only lab tests assigned to me"
-                  disabled={!canFilterAssignedToMe}
-                  onClick={() => setAssignedToMeOnly(value => !value)}
-                  className={[
-                    'inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:cursor-not-allowed',
-                    assignedToMeOnly ? 'bg-[#38A3A5]' : 'bg-gray-300',
-                    !canFilterAssignedToMe ? 'bg-gray-200' : '',
-                  ].join(' ')}
-                >
-                  <span aria-hidden="true" className={'h-4 w-4 rounded-full bg-white shadow-sm transition-transform ' + (assignedToMeOnly ? 'translate-x-4' : 'translate-x-0')} />
-                </button>
-                {!canFilterAssignedToMe && <p role="status" className="basis-full text-sm text-gray-600">{profileStatus === 'loading' ? 'Verifying your technician profile before assignment filtering is available.' : 'Your technician profile could not be verified. Assignment filtering is unavailable, and all tests remain visible.'}</p>}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-800">
+                <UserRoundCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
+                <span>Assigned to me</span>
               </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={assignedToMeOnly}
+                aria-label="Show only lab tests assigned to me"
+                disabled={!canFilterAssignedToMe}
+                onClick={() => setAssignedToMeOnly(value => !value)}
+                className={[
+                  'inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:cursor-not-allowed',
+                  assignedToMeOnly ? 'bg-[#38A3A5]' : 'bg-gray-300',
+                  !canFilterAssignedToMe ? 'bg-gray-200' : '',
+                ].join(' ')}
+              >
+                <span aria-hidden="true" className={'h-4 w-4 rounded-full bg-white shadow-sm transition-transform ' + (assignedToMeOnly ? 'translate-x-4' : 'translate-x-0')} />
+              </button>
+              {!canFilterAssignedToMe && <p role="status" className="basis-full text-sm text-gray-600">{profileStatus === 'loading' ? 'Verifying your technician profile before assignment filtering is available.' : 'Your technician profile could not be verified. Assignment filtering is unavailable, and all tests remain visible.'}</p>}
             </div>
           </section>
 
@@ -472,9 +464,9 @@ export function LabTests() {
               <div className="text-gray-600">Loading lab tests...</div>
             </div>
           ) : error || assignedToMeOnly && !canFilterAssignedToMe ? null : filteredTests.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm">
-              <EmptyState title="No lab tests found" description="Try adjusting your search or filters." />
-            </div>
+            <EmptyState variant="page" surface icon={<FlaskConical />}
+              title={labTests.length === 0 ? 'No lab tests yet' : 'No matching lab tests'}
+              description={labTests.length === 0 ? 'Lab orders will appear here when they are available.' : 'Try adjusting your search, status, or assignment filters.'} />
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">

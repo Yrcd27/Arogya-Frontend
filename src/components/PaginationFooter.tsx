@@ -1,3 +1,4 @@
+import { Select } from './Select';
 interface PaginationFooterProps {
   currentPage: number;
   totalPages: number;
@@ -48,7 +49,7 @@ export function PaginationFooter({
           <span className="font-medium text-gray-900">{totalItems}</span>
         </span>
         {onPageSizeChange && (
-          <select
+          <Select
             aria-label="Rows per page"
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -58,7 +59,7 @@ export function PaginationFooter({
             {pageSizeOptions.map(size => (
               <option key={size} value={size}>{size} / page</option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
 

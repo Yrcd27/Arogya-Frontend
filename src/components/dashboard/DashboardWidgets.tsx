@@ -1,11 +1,12 @@
 import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowRight, CalendarDays, RefreshCw, type LucideIcon } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarDays, FileText, FlaskConical, RefreshCw, type LucideIcon } from 'lucide-react';
 import type { Clinic } from '../../types/clinic';
 import type { Consultation } from '../../services/consultationService';
 import type { TestResult } from '../../services/medicalRecordsService';
 import { dashboardDate } from '../../utils/dashboard';
 import { StatusBadge } from '../StatusBadge';
+import { EmptyState } from '../EmptyState';
 
 export function DashboardMetric({ label, value, loading, hint, icon: Icon }: {
   label: string; value: number | null | undefined; loading?: boolean; hint?: string; icon: LucideIcon;
@@ -48,7 +49,7 @@ export function DashboardPanel({ title, description, action, loading, error, onR
 }
 
 export function ClinicList({ clinics, queueLinks = false }: { clinics: Clinic[]; queueLinks?: boolean }) {
-  if (!clinics.length) return <p className="py-3 text-sm text-gray-500">No upcoming or in-progress clinics.</p>;
+  if (!clinics.length) return <EmptyState icon={<CalendarDays />} title="No upcoming clinics" description="There are no upcoming or in-progress clinics to display." />;
   return <ul className="divide-y divide-gray-100">{clinics.slice(0, 5).map(clinic => (
     <li key={clinic.id} className="py-3 first:pt-1 last:pb-0">
       <div className="flex flex-wrap items-start justify-between gap-2"><p className="min-w-0 break-words font-medium text-gray-900">{clinic.clinicName}</p><StatusBadge status={clinic.status} className="shrink-0" /></div>
@@ -60,7 +61,7 @@ export function ClinicList({ clinics, queueLinks = false }: { clinics: Clinic[];
 }
 
 export function ConsultationList({ consultations, role }: { consultations: Consultation[]; role: 'patient' | 'doctor' }) {
-  if (!consultations.length) return <p className="py-3 text-sm text-gray-500">No consultations recorded yet.</p>;
+  if (!consultations.length) return <EmptyState icon={<FileText />} title="No consultations yet" description="Consultation records will appear here when available." />;
   return <ul className="divide-y divide-gray-100">{consultations.map(consultation => (
     <li key={consultation.id} className="py-3 first:pt-1 last:pb-0">
       <div className="flex flex-wrap items-start justify-between gap-2"><p className="min-w-0 break-words font-medium text-gray-900">Consultation #{consultation.id}</p><StatusBadge status={consultation.status} /></div>
@@ -71,7 +72,7 @@ export function ConsultationList({ consultations, role }: { consultations: Consu
 }
 
 export function ReportList({ reports }: { reports: TestResult[] }) {
-  if (!reports.length) return <p className="py-3 text-sm text-gray-500">No lab reports available yet.</p>;
+  if (!reports.length) return <EmptyState icon={<FlaskConical />} title="No lab reports yet" description="Lab reports will appear here when available." />;
   return <ul className="divide-y divide-gray-100">{reports.map(report => (
     <li key={report.id} className="py-3 first:pt-1 last:pb-0">
       <p className="font-medium text-gray-900">Report #{report.id} <span className="font-normal text-gray-500">· Lab test #{report.labTestId}</span></p>

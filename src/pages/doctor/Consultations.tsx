@@ -13,7 +13,7 @@ import { userAPI } from "../../services/userService";
 import { clinicAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
 import { ApiError } from '../../services/httpClient';
-import { FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { FileText, FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
@@ -37,7 +37,7 @@ export default function Consultations() {
   const { user, sessionKey } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [patients, setPatients] = useState<Record<number, PatientInfo>>({});
   const [clinics, setClinics] = useState<Record<number, ClinicInfo>>({});
@@ -443,9 +443,9 @@ export default function Consultations() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
       />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={!loading && !error && consultations.length === 0}>
           <div className="flex justify-between items-center">
             <div>
               <p className="text-gray-600 text-sm mb-1">Dashboard / Consultations</p>
@@ -500,12 +500,8 @@ export default function Consultations() {
               <div className="text-gray-600">Loading consultations...</div>
             </div>
           ) : error ? null : consultations.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm">
-              <EmptyState 
-                title="No consultations"
-                description="Your consultation history will appear here"
-              />
-            </div>
+            <EmptyState variant="page" icon={<FileText />} title="No consultations yet"
+              description="Your consultation records will appear here when available." />
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
@@ -729,9 +725,8 @@ export default function Consultations() {
                   </button>
                 </div>
               ) : !selectedConsultation || !('labTests' in selectedConsultation) || selectedConsultation.labTests.length === 0 ? (
-                <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
-                  No lab tests requested for this consultation
-                </div>
+                <EmptyState icon={<FlaskConical />} title="No lab tests requested"
+                  description="No lab tests were requested for this consultation." headingLevel={5} />
               ) : (
                 <div className="space-y-3">
                   {selectedConsultation.labTests.map((test) => (
