@@ -34,7 +34,7 @@ const Profile: React.FC = () => {
   const savingRef = useRef(false);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
 
   useEffect(() => {
     if (currentProfile) {
@@ -66,7 +66,9 @@ const Profile: React.FC = () => {
   };
   const cancelEditing = () => {
     if (savingRef.current) return;
-    setProfile(savedProfile.current); setError(''); setFieldErrors({}); setIsEditing(false);
+    confirmDiscard(() => {
+      setProfile(savedProfile.current); setError(''); setFieldErrors({}); setIsEditing(false);
+    });
   };
 
   const fieldProps = (field: AdminField) => ({

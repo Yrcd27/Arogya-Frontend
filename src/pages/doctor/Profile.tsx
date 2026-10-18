@@ -66,7 +66,7 @@ const Profile: React.FC = () => {
   const savedProfile = useRef<DoctorProfile | null>(null);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(profile) !== JSON.stringify(savedProfile.current));
   const loading = profileStatus === 'loading';
 
   useEffect(() => {
@@ -112,10 +112,12 @@ const Profile: React.FC = () => {
 
   const cancelEditing = () => {
     if (savingRef.current) return;
-    if (savedProfile.current) setProfile(savedProfile.current);
-    setError('');
-    setFieldErrors({});
-    setIsEditing(false);
+    confirmDiscard(() => {
+      if (savedProfile.current) setProfile(savedProfile.current);
+      setError('');
+      setFieldErrors({});
+      setIsEditing(false);
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {

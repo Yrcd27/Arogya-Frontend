@@ -35,7 +35,7 @@ export function Profile() {
   const savedFormData = useRef(formData);
   const currentUserIdRef = useRef(user?.id);
   currentUserIdRef.current = user?.id;
-  useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
+  const confirmDiscard = useUnsavedChangesWarning(isEditing && JSON.stringify(formData) !== JSON.stringify(savedFormData.current));
 
   useEffect(() => {
     const profile = currentProfile as PatientProfile | null;
@@ -81,10 +81,12 @@ export function Profile() {
 
   const cancelEditing = () => {
     if (savingRef.current) return;
-    setFormData(savedFormData.current);
-    setError('');
-    setFieldErrors({});
-    setIsEditing(false);
+    confirmDiscard(() => {
+      setFormData(savedFormData.current);
+      setError('');
+      setFieldErrors({});
+      setIsEditing(false);
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {

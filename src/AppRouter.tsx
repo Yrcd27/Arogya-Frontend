@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, Outlet, Route, RouterProvider } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
@@ -24,13 +24,24 @@ import Consultations from './pages/doctor/Consultations';
 import { NotFound } from './pages/NotFound';
 import { LanguageProvider } from './context/LanguageContext';
 import { PageTitleUpdater } from './components/PageTitleUpdater';
+import { UnsavedChangesProvider } from './context/UnsavedChangesProvider';
 
-export function AppRouter() {
+function AppLayout() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <>
       <PageTitleUpdater />
       <LanguageProvider>
-        <Routes>
+        <UnsavedChangesProvider>
+          <Outlet />
+        </UnsavedChangesProvider>
+      </LanguageProvider>
+    </>
+  );
+}
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<AppLayout />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
@@ -63,8 +74,13 @@ export function AppRouter() {
         <Route path="/technician/lab-tests" element={<ProtectedRoute requiredRole="technician"><TechnicianLabTests /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </LanguageProvider>
-    </BrowserRouter>
+    </Route>
+  ),
+  { future: { v7_relativeSplatPath: true } }
+);
+
+export function AppRouter() {
+  return (
+    <RouterProvider router={router} future={{ v7_startTransition: true }} />
   );
 }
