@@ -28,6 +28,8 @@ import { isPositiveId } from '../../utils/clinicalValidation';
 import { useAuth } from '../../hooks/useAuth';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
 import { DoctorSearch } from '../../components/clinic/DoctorSearch';
+import { DatePicker } from '../../components/DatePicker';
+import { TimePicker } from '../../components/TimePicker';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -691,14 +693,12 @@ export function Clinics() {
                     <label htmlFor="clinic-scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Date *
                     </label>
-                    <input
+                    <DatePicker
                       {...fieldProps('scheduledDate')}
-                      type="date"
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
                       min={isEditMode ? undefined : localDateString()}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
                     {fieldError('scheduledDate')}
@@ -708,14 +708,12 @@ export function Clinics() {
                     <label htmlFor="clinic-scheduledTime" className="block text-sm font-medium text-gray-700 mb-1">
                       Scheduled Time *
                     </label>
-                    <input
+                    <TimePicker
                       {...fieldProps('scheduledTime')}
-                      type="time"
                       step={1}
                       name="scheduledTime"
                       value={formData.scheduledTime}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                       required
                     />
                     {fieldError('scheduledTime')}

@@ -1,4 +1,5 @@
 import { PageContent } from '../../components/PageContent';
+import { DatePicker } from '../../components/DatePicker';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
 import { Header } from '../../components/admin/Header';
@@ -184,22 +185,33 @@ const Profile: React.FC = () => {
                     ] as const).map(([label, name, placeholder]) => (
                       <div key={name}>
                         <label htmlFor={`admin-${name}`} className="mb-2 block text-sm font-medium text-gray-700">{label} *</label>
-                        <input
-                          {...fieldProps(name)}
-                          type={name === 'dateOfBirth' ? 'date' : name === 'phoneNumber' ? 'tel' : 'text'}
-                          name={name}
-                          value={profile[name]}
-                          onChange={handleInputChange}
-                          required
-                          min={name === 'dateOfBirth' ? MIN_BIRTH_DATE : undefined}
-                          max={name === 'dateOfBirth' ? localDateString() : undefined}
-                          inputMode={name === 'phoneNumber' ? 'tel' : undefined}
-                          autoComplete={name === 'phoneNumber' ? 'tel' : undefined}
-                          autoCapitalize={name === 'nicNumber' ? 'characters' : undefined}
-                          spellCheck={name === 'nicNumber' ? false : undefined}
-                          placeholder={placeholder}
-                          className={inputClass}
-                        />
+                        {name === 'dateOfBirth' ? (
+                          <DatePicker
+                            {...fieldProps(name)}
+                            name={name}
+                            value={profile[name]}
+                            onChange={handleInputChange}
+                            required
+                            min={MIN_BIRTH_DATE}
+                            max={localDateString()}
+                            showToday={false}
+                          />
+                        ) : (
+                          <input
+                            {...fieldProps(name)}
+                            type={name === 'phoneNumber' ? 'tel' : 'text'}
+                            name={name}
+                            value={profile[name]}
+                            onChange={handleInputChange}
+                            required
+                            inputMode={name === 'phoneNumber' ? 'tel' : undefined}
+                            autoComplete={name === 'phoneNumber' ? 'tel' : undefined}
+                            autoCapitalize={name === 'nicNumber' ? 'characters' : undefined}
+                            spellCheck={name === 'nicNumber' ? false : undefined}
+                            placeholder={placeholder}
+                            className={inputClass}
+                          />
+                        )}
                         {fieldError(name)}
                       </div>
                     ))}

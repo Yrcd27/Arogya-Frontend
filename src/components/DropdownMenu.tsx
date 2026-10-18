@@ -6,14 +6,16 @@ interface DropdownMenuProps {
   children: ReactNode;
   onDismiss: () => void;
   id?: string;
-  role?: 'listbox' | 'menu';
+  role?: 'listbox' | 'menu' | 'dialog';
   label?: string;
   width?: number;
+  minWidth?: number;
+  maxWidth?: number;
   className?: string;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }
 
-export function DropdownMenu({ anchorRef, children, onDismiss, id, role, label, width, className = '', onKeyDown }: DropdownMenuProps) {
+export function DropdownMenu({ anchorRef, children, onDismiss, id, role, label, width, minWidth, maxWidth, className = '', onKeyDown }: DropdownMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<CSSProperties>({ position: 'fixed', top: 0, left: 0, visibility: 'hidden' });
   const anchor = anchorRef.current;
@@ -30,12 +32,17 @@ export function DropdownMenu({ anchorRef, children, onDismiss, id, role, label, 
       const viewportLeft = viewport?.offsetLeft ?? 0;
       const viewportWidth = viewport?.width ?? document.documentElement.clientWidth;
       const viewportHeight = viewport?.height ?? window.innerHeight;
+      if (rect.bottom <= viewportTop || rect.top >= viewportTop + viewportHeight
+        || rect.right <= viewportLeft || rect.left >= viewportLeft + viewportWidth) {
+        onDismiss();
+        return;
+      }
       const below = viewportTop + viewportHeight - rect.bottom - 12;
       const above = rect.top - viewportTop - 12;
       const desiredHeight = menu.scrollHeight;
       const upward = below < desiredHeight && above > below;
       const available = Math.max(0, upward ? above : below);
-      const menuWidth = Math.min(width ?? rect.width, viewportWidth - 16);
+      const menuWidth = Math.min(Math.max(width ?? rect.width, minWidth ?? 0), maxWidth ?? Number.POSITIVE_INFINITY, viewportWidth - 16);
       setPosition({
         position: 'fixed', width: menuWidth,
         left: Math.max(viewportLeft + 8, Math.min(width ? rect.right - menuWidth : rect.left, viewportLeft + viewportWidth - menuWidth - 8)),
@@ -63,7 +70,7 @@ export function DropdownMenu({ anchorRef, children, onDismiss, id, role, label, 
       window.visualViewport?.removeEventListener('resize', place);
       window.visualViewport?.removeEventListener('scroll', place);
     };
-  }, [anchorRef, onDismiss, width]);
+  }, [anchorRef, maxWidth, minWidth, onDismiss, width]);
 
   return createPortal(
     <div ref={menuRef} id={id} role={role} aria-label={label} style={position} onKeyDown={onKeyDown}

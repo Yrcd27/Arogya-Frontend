@@ -1,4 +1,5 @@
 import { Select } from '../../components/Select';
+import { DatePicker } from '../../components/DatePicker';
 import { PageContent } from '../../components/PageContent';
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircleIcon, CheckCircleIcon, SaveIcon, XIcon } from 'lucide-react';
@@ -317,12 +318,11 @@ export function Profile() {
                       <label htmlFor="patient-dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
-                      <input {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
-                        type="date"
+                      <DatePicker {...fieldProps('dateOfBirth')} min={MIN_BIRTH_DATE} max={localDateString()}
                         name="dateOfBirth"
                         value={formData.dateOfBirth}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
+                        showToday={false}
                         disabled={loading}
                       />
                       {fieldError('dateOfBirth')}

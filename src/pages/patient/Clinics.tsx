@@ -21,6 +21,7 @@ import {
   getDistrictOptions
 } from '../../utils/clinic';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
+import { DatePicker } from '../../components/DatePicker';
 
 const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
 const rememberedQueueTokens = new Map<string, string>();
@@ -564,41 +565,27 @@ export function Clinics() {
 
               <div>
                 <label htmlFor="clinic-filter-start" className="sr-only">From Date</label>
-                <div className="relative h-10 rounded-lg border border-gray-300 bg-white focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#38A3A5]">
-                  <input
-                    {...filterProps('start')}
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    min={localDateString()}
-                    onClick={(e) => e.currentTarget.showPicker?.()}
-                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                  />
-                  <span aria-hidden="true" className={`pointer-events-none absolute inset-y-0 left-3 flex items-center ${dateRange.start ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {dateRange.start ? formatDate(dateRange.start) : 'From Date'}
-                  </span>
-                  <CalendarIcon aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-700" />
-                </div>
+                <DatePicker
+                  {...filterProps('start')}
+                  value={dateRange.start}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  min={localDateString()}
+                  placeholder="From Date"
+                  size="compact"
+                />
                 {filterError('start')}
               </div>
 
               <div>
                 <label htmlFor="clinic-filter-end" className="sr-only">To Date</label>
-                <div className="relative h-10 rounded-lg border border-gray-300 bg-white focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#38A3A5]">
-                  <input
-                    {...filterProps('end')}
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
-                    onClick={(e) => e.currentTarget.showPicker?.()}
-                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                  />
-                  <span aria-hidden="true" className={`pointer-events-none absolute inset-y-0 left-3 flex items-center ${dateRange.end ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {dateRange.end ? formatDate(dateRange.end) : 'To Date'}
-                  </span>
-                  <CalendarIcon aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-700" />
-                </div>
+                <DatePicker
+                  {...filterProps('end')}
+                  value={dateRange.end}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
+                  placeholder="To Date"
+                  size="compact"
+                />
                 {filterError('end')}
               </div>
             </div>
