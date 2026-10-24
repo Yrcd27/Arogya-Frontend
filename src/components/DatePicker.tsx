@@ -97,13 +97,13 @@ function MonthSelector({ month, onChange }: { month: number; onChange: (month: n
   return (
     <div ref={containerRef} className="relative min-w-0 flex-1">
       <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(current => !current)}
-        className="inline-flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-2 text-left text-sm font-medium text-gray-800">
+        className="inline-flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-2 text-left text-sm font-medium text-gray-800">
         <span className="truncate">{MONTHS[month - 1]}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-500" />
       </button>
       {open && <div role="listbox" aria-label="Month" className="absolute left-0 top-full z-20 mt-1 max-h-[11.25rem] w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
         {MONTHS.map((label, index) => <button key={label} type="button" role="option" aria-selected={month === index + 1}
           onClick={() => { onChange(index + 1); setOpen(false); }}
-          className={`flex h-9 w-full items-center rounded-md px-2 text-left text-sm ${month === index + 1 ? 'bg-[#e6f6f6] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-gray-100'}`}>{label}</button>)}
+          className={`flex h-8 w-full items-center rounded-md px-2 text-left text-sm ${month === index + 1 ? 'bg-[#e6f6f6] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-gray-100'}`}>{label}</button>)}
       </div>}
     </div>
   );
@@ -233,8 +233,8 @@ export function DatePicker({
         <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0 text-gray-500" />
       </button>
       {open && !disabled && (
-        <DropdownMenu anchorRef={triggerRef} id={popupId} role="dialog" label="Choose date" minWidth={304} maxWidth={360}
-          onDismiss={close} className="overflow-y-auto p-2.5"
+        <DropdownMenu anchorRef={triggerRef} id={popupId} role="dialog" label="Choose date" minWidth={300} maxWidth={320}
+          onDismiss={close} className="!overflow-visible p-2"
           onKeyDown={event => {
             if (event.key === 'Escape') {
               event.preventDefault(); event.stopPropagation(); close(); triggerRef.current?.focus({ preventScroll: true });
@@ -242,11 +242,11 @@ export function DatePicker({
           }}>
           <div className="flex items-center gap-1.5">
             <button type="button" aria-label="Previous month" onClick={() => moveFocus(shiftMonth(focusedDate, -1))}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100">
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100">
               <ChevronLeft aria-hidden="true" className="h-4 w-4" />
             </button>
             <MonthSelector month={visibleMonth.month} onChange={month => changeVisibleMonth(visibleMonth.year, month)} />
-            <div ref={yearControlRef} className="relative w-[4.75rem] shrink-0">
+            <div ref={yearControlRef} className="relative w-[4.25rem] shrink-0">
               <input aria-label="Year" inputMode="numeric" maxLength={4} value={yearInput}
                 onFocus={event => { event.currentTarget.select(); setYearSuggestionsOpen(true); }}
                 onChange={event => { const next = event.target.value.replace(/\D/g, '').slice(0, 4); setYearInput(next); tryChangeYear(next); setYearSuggestionsOpen(true); }}
@@ -254,22 +254,22 @@ export function DatePicker({
                   if (event.key === 'Enter') { event.preventDefault(); tryChangeYear(yearInput); setYearSuggestionsOpen(false); }
                 }}
                 onBlur={() => window.setTimeout(() => setYearInput(String(visibleMonth.year)), 0)}
-                className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-center text-sm font-medium" />
+                className="h-8 w-full rounded-lg border border-gray-300 bg-white px-2 text-center text-sm font-medium" />
               {yearSuggestionsOpen && <div role="listbox" aria-label="Year suggestions" className="absolute right-0 top-full z-20 mt-1 max-h-[11.25rem] w-28 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
                 {matchingYears.length ? matchingYears.map(year => <button key={year} type="button" role="option" aria-selected={year === visibleMonth.year}
                   onMouseDown={event => event.preventDefault()} onClick={() => { changeVisibleMonth(year, visibleMonth.month); setYearSuggestionsOpen(false); }}
-                  className={`flex h-9 w-full items-center rounded-md px-2 text-left text-sm ${year === visibleMonth.year ? 'bg-[#e6f6f6] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-gray-100'}`}>{year}</button>)
+                  className={`flex h-8 w-full items-center rounded-md px-2 text-left text-sm ${year === visibleMonth.year ? 'bg-[#e6f6f6] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-gray-100'}`}>{year}</button>)
                   : <p className="px-2 py-2 text-xs text-gray-500">Type a four-digit year</p>}
               </div>}
             </div>
             <button type="button" aria-label="Next month" onClick={() => moveFocus(shiftMonth(focusedDate, 1))}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100">
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100">
               <ChevronRight aria-hidden="true" className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-2 grid grid-cols-7 gap-1" role="grid" aria-label={`${MONTHS[visibleMonth.month - 1]} ${visibleMonth.year}`}>
+          <div className="mt-1.5 grid grid-cols-7 gap-0.5" role="grid" aria-label={`${MONTHS[visibleMonth.month - 1]} ${visibleMonth.year}`}>
             <div role="row" className="contents">
-              {WEEKDAYS.map(day => <span key={day} role="columnheader" className="py-1 text-center text-xs font-medium text-gray-500">{day}</span>)}
+              {WEEKDAYS.map(day => <span key={day} role="columnheader" className="py-0.5 text-center text-xs font-medium text-gray-500">{day}</span>)}
             </div>
             {Array.from({ length: Math.ceil((firstWeekday + dayCount) / 7) }, (_, week) => (
               <div key={`week-${week}`} role="row" className="contents">
@@ -285,7 +285,7 @@ export function DatePicker({
                       disabled={unavailable} aria-selected={selected} aria-current={isToday ? 'date' : undefined}
                       aria-label={displayDate(day)} onKeyDown={event => handleDayKeyDown(event, day)}
                       onClick={() => { setNativeValue(day); close(); triggerRef.current?.focus({ preventScroll: true }); }}
-                      className={`h-9 rounded-lg text-sm transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${selected ? 'bg-[#38A3A5] font-semibold text-white' : isToday ? 'border border-[#38A3A5] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-[#e6f6f6]'}`}>
+                      className={`h-8 rounded-lg text-sm transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${selected ? 'bg-[#38A3A5] font-semibold text-white' : isToday ? 'border border-[#38A3A5] font-semibold text-[#2d8284]' : 'text-gray-700 hover:bg-[#e6f6f6]'}`}>
                       {dayNumber}
                     </button>
                   );
@@ -293,12 +293,12 @@ export function DatePicker({
               </div>
             ))}
           </div>
-          {(!required || showToday) && <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+          {(!required || showToday) && <div className="mt-1.5 flex items-center justify-between border-t border-gray-100 pt-1.5">
             <button type="button" disabled={required || !value} onClick={() => { setNativeValue(''); close(); triggerRef.current?.focus({ preventScroll: true }); }}
-              className="min-h-9 rounded-lg px-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:invisible">Clear</button>
+              className="min-h-8 rounded-lg px-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:invisible">Clear</button>
             {showToday && <button type="button" disabled={!withinRange(today, minDate, maxDate)}
               onClick={() => { setNativeValue(today); close(); triggerRef.current?.focus({ preventScroll: true }); }}
-              className="min-h-9 rounded-lg px-2.5 text-sm font-semibold text-[#2d8284] hover:bg-[#e6f6f6] disabled:cursor-not-allowed disabled:opacity-50">Today</button>}
+              className="min-h-8 rounded-lg px-2.5 text-sm font-semibold text-[#2d8284] hover:bg-[#e6f6f6] disabled:cursor-not-allowed disabled:opacity-50">Today</button>}
           </div>}
         </DropdownMenu>
       )}

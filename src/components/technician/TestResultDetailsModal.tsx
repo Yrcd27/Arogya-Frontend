@@ -10,6 +10,7 @@ import { ConfirmModal } from '../ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { StatusBadge } from '../StatusBadge';
+import { DETAIL_LABEL, DETAIL_VALUE, MODAL_ALERT, MODAL_CLOSE, MODAL_HEADER, MODAL_INFO_PANEL, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE, BUTTON_DANGER, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../dialogs/modalStyles';
 
 interface TestResultDetailsModalProps {
   labTest: LabTest;
@@ -175,12 +176,12 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeModal}>
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-semibold text-gray-900">Test Result Details</h3>
-          <button type="button" aria-label="Close test result details" onClick={closeModal} disabled={deleting || retaking} className="text-gray-500 hover:text-gray-700">
-            <X className="w-6 h-6" />
+    <div className={`${MODAL_OVERLAY} z-50`} onClick={closeModal}>
+      <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
+        <div className={MODAL_HEADER}>
+          <h3 className={MODAL_TITLE}>Test Result Details</h3>
+          <button type="button" aria-label="Close test result details" onClick={closeModal} disabled={deleting || retaking} className={MODAL_CLOSE}>
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
@@ -190,24 +191,24 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
           <div role="alert" className="text-center py-8 text-red-700">{error}<button type="button" onClick={() => void loadTestResult()} className="ml-3 underline">Retry</button></div>
         ) : testResult ? (
           <div className="space-y-4">
-            {fileError && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <p className="text-sm text-gray-700"><span className="font-medium">Test:</span> {labTest.testName}</p>
-              <p className="text-sm text-gray-700"><span className="font-medium">Test ID:</span> {labTest.id}</p>
-              <p className="flex items-center gap-2 text-sm text-gray-700"><span className="font-medium">Status:</span> <StatusBadge status={labTest.status} /></p>
+            {fileError && <p role="alert" className={MODAL_ALERT}>{fileError}</p>}
+            <div className={MODAL_INFO_PANEL}>
+              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test:</span> {labTest.testName}</p>
+              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test ID:</span> {labTest.id}</p>
+              <p className="flex items-center gap-2 text-sm text-gray-900"><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={labTest.status} /></p>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-500">Test Result Description</label>
-              <p className="text-gray-900 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 mt-1">
+              <p className={DETAIL_LABEL}>Test Result Description</p>
+              <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                 {testResult.testResultDescription}
               </p>
             </div>
 
             {testResult.technicianNotes && (
               <div>
-                <label className="text-sm font-medium text-gray-500">Technician Notes</label>
-                <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border border-gray-200 mt-1">
+                <p className={DETAIL_LABEL}>Technician Notes</p>
+                <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                   {testResult.technicianNotes}
                 </p>
               </div>
@@ -215,19 +216,19 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
 
             {testResult.files.length > 0 && (
               <div>
-                <label className="text-sm font-medium text-gray-500">Attached Files ({testResult.files.length})</label>
+                <p className={DETAIL_LABEL}>Attached Files ({testResult.files.length})</p>
                 <div className="mt-2 space-y-2">
                   {testResult.files.map(file => (
                     <div key={file.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <FileText className="w-5 h-5 text-gray-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
-                        <p className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</p>
+                        <p className="text-xs text-gray-600">{formatFileSize(file.fileSize)}</p>
                       </div>
                       <button
                         onClick={() => handlePreview(file)}
                         disabled={previewLoadingId !== null}
-                        className="flex items-center gap-1.5 px-3 py-2 text-[#38A3A5] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm disabled:opacity-50 flex-shrink-0"
+                        className={`${BUTTON_OUTLINE} h-9 shrink-0 px-3`}
                       >
                         <Eye className="w-4 h-4" />
                         {previewLoadingId === file.id ? 'Loading...' : 'Preview'}
@@ -235,7 +236,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
                       <button
                         disabled={downloadLoadingId !== null}
                         onClick={() => handleDownload(file.id, file.fileName)}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm flex-shrink-0"
+                        className={`${BUTTON_PRIMARY} h-9 shrink-0 px-3`}
                       >
                         <Download className="w-4 h-4" />
                         {downloadLoadingId === file.id ? 'Downloading...' : 'Download'}
@@ -246,22 +247,22 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
               <div>
-                <label className="text-gray-500">Created At</label>
-                <p className="text-gray-900">{new Date(testResult.createdAt).toLocaleString()}</p>
+                <p className={DETAIL_LABEL}>Created At</p>
+                <p className={DETAIL_VALUE}>{new Date(testResult.createdAt).toLocaleString()}</p>
               </div>
               <div>
-                <label className="text-gray-500">Updated At</label>
-                <p className="text-gray-900">{new Date(testResult.updatedAt).toLocaleString()}</p>
+                <p className={DETAIL_LABEL}>Updated At</p>
+                <p className={DETAIL_VALUE}>{new Date(testResult.updatedAt).toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t">
+            <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
               <button
                 onClick={() => { if (!mutationRef.current) onEdit(testResult); }}
                 disabled={deleting || retaking}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className={BUTTON_PRIMARY}
               >
                 <Edit className="w-4 h-4" />
                 Edit Result
@@ -269,7 +270,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
               <button
                 onClick={() => setConfirmingDelete(true)}
                 disabled={deleting || retaking}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                className={BUTTON_DANGER}
               >
                 <Trash2 className="w-4 h-4" />
                 Delete Result
@@ -277,7 +278,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
               <button
                 onClick={closeModal}
                 disabled={deleting || retaking}
-                className="ml-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                className={`${BUTTON_SECONDARY} ml-auto`}
               >
                 Close
               </button>
@@ -290,7 +291,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
               <>
                 <p className="text-sm text-gray-500 mb-4">This test is marked completed but its result is missing — you can reopen it to submit a new result.</p>
                 {retakeError && (
-                  <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded text-sm inline-block">
+                  <div className={`mb-4 inline-block ${MODAL_ALERT}`}>
                     {retakeError}
                   </div>
                 )}
@@ -298,7 +299,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
                   <button
                     onClick={handleRetake}
                     disabled={retaking}
-                    className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+                    className={BUTTON_PRIMARY}
                   >
                     {retaking ? 'Reopening...' : 'Retake Test'}
                   </button>

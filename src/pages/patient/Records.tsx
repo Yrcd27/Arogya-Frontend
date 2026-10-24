@@ -5,12 +5,14 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { PaginationFooter } from '../../components/PaginationFooter';
-import { EyeIcon, FileText, XIcon } from 'lucide-react';
+import { FileText, XIcon } from 'lucide-react';
 import { consultationAPI, Consultation } from '../../services/consultationService';
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { StatusBadge } from '../../components/StatusBadge';
+import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_SECONDARY, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { ViewAction } from '../../components/ViewAction';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -252,12 +254,7 @@ export function Records() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2">
-                            <button 
-                              onClick={() => setSelectedRecord(record)}
-                              className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
-                              title="View details">
-                              <EyeIcon className="w-4 h-4" />
-                            </button>
+                            <ViewAction label="View details" onClick={() => setSelectedRecord(record)} />
                           </div>
                         </td>
                       </tr>)}
@@ -281,55 +278,55 @@ export function Records() {
 
       {/* View Record Modal */}
       {selectedRecord && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-2xl font-bold text-gray-900">Prescription Details</h2>
+        <div className={`${MODAL_OVERLAY} z-50`}>
+          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl`}>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-5 py-4 sm:px-6">
+              <h2 className={MODAL_TITLE}>Prescription Details</h2>
               <button
                 onClick={() => setSelectedRecord(null)}
                 aria-label="Close prescription details"
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <XIcon className="w-6 h-6" />
+                className={MODAL_CLOSE}>
+                <XIcon aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="space-y-5 px-5 py-4 sm:px-6">
               {/* Basic Information */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Status</p>
+                  <p className={DETAIL_LABEL}>Status</p>
                   <StatusBadge status={selectedRecord.status} />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Date</p>
-                  <p className="font-medium">{formatDate(selectedRecord.bookedAt)}</p>
+                  <p className={DETAIL_LABEL}>Date</p>
+                  <p className={DETAIL_VALUE}>{formatDate(selectedRecord.bookedAt)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Doctor</p>
-                  <p className="font-medium">{selectedRecord.doctorName}</p>
+                  <p className={DETAIL_LABEL}>Doctor</p>
+                  <p className={DETAIL_VALUE}>{selectedRecord.doctorName}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Clinic</p>
-                  <p className="font-medium">{selectedRecord.clinicName}</p>
+                  <p className={DETAIL_LABEL}>Clinic</p>
+                  <p className={DETAIL_VALUE}>{selectedRecord.clinicName}</p>
                 </div>
               </div>
 
               {/* Consultation Details */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold mb-4">Consultation Details</h3>
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="mb-3 text-base font-semibold text-gray-900">Consultation Details</h3>
                 
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">Chief Complaint</p>
-                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                    <p className={DETAIL_LABEL}>Chief Complaint</p>
+                    <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                       {selectedRecord.chiefComplaint || 'Not specified'}
                     </p>
                   </div>
 
                   {selectedRecord.presentIllness && (
                     <div>
-                      <p className="text-sm text-gray-600 mb-2">Present Illness</p>
-                      <p className="text-gray-900 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                      <p className={DETAIL_LABEL}>Present Illness</p>
+                      <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                         {selectedRecord.presentIllness}
                       </p>
                     </div>
@@ -337,8 +334,8 @@ export function Records() {
 
                   {selectedRecord.pastMedicalHistory && (
                     <div>
-                      <p className="text-sm text-gray-600 mb-2">Past Medical History</p>
-                      <p className="text-gray-900 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                      <p className={DETAIL_LABEL}>Past Medical History</p>
+                      <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                         {selectedRecord.pastMedicalHistory}
                       </p>
                     </div>
@@ -346,8 +343,8 @@ export function Records() {
 
                   {selectedRecord.recommendations && (
                     <div>
-                      <p className="text-sm text-gray-600 mb-2">Recommendations</p>
-                      <p className="text-gray-900 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                      <p className={DETAIL_LABEL}>Recommendations</p>
+                      <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                         {selectedRecord.recommendations}
                       </p>
                     </div>
@@ -357,12 +354,12 @@ export function Records() {
 
               {/* Timeline */}
               {(selectedRecord.bookedAt || selectedRecord.completedAt) && (
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-semibold mb-4">Timeline</h3>
+                <div className="border-t border-gray-100 pt-5">
+                  <h3 className="mb-3 text-base font-semibold text-gray-900">Timeline</h3>
                   <div className="space-y-2">
                     {selectedRecord.bookedAt && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Booked At:</span>
+                        <span className="text-gray-600">Booked At</span>
                         <span className="font-medium">{new Date(selectedRecord.bookedAt).toLocaleString()}</span>
                       </div>
                     )}
@@ -383,10 +380,11 @@ export function Records() {
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-200 flex justify-end">
+            <div className="flex justify-end border-t border-gray-100 px-5 py-3 sm:px-6">
               <button
+                type="button"
                 onClick={() => setSelectedRecord(null)}
-                className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors">
+                className={BUTTON_SECONDARY}>
                 Close
               </button>
             </div>

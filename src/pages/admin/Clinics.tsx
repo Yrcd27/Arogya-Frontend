@@ -34,6 +34,7 @@ import { DatePicker } from '../../components/DatePicker';
 import { TimePicker } from '../../components/TimePicker';
 import { PaginationFooter } from '../../components/PaginationFooter';
 import { statusLabel } from '../../utils/statusLabels';
+import { MODAL_ALERT, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL, MODAL_TITLE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../../components/dialogs/modalStyles';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -660,31 +661,30 @@ export function Clinics() {
 
       {/* Schedule Clinic Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {isEditMode ? 'Edit Clinic' : 'Schedule New Clinic'}
-                </h2>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={saving}
-                  aria-label="Close clinic form"
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <XIcon className="w-5 h-5" />
-                </button>
-              </div>
+        <div className={`${MODAL_OVERLAY} z-50`}>
+          <div role="dialog" aria-modal="true" aria-labelledby="clinic-form-title" className={`${MODAL_PANEL} flex max-h-[90vh] max-w-2xl flex-col overflow-hidden`}>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+              <h2 id="clinic-form-title" className={MODAL_TITLE}>
+                {isEditMode ? 'Edit Clinic' : 'Schedule New Clinic'}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                aria-label="Close clinic form"
+                className={MODAL_CLOSE}
+              >
+                <XIcon aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
 
-              {error && (
-                <div role="alert" className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                  {error}
-                </div>
-              )}
-
-              <form ref={clinicFormRef} onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="space-y-4">
+            <form ref={clinicFormRef} onSubmit={handleSubmit} noValidate aria-busy={saving || assignmentsLoading} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
+                {error && (
+                  <div role="alert" className={MODAL_ALERT}>
+                    {error}
+                  </div>
+                )}
                 {/* Clinic Name */}
                 <div>
                   <label htmlFor="clinic-clinicName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -899,13 +899,14 @@ export function Clinics() {
                   {fieldError('doctorIds')}
                 </div>
 
-                {/* Submit Buttons */}
-                <div className="flex gap-3 pt-4">
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:px-6">
                   <button
                     type="button"
                     onClick={closeModal}
                     disabled={saving}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className={BUTTON_SECONDARY}
                   >
                     Cancel
                   </button>
@@ -913,13 +914,12 @@ export function Clinics() {
                     type="submit"
                     disabled={saving || assignmentsLoading || (isEditMode && doctorLookupFailed)}
                     title={isEditMode && doctorLookupFailed ? "Can't save until assigned doctors load successfully" : undefined}
-                    className="flex-1 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={BUTTON_PRIMARY}
                   >
                     {saving ? 'Saving...' : assignmentsLoading ? 'Loading assignments...' : (isEditMode ? 'Update Clinic' : 'Schedule Clinic')}
                   </button>
                 </div>
               </form>
-            </div>
           </div>
         </div>
       )}

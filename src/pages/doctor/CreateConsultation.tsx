@@ -13,6 +13,7 @@ import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-
 import type { QueueTokenResponse } from '../../services/queueService';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, LAB_TEST_NAME_MAX_LENGTH, MAX_SESSION_NUMBER, getLabTestNameError, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
+import { BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL } from '../../components/dialogs/modalStyles';
 
 interface CreateConsultationProps {
   token: QueueTokenResponse;
@@ -339,7 +340,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
     <>
       {/* Create Consultation modal */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        className={`${MODAL_OVERLAY} z-50`}
         onClick={saving || partiallySaved ? undefined : cancel}
       >
         <form
@@ -347,7 +348,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
           noValidate
           aria-busy={saving}
           onSubmit={event => { event.preventDefault(); void save(); }}
-          className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+          className={`${MODAL_PANEL} flex max-h-[90vh] max-w-3xl flex-col overflow-hidden`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Modal header */}
@@ -369,7 +370,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
               type="button"
               onClick={cancel}
               disabled={saving}
-              className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
+              className={MODAL_CLOSE}
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -643,7 +644,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
           <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
             <button
               type="button"
-              className="px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className={BUTTON_SECONDARY}
               onClick={cancel}
               disabled={saving}
             >
@@ -652,7 +653,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
             {(unconfirmedWrite || recovery === 'failed') && (
               <button
                 type="button"
-                className="px-6 py-2.5 border border-[#38A3A5] bg-white text-[#38A3A5] rounded-lg hover:bg-[#38A3A5]/10 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className={BUTTON_OUTLINE}
                 onClick={() => void verify()}
                 disabled={saving || verifying}
               >
@@ -661,7 +662,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
             )}
             <button
               type="submit"
-              className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className={BUTTON_PRIMARY}
               disabled={saving || unconfirmedWrite || recovery !== 'ready' || verifying}
             >
               {saving ? 'Saving...' : partiallySaved ? 'Finish Saving' : 'Save Consultation'}

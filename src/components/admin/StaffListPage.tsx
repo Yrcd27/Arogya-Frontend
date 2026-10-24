@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { EyeIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { PageContent } from '../PageContent';
@@ -10,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { loadDoctorProfiles, loadTechnicianProfiles } from '../../utils/dashboard';
 import type { DoctorProfile, TechnicianProfile } from '../../types/user';
+import { ViewAction } from '../ViewAction';
 
 const COPY: Record<StaffKind, { plural: string; title: string; speciality: string; fourth: string }> = {
   doctor: { plural: 'doctors', title: 'Doctors', speciality: 'Specialization', fourth: 'Experience' },
@@ -154,16 +154,7 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{value(profile.phoneNumber)}</td>
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{fourthColumn(profile, kind)}</td>
                             <td className="px-6 py-4">
-                              <button
-                                type="button"
-                                aria-haspopup="dialog"
-                                aria-label={`View details for ${name}`}
-                                onClick={() => setSelected(profile)}
-                                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#38A3A5] hover:text-[#2d8284]"
-                              >
-                                <EyeIcon aria-hidden="true" className="h-4 w-4" />
-                                View
-                              </button>
+                              <ViewAction opensDialog label={`View details for ${name}`} onClick={() => setSelected(profile)} />
                             </td>
                           </tr>
                         );

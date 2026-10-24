@@ -21,6 +21,7 @@ import { operationalClinics } from '../../utils/dashboard';
 import { clearStoredClinicId, getStoredClinicId, storeClinicId } from '../../utils/doctorClinicSelection';
 import { clearStoredServingTokenId, getStoredServingTokenId, setStoredServingTokenId } from '../../utils/servingTokenStorage';
 import type { Clinic } from '../../types/clinic';
+import { ViewAction } from '../../components/ViewAction';
 
 export function Queue() {
   const { profile, status: profileStatus } = useUserProfile();
@@ -593,12 +594,11 @@ export function Queue() {
                           </td>
                           <td className="w-px whitespace-nowrap px-4 py-3 sm:px-5">
                             <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                className="inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium text-[#2d8284] transition-colors hover:bg-[#38A3A5]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5]"
-                                aria-label={'View profile for ' + (nameById[String(token.patientId)] || 'patient #' + token.patientId)}
+                              <ViewAction
+                                opensDialog
+                                label={'View profile for ' + (nameById[String(token.patientId)] || 'patient #' + token.patientId)}
                                 onClick={() => { setSelectedPatientId(token.patientId); setIsProfileModalOpen(true); }}
-                              >Profile</button>
+                              />
                               <button
                                 type="button"
                                 className={primaryActionClass + ' !h-9 !min-h-0 whitespace-nowrap !py-0'}
