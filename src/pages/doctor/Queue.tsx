@@ -2,11 +2,12 @@ import { Select } from '../../components/Select';
 import { PageContent } from '../../components/PageContent';
 import { EmptyState } from '../../components/EmptyState';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { PatientProfileModal } from '../../components/doctor/PatientProfileModal';
+import { CreateConsultation } from './CreateConsultation';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { ClipboardCheck, ClipboardList, SearchIcon, PhoneCallIcon, XCircle, Loader2, RefreshCw, UsersRound } from 'lucide-react';
@@ -16,50 +17,18 @@ import { useAuth } from '../../hooks/useAuth';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { ApiError } from '../../services/httpClient';
 import { isPositiveId } from '../../utils/clinicalValidation';
-
-const servingTokenStorageKey = (doctorId: number, clinicId: number) => `doctorQueue:servingTokenId:${doctorId}:${clinicId}`;
-const legacyServingTokenStorageKey = (clinicId: number) => `doctorQueue:servingTokenId:${clinicId}`;
-
-const getStoredServingTokenId = (doctorId: number, clinicId: number): number | null => {
-  try {
-    sessionStorage.removeItem(legacyServingTokenStorageKey(clinicId));
-    const raw = sessionStorage.getItem(servingTokenStorageKey(doctorId, clinicId));
-    if (raw === null) return null;
-    if (!isPositiveId(raw)) {
-      sessionStorage.removeItem(servingTokenStorageKey(doctorId, clinicId));
-      return null;
-    }
-    return Number(raw);
-  } catch {
-    return null;
-  }
-};
-
-const setStoredServingTokenId = (doctorId: number, clinicId: number, tokenId: number) => {
-  try {
-    sessionStorage.setItem(servingTokenStorageKey(doctorId, clinicId), String(tokenId));
-  } catch {
-    return;
-  }
-};
-
-const clearStoredServingTokenId = (doctorId: number, clinicId: number) => {
-  try {
-    sessionStorage.removeItem(servingTokenStorageKey(doctorId, clinicId));
-  } catch {
-    return;
-  }
-};
+import { operationalClinics } from '../../utils/dashboard';
+import { clearStoredClinicId, getStoredClinicId, storeClinicId } from '../../utils/doctorClinicSelection';
+import { clearStoredServingTokenId, getStoredServingTokenId, setStoredServingTokenId } from '../../utils/servingTokenStorage';
+import type { Clinic } from '../../types/clinic';
 
 export function Queue() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { profile, status: profileStatus } = useUserProfile();
   const { user, sessionKey } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
-  const [clinics, setClinics] = useState<Array<{ id: number; clinicName: string }>>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [clinicsLoading, setClinicsLoading] = useState(true);
   const clinicIdParam = searchParams.get('clinicId');
   const selectedClinicId = isPositiveId(clinicIdParam) ? Number(clinicIdParam) : null;
@@ -79,6 +48,7 @@ export function Queue() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [tokenToCancel, setTokenToCancel] = useState<{ token: QueueTokenResponse; context: string } | null>(null);
+  const [consultationDraft, setConsultationDraft] = useState<{ token: QueueTokenResponse; patientName?: string; context: string } | null>(null);
   const loadQueueRef = useRef<(clinicId: number) => Promise<void>>(async () => undefined);
   const queueRequestRef = useRef(0);
   const actionRef = useRef(false);
@@ -114,7 +84,7 @@ export function Queue() {
         const myClinicIds = new Set(
           allClinicDoctors.filter(cd => cd.doctorRefId === profile.id).map(cd => cd.clinic?.id).filter((id): id is number => typeof id === 'number')
         );
-        const mine = allClinics.filter(c => myClinicIds.has(c.id)).map(c => ({ id: c.id, clinicName: c.clinicName }));
+        const mine = allClinics.filter(c => myClinicIds.has(c.id));
         if (!cancelled) setClinics(mine);
       } catch (e) {
         if (!cancelled) {
@@ -128,6 +98,29 @@ export function Queue() {
     return () => { cancelled = true; };
   }, [profile?.id, profileStatus, sessionKey]);
 
+  const selectionResolvedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (clinicsLoading) {
+      selectionResolvedRef.current = null;
+      return;
+    }
+    if (profileStatus !== 'ready' || !user?.id) return;
+    const resolvedKey = `${sessionKey}:${user.id}`;
+    if (selectionResolvedRef.current === resolvedKey) return;
+    selectionResolvedRef.current = resolvedKey;
+    if (selectedClinicId) {
+      if (clinics.some(clinic => clinic.id === selectedClinicId)) storeClinicId(user.id, selectedClinicId);
+      return;
+    }
+    const storedId = getStoredClinicId(user.id);
+    if (storedId === null) return;
+    if (operationalClinics(clinics).some(clinic => clinic.id === storedId)) {
+      setSearchParams({ clinicId: String(storedId) }, { replace: true });
+    } else {
+      clearStoredClinicId(user.id);
+    }
+  }, [clinics, clinicsLoading, profileStatus, selectedClinicId, sessionKey, setSearchParams, user?.id]);
+
   // Restore the queue for the clinic in the URL once the clinic list is known.
   useEffect(() => {
     queueRequestRef.current += 1;
@@ -137,6 +130,7 @@ export function Queue() {
     setLoading(false);
     setQueueContext(null);
     setTokenToCancel(null);
+    setConsultationDraft(null);
     setIsProfileModalOpen(false);
     setSelectedPatientId(null);
     if (selectedClinicId && validClinic) {
@@ -144,16 +138,6 @@ export function Queue() {
     }
     return () => { queueRequestRef.current += 1; };
   }, [selectedClinicId, validClinic, sessionKey]);
-
-  useEffect(() => {
-    if (location.state?.consultationCreated && servingToken && location.state.tokenId === servingToken.id && Number(servingToken.clinicId) === selectedClinicId) {
-      setRecentlyDone(prev => [{ ...servingToken, status: 'COMPLETED' }, ...prev]);
-      setServingToken(null);
-      setServingState('none');
-      if (selectedClinicId && user?.id) clearStoredServingTokenId(user.id, selectedClinicId);
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state, selectedClinicId, servingToken, user?.id]);
 
   useEffect(() => {
     verifiedContextRef.current = null;
@@ -235,7 +219,12 @@ export function Queue() {
       await hydratePatientNames(tokens || [], requestContext);
     } catch (e) {
       if (requestId !== queueRequestRef.current || currentContextRef.current !== requestContext) return;
-      setError(e instanceof Error ? e.message : 'Failed to load queue');
+      if (e instanceof ApiError && e.status === 403) {
+        clearStoredClinicId(user?.id);
+        setError("You don't have access to this clinic's queue. Choose another clinic.");
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load queue');
+      }
       setQueueTokens([]);
     } finally {
       if (requestId === queueRequestRef.current && currentContextRef.current === requestContext) {
@@ -279,6 +268,8 @@ export function Queue() {
       setError('Select one of your assigned clinics.');
       return;
     }
+    if (id) storeClinicId(user?.id, id);
+    else clearStoredClinicId(user?.id);
     verifiedContextRef.current = null;
     setServingToken(null);
     setServingState('checking');
@@ -369,16 +360,22 @@ export function Queue() {
     }
   };
 
+  const handleConsultationSaved = (tokenId: number) => {
+    if (!consultationDraft || consultationDraft.context !== currentContextRef.current) return;
+    setConsultationDraft(null);
+    if (servingToken && servingToken.id === tokenId && Number(servingToken.clinicId) === selectedClinicId) {
+      setRecentlyDone(prev => [{ ...servingToken, status: 'COMPLETED' }, ...prev]);
+      setServingToken(null);
+      setServingState('none');
+      if (selectedClinicId && user?.id) clearStoredServingTokenId(user.id, selectedClinicId);
+    }
+    if (selectedClinicId) void loadQueue(selectedClinicId);
+  };
+
   const goToConsultation = (token: QueueTokenResponse) => {
     if (actionRef.current || !validClinic || servingState !== 'serving' || verifiedContextRef.current !== contextKey
       || servingToken?.id !== token.id || Number(token.clinicId) !== selectedClinicId) return;
-    navigate('/doctor/queue/create-consultation', {
-      state: {
-        token,
-        patientName: nameById[String(token.patientId)],
-        clinicId: selectedClinicId,
-      },
-    });
+    setConsultationDraft({ token, patientName: nameById[String(token.patientId)], context: contextKey });
   };
 
   const filteredTokens = searchTerm.trim()
@@ -548,9 +545,9 @@ export function Queue() {
                   disabled={queueIsLoading || actionLoadingId !== null}
                   aria-label="Refresh patient queue"
                   title="Refresh patient queue"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#2d8284] disabled:opacity-40"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#38A3A5]/10 hover:text-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                  <RefreshCw aria-hidden="true" className="h-[18px] w-[18px]" />
                 </button>
               </div>
 
@@ -575,18 +572,18 @@ export function Queue() {
                     <caption className="sr-only">Waiting patient queue for {clinics.find(clinic => clinic.id === selectedClinicId)?.clinicName}</caption>
                     <thead className="bg-gray-50 text-gray-600">
                       <tr>
-                        <th scope="col" className="px-4 py-3 font-medium sm:px-5">Queue Token</th>
+                        <th scope="col" className="w-20 whitespace-nowrap px-4 py-3 font-medium sm:px-5">Token</th>
                         <th scope="col" className="px-4 py-3 font-medium">Patient</th>
                         <th scope="col" className="px-4 py-3 font-medium">Status</th>
                         <th scope="col" className="px-4 py-3 font-medium">Issued Time</th>
-                        <th scope="col" className="px-4 py-3 text-right font-medium sm:px-5">Actions</th>
+                        <th scope="col" className="w-px whitespace-nowrap px-4 py-3 text-right font-medium sm:px-5">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {filteredTokens.map(token => (
-                        <tr key={token.id} className="hover:bg-gray-50/70">
+                        <tr key={token.id} className="align-middle hover:bg-gray-50/70">
                           <td className="px-4 py-3 sm:px-5">
-                            <span aria-label={'Token ' + token.tokenNumber} className="inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-[#e6f6f6] px-2 text-sm font-semibold text-[#2d8284]">{token.tokenNumber}</span>
+                            <span aria-label={'Token ' + token.tokenNumber} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#e6f6f6] text-sm font-semibold text-[#2d8284]">{token.tokenNumber}</span>
                           </td>
                           <td className="max-w-52 break-words px-4 py-3 font-medium text-gray-900">{nameById[String(token.patientId)] || 'Patient #' + token.patientId}</td>
                           <td className="whitespace-nowrap px-4 py-3"><StatusBadge status={token.status} /></td>
@@ -594,17 +591,17 @@ export function Queue() {
                             <time dateTime={token.issuedAt} className="whitespace-nowrap">{new Date(token.issuedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
                             <span className="mt-0.5 block whitespace-nowrap text-xs text-gray-500">{new Date(token.issuedAt).toLocaleDateString()}</span>
                           </td>
-                          <td className="px-4 py-3 sm:px-5">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <td className="w-px whitespace-nowrap px-4 py-3 sm:px-5">
+                            <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
-                                className="min-h-10 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#2d8284]"
+                                className="inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium text-[#2d8284] transition-colors hover:bg-[#38A3A5]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5]"
                                 aria-label={'View profile for ' + (nameById[String(token.patientId)] || 'patient #' + token.patientId)}
                                 onClick={() => { setSelectedPatientId(token.patientId); setIsProfileModalOpen(true); }}
                               >Profile</button>
                               <button
                                 type="button"
-                                className={primaryActionClass + ' whitespace-nowrap'}
+                                className={primaryActionClass + ' !h-9 !min-h-0 whitespace-nowrap !py-0'}
                                 onClick={() => void callNext(token)}
                                 disabled={actionLoadingId !== null || servingState !== 'none' || !validClinic || verifiedContextRef.current !== contextKey || token.status !== 'PENDING'}
                                 title={servingState === 'error' || servingState === 'checking' ? 'Verify the current patient before calling another patient' : servingToken ? 'Finish the current consultation first' : 'Call this patient'}
@@ -614,12 +611,12 @@ export function Queue() {
                               </button>
                               <button
                                 type="button"
-                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                                 onClick={() => setTokenToCancel({ token, context: contextKey })}
                                 disabled={actionLoadingId !== null || !validClinic || token.status !== 'PENDING'}
                                 aria-label={'Cancel token #' + token.tokenNumber}
-                                title="Cancel Token"
-                              ><XCircle aria-hidden="true" className="h-5 w-5" /></button>
+                                title="Cancel token and remove this patient from the queue"
+                              ><XCircle aria-hidden="true" className="h-[18px] w-[18px]" /></button>
                             </div>
                           </td>
                         </tr>
@@ -647,6 +644,16 @@ export function Queue() {
           await cancelToken(tokenToCancel.token);
         }}
       />
+
+      {consultationDraft && consultationDraft.context === contextKey && (
+        <CreateConsultation
+          token={consultationDraft.token}
+          patientName={consultationDraft.patientName}
+          clinicId={selectedClinicId ?? undefined}
+          onClose={() => setConsultationDraft(null)}
+          onSaved={handleConsultationSaved}
+        />
+      )}
 
       {isProfileModalOpen && selectedPatientId && (
         <PatientProfileModal

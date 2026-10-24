@@ -13,7 +13,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS, type ClinicFilters } from '../../types/clinic';
-import { localDateString } from '../../utils/profileValidation';
+import { businessDateString } from '../../utils/businessDate';
 import {
   getAvailableClinics,
   filterClinics,
@@ -23,6 +23,7 @@ import {
 } from '../../utils/clinic';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
 import { DatePicker } from '../../components/DatePicker';
+import { StatusBadge } from '../../components/StatusBadge';
 
 const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
 const rememberedQueueTokens = new Map<string, string>();
@@ -571,7 +572,7 @@ export function Clinics() {
                   {...filterProps('start')}
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  min={localDateString()}
+                  min={businessDateString()}
                   placeholder="From Date"
                   size="compact"
                 />
@@ -584,7 +585,7 @@ export function Clinics() {
                   {...filterProps('end')}
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
+                  min={filterErrors.start ? businessDateString() : dateRange.start || businessDateString()}
                   placeholder="To Date"
                   size="compact"
                 />
@@ -859,15 +860,7 @@ export function Clinics() {
                           <span className="ml-2">• Position: {token.position}</span>
                           {name && <span className="ml-2 text-gray-600">• {name}</span>}
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          token.status === 'SERVING'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : token.status === 'CANCELLED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-gray-200 text-gray-800'
-                        }`}>
-                          {token.status}
-                        </span>
+                        <StatusBadge status={token.status} className="shrink-0" />
                       </div>
                     );
                   })}
@@ -886,7 +879,7 @@ export function Clinics() {
                             <span className="ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
                           )}
                         </div>
-                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">COMPLETED</span>
+                        <StatusBadge status="COMPLETED" className="shrink-0" />
                       </div>
                     ))}
                   </div>

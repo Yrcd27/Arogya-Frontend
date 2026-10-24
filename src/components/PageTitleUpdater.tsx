@@ -14,7 +14,6 @@ const ROUTE_TITLES: Record<string, string> = {
   '/doctor/dashboard': 'Arogya | Doctor Dashboard',
   '/doctor/profile': 'Arogya | Doctor Profile',
   '/doctor/queue': 'Arogya | Patient Queue',
-  '/doctor/queue/create-consultation': 'Arogya | New Consultation',
   '/doctor/consultations': 'Arogya | Consultation History',
   '/admin/dashboard': 'Arogya | Administrator Dashboard',
   '/admin/profile': 'Arogya | Administrator Profile',

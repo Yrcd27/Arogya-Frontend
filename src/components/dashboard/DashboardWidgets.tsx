@@ -24,21 +24,22 @@ export function DashboardMetric({ label, value, loading, hint, icon: Icon }: {
   );
 }
 
-export function DashboardPanel({ title, description, action, loading, error, onRetry, children, className = '' }: {
-  title: string; description?: string; action?: { to: string; label: string }; loading?: boolean;
+export function DashboardPanel({ title, description, action, loading, refreshing, error, onRetry, children, className = '' }: {
+  title: string; description?: string; action?: { to: string; label: string }; loading?: boolean; refreshing?: boolean;
   error?: string | null; onRetry?: () => void; children: ReactNode; className?: string;
 }) {
   const titleId = useId();
   return (
-    <section aria-labelledby={titleId} aria-busy={loading} className={`min-w-0 rounded-xl border border-gray-100 bg-white shadow-sm ${className}`}>
+    <section aria-labelledby={titleId} aria-busy={loading || refreshing} className={`min-w-0 rounded-xl border border-gray-100 bg-white shadow-sm ${className}`}>
       <div className="flex items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
         <div className="min-w-0">
           <h2 id={titleId} className="text-lg font-bold text-gray-900">{title}</h2>
           {description && <p className="mt-1 text-sm leading-5 text-gray-500">{description}</p>}
         </div>
-        {onRetry && <button type="button" onClick={onRetry} disabled={loading} aria-label={`Refresh ${title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50 hover:text-[#2d8284] disabled:opacity-40"><RefreshCw aria-hidden="true" className="h-4 w-4" /></button>}
+        {onRetry && <button type="button" onClick={onRetry} disabled={loading || refreshing} aria-label={`Refresh ${title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-50 hover:text-[#2d8284] disabled:opacity-40"><RefreshCw aria-hidden="true" className={`h-4 w-4 ${refreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /></button>}
       </div>
       <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+        {refreshing && <p role="status" className="sr-only">Refreshing {title}</p>}
         {loading ? <div role="status" className="space-y-3 py-2"><span className="sr-only">Loading {title}</span>{[0, 1, 2].map(row => <div key={row} aria-hidden="true" className="h-12 animate-pulse rounded-lg bg-gray-50 motion-reduce:animate-none" />)}</div>
           : error ? <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><div className="flex items-start gap-2"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0 break-words">{error}</p></div>{onRetry && <button type="button" onClick={onRetry} className="mt-2 font-semibold underline underline-offset-2">Try again</button>}</div>
           : children}

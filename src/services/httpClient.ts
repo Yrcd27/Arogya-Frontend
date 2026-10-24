@@ -34,6 +34,12 @@ if (!isDevelopment && !(envBase && envBase.length > 0)) {
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 
+const TRUSTED_ABSOLUTE_ORIGINS = isDevelopment ? ['http://localhost:8091'] : [];
+
+function isTrustedAbsoluteUrl(path: string): boolean {
+  return TRUSTED_ABSOLUTE_ORIGINS.some(origin => path.startsWith(`${origin}/`));
+}
+
 const AUTH_TOKEN_KEY = 'authToken';
 const DEFAULT_TIMEOUT_MS = 15000;
 const SAFE_RETRY_METHODS = new Set(['GET', 'HEAD']);
@@ -111,6 +117,10 @@ function isMutatingMethod(method: string | undefined): boolean {
 export async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}, attempt = 0): Promise<T> {
   const { skipAuth, headers, body, timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...rest } = options;
 
+  if (!skipAuth && !isTrustedAbsoluteUrl(path) && (!path.startsWith('/') || path.startsWith('//'))) {
+    throw new ApiError(0, 'Invalid request path.');
+  }
+
   const controller = new AbortController();
   const onCallerAbort = () => controller.abort();
   if (callerSignal) {
@@ -144,11 +154,15 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
   }
 
   if (!response.ok) {
-    const { message, errors, bodyEmpty } = await readErrorMessage(response);
+    const { message: serverMessage, errors, bodyEmpty } = await readErrorMessage(response);
 
     if (response.status === 401 && !skipAuth) {
       window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
     }
+
+    const message = response.status === 403 && (bodyEmpty || /^forbidden$/i.test(serverMessage.trim()))
+      ? 'You do not have permission to access this resource.'
+      : serverMessage;
 
     throw new ApiError(response.status, message, errors, undefined, bodyEmpty);
   }

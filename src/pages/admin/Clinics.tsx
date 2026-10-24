@@ -5,10 +5,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { Header } from '../../components/admin/Header';
-import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, TrashIcon, XIcon, XCircle, CheckIcon } from 'lucide-react';
+import { SearchIcon, PlusIcon, CalendarIcon, UsersIcon, EditIcon, XIcon, XCircle, CheckIcon, PlayIcon } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, doctorAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { ClinicActionsMenu } from '../../components/clinic/ClinicActionsMenu';
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { Clinic, Doctor, SelectedDoctor, PROVINCES_DISTRICTS } from '../../types/clinic';
 import {
@@ -24,13 +25,15 @@ import {
   sortClinics
 } from '../../utils/clinic';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
-import { localDateString } from '../../utils/profileValidation';
+import { businessDateString } from '../../utils/businessDate';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { useAuth } from '../../hooks/useAuth';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
 import { DoctorSearch } from '../../components/clinic/DoctorSearch';
 import { DatePicker } from '../../components/DatePicker';
 import { TimePicker } from '../../components/TimePicker';
+import { PaginationFooter } from '../../components/PaginationFooter';
+import { statusLabel } from '../../utils/statusLabels';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -47,6 +50,8 @@ export function Clinics() {
   const [searchTerm, setSearchTerm] = useState('');
   useLinkedSearch(setSearchTerm);
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -66,6 +71,7 @@ export function Clinics() {
   const doctorsRequestRef = useRef(0);
   const editingClinicIdRef = useRef<number | null>(null);
   const originalDoctorIdsRef = useRef<number[]>([]);
+  const statusChangeRef = useRef(false);
   const loadClinicsRef = useRef<() => Promise<void>>(async () => undefined);
   const loadDoctorsRef = useRef<() => Promise<void>>(async () => undefined);
 
@@ -85,6 +91,8 @@ export function Clinics() {
   const [selectedDoctors, setSelectedDoctors] = useState<SelectedDoctor[]>([]);
   const [doctorToRemove, setDoctorToRemove] = useState<{ doctor: SelectedDoctor; session: number; clinicId: number | null } | null>(null);
   const [confirmingCancellation, setConfirmingCancellation] = useState(false);
+  const [statusChangeId, setStatusChangeId] = useState<number | null>(null);
+  const [clinicToCancel, setClinicToCancel] = useState<Clinic | null>(null);
   const clinicFormRef = useRef<HTMLFormElement>(null);
 
   // Load clinics on component mount
@@ -423,6 +431,41 @@ export function Clinics() {
     await loadAssignedDoctorsForEdit(clinic.id);
   };
 
+  const changeClinicStatus = async (clinic: Clinic, status: Clinic['status']) => {
+    if (savingRef.current || statusChangeRef.current || !isPositiveId(clinic.id)) return;
+    const requestSession = sessionKey;
+    statusChangeRef.current = true;
+    setStatusChangeId(clinic.id);
+    try {
+      const assigned = await clinicDoctorAPI.getClinicDoctorsByClinicId(clinic.id);
+      const doctorIds = (assigned || []).map(item => item.doctorRefId);
+      if (doctorIds.some(id => typeof id !== 'number' || !isPositiveId(id)) || new Set(doctorIds).size !== doctorIds.length) {
+        throw new Error('The assigned doctors could not be verified, so the status was not changed.');
+      }
+      await clinicAPI.updateClinic({
+        id: clinic.id,
+        clinicName: clinic.clinicName,
+        province: clinic.province,
+        district: clinic.district,
+        location: clinic.location || undefined,
+        scheduledDate: clinic.scheduledDate,
+        scheduledTime: formatTimeForAPI(clinic.scheduledTime),
+        status,
+        doctorIds,
+      });
+      if (currentSessionRef.current !== requestSession) return;
+      toast.success(`${clinic.clinicName} is now ${statusLabel(status)}`);
+      void loadClinics();
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      if (currentSessionRef.current !== requestSession) return;
+      toast.error(error instanceof Error ? error.message : 'Failed to update the clinic status. Please try again.');
+    } finally {
+      statusChangeRef.current = false;
+      setStatusChangeId(null);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (deleteRef.current || !clinicToDelete || !isPositiveId(clinicToDelete.id) || !isPositiveId(user?.id)) return;
     const requestSession = sessionKey;
@@ -458,6 +501,13 @@ export function Clinics() {
     }),
     'date'
   );
+  const totalPages = Math.max(1, Math.ceil(filteredClinics.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageClinics = filteredClinics.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, pageSize]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -507,11 +557,8 @@ export function Clinics() {
                 }}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
               >
-                <option>All Status</option>
-                <option>SCHEDULED</option>
-                <option>IN_PROGRESS</option>
-                <option>COMPLETED</option>
-                <option>CANCELLED</option>
+                <option value="All Status">All Status</option>
+                {CLINIC_STATUSES.map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}
               </Select>
             </div>
           </div>
@@ -533,8 +580,9 @@ export function Clinics() {
           )}
 
           {/* Clinics Grid */}
-          {filteredClinics.length > 0 && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {filteredClinics.map(clinic => {
+          {filteredClinics.length > 0 && <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {pageClinics.map(clinic => {
               const doctorCount = doctorCounts[clinic.id] ?? 0;
               return (
                 <ClinicCard
@@ -547,7 +595,29 @@ export function Clinics() {
                     </div>
                   }
                   footer={
-                    <div className="flex justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2">
+                      {clinic.status === 'SCHEDULED' && (
+                        <button
+                          type="button"
+                          onClick={() => void changeClinicStatus(clinic, 'IN_PROGRESS')}
+                          disabled={statusChangeId !== null}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#38A3A5] bg-white px-3 py-2 text-sm font-medium text-[#38A3A5] transition-colors hover:bg-[#38A3A5]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <PlayIcon aria-hidden="true" className="h-4 w-4" />
+                          {statusChangeId === clinic.id ? 'Starting...' : 'Start Clinic'}
+                        </button>
+                      )}
+                      {clinic.status === 'IN_PROGRESS' && (
+                        <button
+                          type="button"
+                          onClick={() => void changeClinicStatus(clinic, 'COMPLETED')}
+                          disabled={statusChangeId !== null}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#38A3A5] bg-white px-3 py-2 text-sm font-medium text-[#38A3A5] transition-colors hover:bg-[#38A3A5]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <CheckIcon aria-hidden="true" className="h-4 w-4" />
+                          {statusChangeId === clinic.id ? 'Completing...' : 'Complete Clinic'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleEdit(clinic)}
@@ -556,20 +626,27 @@ export function Clinics() {
                         <EditIcon aria-hidden="true" className="h-4 w-4" />
                         Edit Clinic
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setClinicToDelete(clinic)}
-                        aria-label={`Delete ${clinic.clinicName}`}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 text-red-600 transition-colors hover:bg-red-50"
-                      >
-                        <TrashIcon aria-hidden="true" className="h-4 w-4" />
-                      </button>
+                      <ClinicActionsMenu
+                        clinic={clinic}
+                        disabled={statusChangeId !== null}
+                        onCancel={() => setClinicToCancel(clinic)}
+                        onDelete={() => setClinicToDelete(clinic)}
+                      />
                     </div>
                   }
                 />
               );
             })}
-          </div>}
+            </div>
+            <PaginationFooter
+              currentPage={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalItems={filteredClinics.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>}
 
           {/* Empty State */}
           {!isLoading && !listError && filteredClinics.length === 0 && (
@@ -700,7 +777,7 @@ export function Clinics() {
                       name="scheduledDate"
                       value={formData.scheduledDate}
                       onChange={handleInputChange}
-                      min={isEditMode ? undefined : localDateString()}
+                      min={isEditMode ? undefined : businessDateString()}
                       required
                     />
                     {fieldError('scheduledDate')}
@@ -735,10 +812,7 @@ export function Clinics() {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent"
                     >
-                      <option value="SCHEDULED">SCHEDULED</option>
-                      <option value="IN_PROGRESS">IN_PROGRESS</option>
-                      <option value="COMPLETED">COMPLETED</option>
-                      <option value="CANCELLED">CANCELLED</option>
+                      {CLINIC_STATUSES.map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}
                     </Select>
                     {fieldError('status')}
                   </div>
@@ -872,6 +946,22 @@ export function Clinics() {
         onConfirm={async () => {
           await saveClinic();
           if (currentSessionRef.current === sessionKey) setConfirmingCancellation(false);
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={clinicToCancel !== null}
+        title="Cancel Clinic?"
+        message={`Mark "${clinicToCancel?.clinicName}" as cancelled? Patients will no longer be able to join its queue.`}
+        confirmLabel="Cancel Clinic"
+        cancelLabel="Keep Clinic"
+        loading={statusChangeId !== null}
+        onCancel={() => { if (statusChangeId === null) setClinicToCancel(null); }}
+        onConfirm={async () => {
+          const clinic = clinicToCancel;
+          if (!clinic) return;
+          await changeClinicStatus(clinic, 'CANCELLED');
+          setClinicToCancel(null);
         }}
       />
 

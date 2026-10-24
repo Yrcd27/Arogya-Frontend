@@ -10,6 +10,7 @@ import { consultationAPI, Consultation } from '../../services/consultationServic
 import { profileAPI, clinicAPI, userAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
+import { StatusBadge } from '../../components/StatusBadge';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -163,18 +164,6 @@ export function Records() {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'COMPLETED':
-        return 'bg-[#57CC99] bg-opacity-20 text-[#57CC99]';
-      case 'SCHEDULED':
-        return 'bg-blue-100 text-blue-700';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
   return <div className="min-h-screen bg-gray-50">
       <Sidebar 
         isOpen={isSidebarOpen} 
@@ -205,14 +194,8 @@ export function Records() {
                   placeholder="Search prescriptions..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
+                  className="min-w-0 w-full flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent" 
                 />
-                <button 
-                  onClick={loadRecords}
-                  disabled={loading}
-                  className="px-6 py-2 bg-[#38A3A5] text-white rounded-lg font-medium hover:bg-[#2d8284] transition-colors disabled:opacity-50">
-                  {loading ? 'Loading...' : 'Refresh'}
-                </button>
               </div>
             </div>
 
@@ -265,9 +248,7 @@ export function Records() {
                           {record.clinicName}
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                            {record.status || 'Unknown'}
-                          </span>
+                          <StatusBadge status={record.status} />
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex gap-2">
@@ -317,9 +298,7 @@ export function Records() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Status</p>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedRecord.status)}`}>
-                    {selectedRecord.status}
-                  </span>
+                  <StatusBadge status={selectedRecord.status} />
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Date</p>

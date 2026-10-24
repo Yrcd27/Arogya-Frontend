@@ -1,27 +1,29 @@
-import { PageContent } from '../../components/PageContent';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { Sidebar } from '../../components/doctor/Sidebar';
-import { Header } from '../../components/doctor/Header';
 import { consultationAPI } from '../../services/consultationService';
-import type { ConsultationCreate } from '../../services/consultationService';
+import type { Consultation, ConsultationCreate } from '../../services/consultationService';
 import { labTestAPI } from '../../services/labTestService';
 import { queueAPI } from '../../services/queueService';
 import { ApiError } from '../../services/httpClient';
 import { LabTestFormData } from '../../types/labTest';
 import { useAuth } from '../../hooks/useAuth';
+import { findConsultationForToken, isLabOrderSaved, progressForStatus } from '../../utils/consultationRecovery';
+import { statusLabel } from '../../utils/statusLabels';
 import { Plus, Trash2, FlaskConical, Stethoscope, FileText, User } from 'lucide-react';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, LAB_TEST_NAME_MAX_LENGTH, MAX_SESSION_NUMBER, getLabTestNameError, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 
-export function CreateConsultation() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const navigate = useNavigate();
-  const location = useLocation();
+interface CreateConsultationProps {
+  token: QueueTokenResponse;
+  patientName?: string;
+  clinicId?: number;
+  onClose: () => void;
+  onSaved: (tokenId: number, consultationId: number) => void;
+}
+
+export function CreateConsultation({ token, patientName, clinicId, onClose, onSaved }: CreateConsultationProps) {
   const { user: currentUser, sessionKey } = useAuth();
-  const { token, patientName, clinicId } = (location.state || {}) as { token?: QueueTokenResponse; patientName?: string; clinicId?: number };
   const currentSessionRef = useRef(sessionKey);
   currentSessionRef.current = sessionKey;
   const consultationContext = `${sessionKey}:${token?.id}:${token?.patientId}:${token?.clinicId}`;
@@ -41,6 +43,11 @@ export function CreateConsultation() {
   const [saveError, setSaveError] = useState('');
   const [unconfirmedWrite, setUnconfirmedWrite] = useState(false);
   const unconfirmedWriteRef = useRef(false);
+  const uncertainRef = useRef<{ kind: 'consultation' | 'lab'; labIndex: number } | null>(null);
+  const [recovery, setRecovery] = useState<'checking' | 'ready' | 'failed'>('checking');
+  const [recoveryNotice, setRecoveryNotice] = useState('');
+  const [labsOpen, setLabsOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const savingRef = useRef(false);
   const createdConsultationIdRef = useRef<number | null>(null);
@@ -51,19 +58,13 @@ export function CreateConsultation() {
   const [requestLabTests, setRequestLabTests] = useState(false);
   const [labTests, setLabTests] = useState<LabTestFormData[]>([]);
 
-  useEffect(() => {
-    if (!token) {
-      navigate('/doctor/queue');
-    }
-  }, [token, navigate]);
-
   const addLabTest = () => {
-    if (savingRef.current || createdConsultationIdRef.current !== null) return;
+    if (savingRef.current || createdConsultationIdRef.current !== null && !labsOpen) return;
     setLabTests(previous => [...previous, { testName: '', testDescription: '', testInstructions: '' }]);
   };
 
   const removeLabTest = (index: number) => {
-    if (savingRef.current || createdConsultationIdRef.current !== null) return;
+    if (savingRef.current || createdConsultationIdRef.current !== null && !labsOpen) return;
     setLabTests(labTests.filter((_, i) => i !== index));
     setLabErrors(previous => previous.filter((_, i) => i !== index));
   };
@@ -98,8 +99,92 @@ export function CreateConsultation() {
   const fieldError = (field: ConsultationField | 'sessionNumber') => formErrors[field]
     ? <p id={`consultation-${field}-error`} role="alert" className="text-red-500 text-xs mt-1.5">{formErrors[field]}</p> : null;
 
+  const lookupExisting = async (): Promise<Consultation | null> => {
+    const patientId = Number(token.patientId);
+    const doctorId = Number(currentUser?.id);
+    if (!isPositiveId(patientId) || !isPositiveId(doctorId)) throw new Error('The patient or signed-in doctor could not be verified.');
+    const fetchPage = async (page: number) => {
+      try {
+        return await consultationAPI.list({ patientId, doctorId, page, size: 100 });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 400 && err.bodyEmpty) return { items: [] as Consultation[], total: 0 };
+        throw err;
+      }
+    };
+    const first = await fetchPage(0);
+    const items = [...first.items];
+    if (first.total > items.length) items.push(...(await fetchPage(Math.ceil(first.total / 100) - 1)).items);
+    return findConsultationForToken(items, { tokenId: token.id, patientId, doctorId, clinicId: Number(token.clinicId) });
+  };
+
+  const adopt = async (found: Consultation) => {
+    const details = await consultationAPI.getWithTests(found.id);
+    const existingTests = details.labTests ?? [];
+    const progress = progressForStatus(found.status);
+    createdConsultationIdRef.current = found.id;
+    progressRef.current.started = progress.started;
+    progressRef.current.completed = progress.completed;
+    setChief(found.chiefComplaint ?? '');
+    setPresent(found.presentIllness ?? '');
+    setPast(found.pastMedicalHistory ?? '');
+    setRecom(found.recommendations ?? '');
+    setSessionNumber(String(found.sessionNumber ?? 1));
+    setLabsOpen(existingTests.length === 0);
+    setPartiallySaved(true);
+    setRecoveryNotice(`An earlier consultation (#${found.id}, ${statusLabel(found.status)}) is already saved for this patient's queue token.${existingTests.length ? ' Its lab tests are already ordered.' : ''} No new consultation will be created. Review it, then use Finish Saving to complete the remaining steps.`);
+  };
+
+  const initialCheckRef = useRef<() => Promise<void>>(async () => undefined);
+  initialCheckRef.current = async () => {
+    setRecovery('checking');
+    try {
+      const found = await lookupExisting();
+      if (found) await adopt(found);
+      setSaveError('');
+      setRecovery('ready');
+    } catch (err) {
+      setRecovery('failed');
+      setSaveError(`Could not check for an earlier saved consultation: ${err instanceof Error ? err.message : 'please try again.'} Use Check Save Status to retry before saving.`);
+    }
+  };
+
+  useEffect(() => {
+    void initialCheckRef.current();
+  }, [consultationContext]);
+
+  const verify = async () => {
+    if (savingRef.current || verifying) return;
+    setVerifying(true);
+    setSaveError('');
+    try {
+      const uncertain = uncertainRef.current;
+      const existingId = createdConsultationIdRef.current;
+      if (uncertain?.kind === 'lab' && existingId !== null) {
+        const details = await consultationAPI.getWithTests(existingId);
+        if (isLabOrderSaved(details.labTests ?? [], labTests, uncertain.labIndex)) {
+          progressRef.current.labOrders.add(uncertain.labIndex);
+          setRecoveryNotice(`Lab test ${uncertain.labIndex + 1} was found on the server. Use Finish Saving to continue.`);
+        } else {
+          setRecoveryNotice(`Lab test ${uncertain.labIndex + 1} was not found on the server, so it is safe to use Finish Saving again.`);
+        }
+      } else {
+        const found = await lookupExisting();
+        if (found) await adopt(found);
+        else setRecoveryNotice('No saved consultation was found on the server, so it is safe to save again.');
+        setRecovery('ready');
+      }
+      uncertainRef.current = null;
+      unconfirmedWriteRef.current = false;
+      setUnconfirmedWrite(false);
+    } catch (err) {
+      setSaveError(`Could not check the saved status: ${err instanceof Error ? err.message : 'please try again.'}`);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const save = async () => {
-    if (savingRef.current || unconfirmedWriteRef.current) return;
+    if (savingRef.current || unconfirmedWriteRef.current || recovery !== 'ready') return;
     setSaveError('');
     if (initialContextRef.current !== consultationContext) {
       setSaveError('The patient or signed-in session changed. Return to the queue and reopen this consultation.');
@@ -125,6 +210,8 @@ export function CreateConsultation() {
     };
     savingRef.current = true;
     setSaving(true);
+    setLabsOpen(false);
+    setRecoveryNotice('');
     let stage: 'consultation' | 'start' | 'complete' | 'queue' | 'lab' = 'consultation';
     let labIndex = -1;
     let pendingWrite: 'consultation' | 'lab' | null = null;
@@ -211,7 +298,7 @@ export function CreateConsultation() {
         }
       }
       toast.success('Consultation saved');
-      navigate('/doctor/queue', { state: { consultationCreated: true, tokenId: token.id, consultationId } });
+      onSaved(token.id, consultationId);
     } catch (err) {
       if (currentSessionRef.current !== submittedSession || currentContextRef.current !== consultationContext) return;
       if (stage === 'consultation') setFormErrors(getApiFieldErrors(err, [...CONSULTATION_FIELDS, 'sessionNumber']));
@@ -228,8 +315,9 @@ export function CreateConsultation() {
       }
       if (pendingWrite !== null && (!(err instanceof ApiError) || err.status === 0 || err.status >= 500 || err.status === 409)) {
         unconfirmedWriteRef.current = true;
+        uncertainRef.current = { kind: pendingWrite, labIndex };
         setUnconfirmedWrite(true);
-        setSaveError(`${pendingWrite === 'lab' ? `Consultation #${createdConsultationIdRef.current} exists, but lab test ${labIndex + 1}` : 'The consultation'} has an unconfirmed save outcome. Do not submit it again until you have checked the consultation history and lab orders with clinic staff. Return to the queue to review; automatic resubmission is blocked to avoid duplicates.`);
+        setSaveError(`${pendingWrite === 'lab' ? `Consultation #${createdConsultationIdRef.current} exists, but lab test ${labIndex + 1}` : 'The consultation'} has an unconfirmed save outcome. Automatic resubmission is blocked to avoid duplicates. Use Check Save Status to confirm what the server saved.`);
       }
       if (formRef.current) focusFirstInvalidField(formRef.current);
     } finally {
@@ -244,28 +332,11 @@ export function CreateConsultation() {
       toast.warn('This consultation was already created. Finish saving it before returning to the queue.');
       return;
     }
-    navigate('/doctor/queue');
+    onClose();
   };
 
-  if (!token) {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
-      <div className={`flex flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
-        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
-          <p className="text-gray-500 text-xs uppercase tracking-wide font-medium">
-            Dashboard / Patient Queue / Create Consultation
-          </p>
-        </PageContent>
-      </div>
-
+    <>
       {/* Create Consultation modal */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -309,8 +380,16 @@ export function CreateConsultation() {
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto">
-          <fieldset disabled={saving || unconfirmedWrite} className="p-6 space-y-6">
+          <fieldset disabled={saving || unconfirmedWrite || recovery === 'checking'} className="p-6 space-y-6">
             {saveError && <div role="alert" className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{saveError}</div>}
+            {recovery === 'checking' && (
+              <div role="status" className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
+                Checking for an earlier saved consultation for this patient...
+              </div>
+            )}
+            {recoveryNotice && (
+              <div role="status" className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">{recoveryNotice}</div>
+            )}
             {partiallySaved && !unconfirmedWrite && (
               <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
                 The consultation record exists. Saved clinical details are locked; correct any unsaved test errors, then use Finish Saving to retry the remaining steps.
@@ -448,7 +527,7 @@ export function CreateConsultation() {
                   <input
                     type="checkbox"
                     id="requestLabTests"
-                    disabled={partiallySaved}
+                    disabled={partiallySaved && !labsOpen}
                     checked={requestLabTests}
                     onChange={(e) => {
                       setRequestLabTests(e.target.checked);
@@ -474,7 +553,7 @@ export function CreateConsultation() {
                         </span>
                         <button
                           type="button"
-                          disabled={partiallySaved}
+                          disabled={partiallySaved && !labsOpen}
                           onClick={() => removeLabTest(index)}
                           className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
                           title="Remove test"
@@ -547,7 +626,7 @@ export function CreateConsultation() {
 
                   <button
                     type="button"
-                    disabled={partiallySaved}
+                    disabled={partiallySaved && !labsOpen}
                     onClick={addLabTest}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-[#38A3A5] border-2 border-dashed border-[#38A3A5]/40 rounded-lg hover:border-[#38A3A5] hover:bg-[#38A3A5]/5 transition-colors"
                   >
@@ -570,16 +649,26 @@ export function CreateConsultation() {
             >
               {unconfirmedWrite ? 'Return to Queue' : 'Cancel'}
             </button>
+            {(unconfirmedWrite || recovery === 'failed') && (
+              <button
+                type="button"
+                className="px-6 py-2.5 border border-[#38A3A5] bg-white text-[#38A3A5] rounded-lg hover:bg-[#38A3A5]/10 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => void verify()}
+                disabled={saving || verifying}
+              >
+                {verifying ? 'Checking...' : 'Check Save Status'}
+              </button>
+            )}
             <button
               type="submit"
               className="px-6 py-2.5 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              disabled={saving || unconfirmedWrite}
+              disabled={saving || unconfirmedWrite || recovery !== 'ready' || verifying}
             >
               {saving ? 'Saving...' : partiallySaved ? 'Finish Saving' : 'Save Consultation'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </>
   );
 }

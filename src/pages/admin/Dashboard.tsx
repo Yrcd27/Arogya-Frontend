@@ -6,14 +6,14 @@ import { EmptyState } from '../../components/EmptyState';
 import { ClinicList, DashboardMetric, DashboardPanel } from '../../components/dashboard/DashboardWidgets';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { operationalClinics } from '../../utils/dashboard';
-import { localDateString } from '../../utils/profileValidation';
+import { businessDateString } from '../../utils/businessDate';
 
 export function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const { clinics, assignments } = useDashboardData({ role: 'admin' });
-  const today = localDateString();
+  const today = businessDateString();
   const schedule = operationalClinics(clinics.data ?? []);
-  const refreshSchedule = () => { clinics.reload(); assignments.reload(); };
+  const refreshAssignments = () => { assignments.reload(); if (!clinics.data) clinics.reload(); };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -28,11 +28,11 @@ export function Dashboard() {
             <DashboardMetric label="Upcoming clinics" value={clinics.data ? schedule.filter(clinic => clinic.status === 'SCHEDULED').length : null} loading={clinics.loading} hint="Scheduled from today onward" icon={Stethoscope} />
           </div>
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <DashboardPanel title="Clinic schedule" description="In-progress clinics first, followed by the next scheduled visits." loading={clinics.loading} error={clinics.error} onRetry={clinics.reload} action={{ to: '/admin/clinics', label: 'Manage clinic schedules' }}>
+            <DashboardPanel title="Clinic schedule" description="In-progress clinics first, followed by the next scheduled visits." loading={clinics.loading} refreshing={clinics.refreshing} error={clinics.error} onRetry={clinics.reload} action={{ to: '/admin/clinics', label: 'Manage clinic schedules' }}>
               <ClinicList clinics={schedule} />
               {schedule.length > 5 && <p className="mt-3 text-xs text-gray-500">Showing 5 of {schedule.length} active and upcoming clinics.</p>}
             </DashboardPanel>
-            <DashboardPanel title="Doctor assignments" description="Coverage for the clinics in the schedule preview." loading={clinics.loading || assignments.loading} error={clinics.error || assignments.error} onRetry={refreshSchedule}>
+            <DashboardPanel title="Doctor assignments" description="Coverage for the clinics in the schedule preview." loading={clinics.loading || assignments.loading} refreshing={assignments.refreshing} error={(!clinics.data && clinics.error) || assignments.error} onRetry={refreshAssignments}>
               {!schedule.length ? <EmptyState icon={<Stethoscope />} title="No upcoming assignments" description="There are no upcoming clinic assignments to display." />
                 : <ul className="divide-y divide-gray-100">{schedule.slice(0, 5).map(clinic => {
                   const doctors = Array.from(new Map((assignments.data ?? []).filter(row => row.clinic?.id === clinic.id).map(row => [row.doctorRefId, row])).values());

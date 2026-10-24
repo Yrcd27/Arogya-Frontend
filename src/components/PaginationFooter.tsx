@@ -54,7 +54,7 @@ export function PaginationFooter({
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             disabled={loading}
-            className="ml-2 border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 focus:ring-2 focus:ring-[#38A3A5] focus:border-transparent disabled:opacity-60"
+            className="ml-2 !h-9 !w-[116px] !gap-1 !px-3 text-sm text-gray-700 hover:border-gray-400 focus-visible:!border-[#38A3A5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5]/30 disabled:opacity-60"
           >
             {pageSizeOptions.map(size => (
               <option key={size} value={size}>{size} / page</option>
@@ -67,7 +67,7 @@ export function PaginationFooter({
         <button
           onClick={() => onPageChange(Math.max(1, safePage - 1))}
           disabled={loading || safePage === 1}
-          className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex h-9 items-center justify-center px-3 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Prev
         </button>
@@ -83,7 +83,7 @@ export function PaginationFooter({
               aria-current={p === safePage ? 'page' : undefined}
               onClick={() => onPageChange(p)}
               disabled={loading}
-              className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors disabled:opacity-60 ${
+              className={`inline-flex h-9 min-w-9 items-center justify-center px-3 text-sm rounded-lg font-medium transition-colors disabled:opacity-60 ${
                 p === safePage
                   ? 'bg-[#38A3A5] text-white'
                   : 'text-gray-600 hover:bg-gray-100 border border-gray-300'
@@ -96,7 +96,7 @@ export function PaginationFooter({
         <button
           onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
           disabled={loading || safePage === totalPages}
-          className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex h-9 items-center justify-center px-3 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Next
         </button>

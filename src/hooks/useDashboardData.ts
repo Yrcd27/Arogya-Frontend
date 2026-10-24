@@ -29,18 +29,18 @@ function useDashboardRequest<T>(identity: string, enabled: boolean, load: (isCur
     if (!enabled) return;
     let cancelled = false;
     const isCurrent = () => !cancelled && identityRef.current === identity;
-    setState({ identity, data: null, loading: true, error: null });
+    setState(previous => ({ identity, data: previous.identity === identity ? previous.data : null, loading: true, error: null }));
     void Promise.resolve().then(() => isCurrent() ? loaderRef.current(isCurrent) : undefined).then(data => {
       if (isCurrent() && data !== undefined) setState({ identity, data, loading: false, error: null });
     }).catch((cause: unknown) => {
-      if (isCurrent()) setState({ identity, data: null, loading: false, error: cause instanceof Error ? cause.message : 'This information could not be loaded. Please try again.' });
+      if (isCurrent()) setState(previous => ({ identity, data: previous.identity === identity ? previous.data : null, loading: false, error: cause instanceof Error ? cause.message : 'This information could not be loaded. Please try again.' }));
     });
     return () => { cancelled = true; };
   }, [identity, enabled, attempt]);
 
   const reload = useCallback(() => setAttempt(value => value + 1), []);
   const current = enabled && state.identity === identity ? state : { data: null, loading: enabled, error: null };
-  return { ...current, reload };
+  return { ...current, loading: current.loading && current.data === null, refreshing: current.loading && current.data !== null, reload };
 }
 
 export function useDashboardData({ role, clinicId, worklistPage = 1 }: { role: DashboardRole; clinicId?: number | null; worklistPage?: number }) {

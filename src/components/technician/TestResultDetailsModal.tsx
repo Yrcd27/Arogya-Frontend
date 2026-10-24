@@ -9,6 +9,7 @@ import { EmptyState } from '../EmptyState';
 import { ConfirmModal } from '../ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
+import { StatusBadge } from '../StatusBadge';
 
 interface TestResultDetailsModalProps {
   labTest: LabTest;
@@ -193,7 +194,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <p className="text-sm text-gray-700"><span className="font-medium">Test:</span> {labTest.testName}</p>
               <p className="text-sm text-gray-700"><span className="font-medium">Test ID:</span> {labTest.id}</p>
-              <p className="text-sm text-gray-700"><span className="font-medium">Status:</span> {labTest.status}</p>
+              <p className="flex items-center gap-2 text-sm text-gray-700"><span className="font-medium">Status:</span> <StatusBadge status={labTest.status} /></p>
             </div>
 
             <div>
