@@ -2,7 +2,7 @@
 
 import { PROVINCES_DISTRICTS, type Clinic, type ClinicFilters, type CreateClinicRequest, type SelectedDoctor } from '../types/clinic';
 import type { FieldErrors } from './formValidation';
-import { localDateString, localTimeString } from './profileValidation';
+import { businessDateString, businessTimeString } from './businessDate';
 import { isPositiveId } from './clinicalValidation';
 
 export const CLINIC_FIELDS = ['clinicName', 'province', 'district', 'location', 'scheduledDate', 'scheduledTime', 'status', 'doctorIds'] as const;
@@ -35,7 +35,7 @@ export function getProvinceDistrictErrors(province: string, district: string, re
   return errors;
 }
 
-export function validateClinicFields(formData: CreateClinicRequest, selectedDoctors: SelectedDoctor[], isEditMode = false, allowedDoctorIds?: readonly number[], today = localDateString(), nowTime = localTimeString()): FieldErrors<ClinicField> {
+export function validateClinicFields(formData: CreateClinicRequest, selectedDoctors: SelectedDoctor[], isEditMode = false, allowedDoctorIds?: readonly number[], today = businessDateString(), nowTime = businessTimeString()): FieldErrors<ClinicField> {
   const errors: FieldErrors<ClinicField> = getProvinceDistrictErrors(formData.province, formData.district, true);
   if (!formData.clinicName.trim()) errors.clinicName = 'Clinic name is required.';
   else if (formData.clinicName.trim().length > CLINIC_NAME_MAX_LENGTH) errors.clinicName = `Clinic name must be ${CLINIC_NAME_MAX_LENGTH} characters or fewer.`;
@@ -55,7 +55,7 @@ export function validateClinicFields(formData: CreateClinicRequest, selectedDoct
   return errors;
 }
 
-export function validateClinicFilters(filters: ClinicFilters, today = localDateString()): FieldErrors<'province' | 'district' | 'start' | 'end' | 'status' | 'sortBy'> {
+export function validateClinicFilters(filters: ClinicFilters, today = businessDateString()): FieldErrors<'province' | 'district' | 'start' | 'end' | 'status' | 'sortBy'> {
   const errors = { ...getProvinceDistrictErrors(filters.province, filters.district) } as FieldErrors<'province' | 'district' | 'start' | 'end' | 'status' | 'sortBy'>;
   for (const field of ['start', 'end'] as const) {
     const date = filters.dateRange[field];
@@ -110,7 +110,7 @@ export const getDaysUntilClinic = (dateStr: string): string | null => {
  * Check if a date is in the past
  */
 export const isPastDate = (dateStr: string): boolean => {
-  return isValidClinicDate(dateStr) && dateStr < localDateString();
+  return isValidClinicDate(dateStr) && dateStr < businessDateString();
 };
 
 /**
@@ -164,7 +164,7 @@ export const sortClinics = (clinics: Clinic[], sortBy: string): Clinic[] => {
  * Get available clinics (scheduled and future dates only)
  */
 export const getAvailableClinics = (clinics: Clinic[]): Clinic[] => {
-  const today = localDateString();
+  const today = businessDateString();
   
   return clinics.filter((clinic: Clinic) => {
     return clinic.status === 'SCHEDULED' && isValidClinicDate(clinic.scheduledDate) && clinic.scheduledDate >= today;

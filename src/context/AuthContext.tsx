@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { getCurrentUser, removeCurrentUser, getToken, isTokenExpired, decodeJwtPayload } from '../utils/auth';
+import { clearStoredClinicSelections } from '../utils/doctorClinicSelection';
 import type { User } from '../types/user';
 import { AUTH_EXPIRED_EVENT } from '../services/httpClient';
 import { AuthContext } from './AuthContextType';
@@ -13,11 +14,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionKey, setSessionKey] = useState(0);
 
-  const logout = useCallback(() => {
+  const endSession = useCallback(() => {
     removeCurrentUser();
     setUser(null);
     setSessionKey(value => value + 1);
   }, []);
+
+  const logout = useCallback(() => {
+    clearStoredClinicSelections(getCurrentUser()?.id);
+    endSession();
+  }, [endSession]);
 
   const login = useCallback((userData: User) => {
     try {
@@ -61,10 +67,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const handleAuthExpired = () => logout();
+    const handleAuthExpired = () => endSession();
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
-  }, [logout]);
+  }, [endSession]);
 
   // Proactively log out right when the token expires, instead of waiting
   // for the next failed request.
@@ -75,12 +81,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!payload?.exp) return;
     const msUntilExpiry = payload.exp * 1000 - Date.now();
     if (msUntilExpiry <= 0) {
-      logout();
+      endSession();
       return;
     }
-    const timer = window.setTimeout(logout, msUntilExpiry);
+    const timer = window.setTimeout(endSession, msUntilExpiry);
     return () => window.clearTimeout(timer);
-  }, [user, logout]);
+  }, [user, endSession]);
 
   const value = {
     user,

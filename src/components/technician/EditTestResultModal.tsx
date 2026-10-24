@@ -7,6 +7,7 @@ import { isPositiveId } from '../../utils/clinicalValidation';
 import { ApiError } from '../../services/httpClient';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
 import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, normalizeTestResultFile, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
+import { MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TITLE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../dialogs/modalStyles';
 
 interface EditTestResultModalProps {
   testResult: TestResult;
@@ -157,17 +158,17 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={closeModal}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-gray-900">Edit Test Result</h3>
-          <button type="button" aria-label="Close edit result" onClick={closeModal} disabled={loading} className="text-gray-500 hover:text-gray-700 disabled:opacity-40">
-            <X className="w-6 h-6" />
+    <div className={`${MODAL_OVERLAY} z-50`} onClick={closeModal}>
+      <div className={`${MODAL_PANEL_SCROLL} max-w-2xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
+        <div className={MODAL_HEADER}>
+          <h3 className={MODAL_TITLE}>Edit Test Result</h3>
+          <button type="button" aria-label="Close edit result" onClick={closeModal} disabled={loading} className={MODAL_CLOSE}>
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
         {error && (
-          <div role="alert" className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <div role="alert" className={`mb-4 ${MODAL_ALERT}`}>
             {error}
           </div>
         )}
@@ -276,18 +277,18 @@ export function EditTestResultModal({ testResult, onClose, onSuccess }: EditTest
             )}
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className={MODAL_FOOTER}>
             <button
               type="button"
               onClick={closeModal}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className={BUTTON_SECONDARY}
               disabled={loading}
             >
               {outcomeUnknown ? 'Close and review worklist' : 'Cancel'}
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors disabled:opacity-50"
+              className={BUTTON_PRIMARY}
               disabled={loading || outcomeUnknown}
             >
               {loading ? 'Updating...' : 'Update Result'}

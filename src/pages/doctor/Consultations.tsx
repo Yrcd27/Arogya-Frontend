@@ -8,15 +8,19 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { StatusBadge } from '../../components/StatusBadge';
 import { PaginationFooter } from '../../components/PaginationFooter';
+import { RowActionsMenu } from '../../components/RowActionsMenu';
 import { toast } from 'react-toastify';
 import { consultationAPI, Consultation, ConsultationUpdate, ConsultationWithTests } from "../../services/consultationService";
 import { userAPI } from "../../services/userService";
-import { clinicAPI } from "../../services/api";
+import { clinicAPI, queueAPI } from "../../services/api";
 import { useAuth } from "../../hooks/useAuth";
+import { clearStoredServingTokenId, getStoredServingTokenId } from '../../utils/servingTokenStorage';
 import { ApiError } from '../../services/httpClient';
 import { FileText, FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
+import { DETAIL_LABEL, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL, MODAL_PANEL_SCROLL, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { DetailGrid, DetailItem, DetailText } from '../../components/dialogs/DetailItem';
 
 type PatientInfo = {
   id: number;
@@ -205,6 +209,20 @@ export default function Consultations() {
     return true;
   };
 
+  const completeLinkedQueueToken = async (consultation: Consultation) => {
+    const tokenId = consultation.queueTokenId;
+    const doctorId = user?.id;
+    if (typeof tokenId !== 'number' || !isPositiveId(tokenId) || typeof doctorId !== 'number' || !isPositiveId(doctorId)) return;
+    try {
+      const token = await queueAPI.getToken(tokenId);
+      if (token.status !== 'SERVING' || Number(token.clinicId) !== consultation.clinicId || Number(token.patientId) !== consultation.patientId) return;
+      await queueAPI.updateStatus(token.id, 'COMPLETED');
+      if (getStoredServingTokenId(doctorId, consultation.clinicId) === token.id) clearStoredServingTokenId(doctorId, consultation.clinicId);
+    } catch {
+      toast.warn('The consultation was completed, but its queue token could not be updated. Check the Patient Queue.');
+    }
+  };
+
   const changeStatus = async (id: number, operation: 'complete' | 'cancel') => {
     if (!canMutate(id)) return false;
     const submittedSession = sessionKey;
@@ -216,6 +234,7 @@ export default function Consultations() {
       if (updated.id !== id || updated.doctorId !== user?.id) throw new Error('The service did not confirm the updated consultation. Refresh before continuing.');
       setConsultations((prev) => prev.map((c) => (c.id === id ? updated : c)));
       toast.success(operation === 'complete' ? 'Consultation marked as complete' : 'Consultation cancelled');
+      if (operation === 'complete') await completeLinkedQueueToken(updated);
       return true;
     } catch (err) {
       if (currentSessionRef.current !== submittedSession) return false;
@@ -512,13 +531,6 @@ export default function Consultations() {
                   </button>
                 </div>
               )}
-              <button
-                onClick={() => { if (actionRef.current || editSavingRef.current) return; setSelectedIds(new Set()); void loadConsultations(currentPage); }}
-                disabled={loading || actionPending || savingEdit}
-                className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors font-medium disabled:opacity-50"
-              >
-                {loading ? 'Refreshing...' : 'Refresh'}
-              </button>
             </div>
           </div>
 
@@ -541,21 +553,21 @@ export default function Consultations() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-4 text-left w-10">
+                      <th className="px-4 py-3 text-left w-10">
                         <input
                           type="checkbox"
                           aria-label="Select all consultations on this page"
                           disabled={actionPending || savingEdit}
                           checked={paginatedConsultations.length > 0 && paginatedConsultations.every((c) => selectedIds.has(c.id))}
                           onChange={toggleSelectAllOnPage}
-                          className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                          className="h-4 w-4"
                         />
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Patient</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Chief Complaint</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Booked At</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
-                      <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Actions</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Patient</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Chief Complaint</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Booked At</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -565,17 +577,17 @@ export default function Consultations() {
                           className={`hover:bg-gray-50 cursor-pointer ${selectedIds.has(c.id) ? 'bg-[#38A3A5]/5' : ''}`}
                           onClick={() => handleConsultationClick(c)}
                         >
-                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               aria-label={`Select consultation ${c.id}`}
                               disabled={actionPending || savingEdit}
                               checked={selectedIds.has(c.id)}
                               onChange={() => toggleSelectRow(c.id)}
-                              className="w-4 h-4 text-[#38A3A5] border-gray-300 rounded focus:ring-[#38A3A5]"
+                              className="h-4 w-4"
                             />
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             {patients[c.patientId]?.name ? (
                               <span className="text-sm text-gray-900">{patients[c.patientId]?.name}</span>
                             ) : (
@@ -587,66 +599,49 @@ export default function Consultations() {
                               <span className="block mt-1 h-3 w-16 bg-gray-100 rounded animate-pulse" />
                             )}
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-700">{c.chiefComplaint || '-'}</span>
+                          <td className="max-w-xs px-4 py-3">
+                            <span className="line-clamp-2 break-words text-sm text-gray-700">{c.chiefComplaint || '-'}</span>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-600">{formatDateTime(c.bookedAt)}</span>
+                          <td className="px-4 py-3">
+                            <span className="whitespace-nowrap text-sm text-gray-600">{formatDateTime(c.bookedAt)}</span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="whitespace-nowrap px-4 py-3">
                             <StatusBadge status={c.status} />
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-end gap-2">
+                          <td className="w-px whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
                               {c.status === 'IN_PROGRESS' && (
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleComplete(c.id);
-                                  }}
-                                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  type="button"
+                                  onClick={() => { void handleComplete(c.id); }}
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#38A3A5]/10 hover:text-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] disabled:cursor-not-allowed disabled:opacity-40"
                                   title="Mark as complete"
+                                  aria-label={`Mark consultation #${c.id} as complete`}
                                   disabled={actionPending || savingEdit}
                                 >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </button>
-                              )}
-                              {(c.status === 'SCHEDULED' || c.status === 'IN_PROGRESS') && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCancel(c.id);
-                                  }}
-                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
-                                  title="Cancel consultation"
-                                  aria-label={`Cancel consultation #${c.id}`}
-                                  disabled={actionPending || savingEdit}
-                                >
-                                  <XCircle aria-hidden="true" className="h-5 w-5" />
+                                  <CheckCircle2 aria-hidden="true" className="h-[18px] w-[18px]" />
                                 </button>
                               )}
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEdit(c);
-                                }}
-                                className="p-2 text-gray-500 hover:text-[#2d8284] hover:bg-[#38A3A5]/10 rounded-lg transition-colors"
+                                type="button"
+                                onClick={() => openEdit(c)}
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#38A3A5]/10 hover:text-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] disabled:cursor-not-allowed disabled:opacity-40"
                                 title="Edit consultation"
+                                aria-label={`Edit consultation #${c.id}`}
                                 disabled={actionPending || savingEdit}
                               >
-                                <Pencil className="w-4 h-4" />
+                                <Pencil aria-hidden="true" className="h-[18px] w-[18px]" />
                               </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(c.id);
-                                }}
+                              <RowActionsMenu
+                                label={`More actions for consultation #${c.id}`}
                                 disabled={actionPending || savingEdit}
-                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
-                                title="Delete consultation"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                                actions={[
+                                  ...(c.status === 'SCHEDULED' || c.status === 'IN_PROGRESS'
+                                    ? [{ key: 'cancel', label: 'Cancel', icon: <XCircle aria-hidden="true" className="h-4 w-4" />, onSelect: () => handleCancel(c.id), destructive: true }]
+                                    : []),
+                                  { key: 'delete', label: 'Delete', icon: <Trash2 aria-hidden="true" className="h-4 w-4" />, onSelect: () => handleDelete(c.id), destructive: true },
+                                ]}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -674,75 +669,43 @@ export default function Consultations() {
 
       {/* Detail Modal */}
       {selectedConsultation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeConsultationDetails}>
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Consultation Details</h3>
-              <button onClick={closeConsultationDetails} disabled={actionPending} className="text-gray-500 hover:text-gray-700" aria-label="Close consultation details">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`${MODAL_OVERLAY} z-50`} onClick={closeConsultationDetails}>
+          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
+            <div className={MODAL_HEADER}>
+              <h3 className={MODAL_TITLE}>Consultation Details</h3>
+              <button type="button" onClick={closeConsultationDetails} disabled={actionPending} className={MODAL_CLOSE} aria-label="Close consultation details">
+                <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">ID</label>
-                <p className="text-gray-900">{selectedConsultation.id}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Status</label>
-                <p>
-                  <StatusBadge status={selectedConsultation.status} />
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Patient</label>
-                <p className="text-gray-900">{patients[selectedConsultation.patientId]?.name || `Patient #${selectedConsultation.patientId}`}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Clinic</label>
-                <p className="text-gray-900">{clinics[selectedConsultation.clinicId]?.clinicName || `Clinic #${selectedConsultation.clinicId}`}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Session Number</label>
-                <p className="text-gray-900">{selectedConsultation.sessionNumber || '-'}</p>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Chief Complaint</label>
-                <p className="text-gray-900">{selectedConsultation.chiefComplaint || '-'}</p>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Past Medical History</label>
-                <p className="text-gray-900 whitespace-pre-wrap">{selectedConsultation.pastMedicalHistory || '-'}</p>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Present Illness</label>
-                <p className="text-gray-900 whitespace-pre-wrap">{selectedConsultation.presentIllness || '-'}</p>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Recommendations</label>
-                <p className="text-gray-900 whitespace-pre-wrap">{selectedConsultation.recommendations || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Booked At</label>
-                <p className="text-gray-900">{formatDateTime(selectedConsultation.bookedAt)}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Completed At</label>
-                <p className="text-gray-900">{formatDateTime(selectedConsultation.completedAt)}</p>
-              </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Last Updated</label>
-                <p className="text-gray-900">{formatDateTime(selectedConsultation.updatedAt)}</p>
-              </div>
+            <DetailGrid>
+              <DetailItem label="ID">{selectedConsultation.id}</DetailItem>
+              <DetailItem label="Status"><StatusBadge status={selectedConsultation.status} /></DetailItem>
+              <DetailItem label="Patient">{patients[selectedConsultation.patientId]?.name || `Patient #${selectedConsultation.patientId}`}</DetailItem>
+              <DetailItem label="Clinic">{clinics[selectedConsultation.clinicId]?.clinicName || `Clinic #${selectedConsultation.clinicId}`}</DetailItem>
+              <DetailItem label="Session Number">{selectedConsultation.sessionNumber || '-'}</DetailItem>
+              <DetailItem label="Booked At">{formatDateTime(selectedConsultation.bookedAt)}</DetailItem>
+            </DetailGrid>
+
+            <div className="mt-5 space-y-4">
+              <DetailText label="Chief Complaint" missing={!selectedConsultation.chiefComplaint}>{selectedConsultation.chiefComplaint || 'Not provided'}</DetailText>
+              <DetailText label="Past Medical History" missing={!selectedConsultation.pastMedicalHistory}>{selectedConsultation.pastMedicalHistory || 'Not provided'}</DetailText>
+              <DetailText label="Present Illness" missing={!selectedConsultation.presentIllness}>{selectedConsultation.presentIllness || 'Not provided'}</DetailText>
+              <DetailText label="Recommendations" missing={!selectedConsultation.recommendations}>{selectedConsultation.recommendations || 'Not provided'}</DetailText>
             </div>
-            
+
+            <DetailGrid className="mt-5">
+              <DetailItem label="Completed At">{formatDateTime(selectedConsultation.completedAt)}</DetailItem>
+              <DetailItem label="Last Updated">{formatDateTime(selectedConsultation.updatedAt)}</DetailItem>
+            </DetailGrid>
+
             {/* Lab Tests Section */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center gap-2 mb-4">
-                <FlaskConical className="w-5 h-5 text-[#38A3A5]" />
-                <h4 className="text-lg font-semibold text-gray-900">Lab Tests</h4>
+            <div className="mt-5 border-t border-gray-100 pt-5">
+              <div className="mb-3 flex items-center gap-2">
+                <FlaskConical aria-hidden="true" className="h-5 w-5 text-[#38A3A5]" />
+                <h4 className="text-base font-semibold text-gray-900">Lab Tests</h4>
               </div>
               
               {loadingLabTests ? (
@@ -773,18 +736,18 @@ export default function Consultations() {
                         <StatusBadge status={test.status} />
                       </div>
                       {test.testDescription && (
-                        <p className="text-sm text-gray-700 mb-2">{test.testDescription}</p>
+                        <p className="mb-2 text-sm text-gray-900">{test.testDescription}</p>
                       )}
                       {test.testInstructions && (
                         <div className="mb-2">
-                          <span className="text-xs font-medium text-gray-500">Instructions:</span>
-                          <p className="text-sm text-gray-700 mt-1">{test.testInstructions}</p>
+                          <span className={DETAIL_LABEL}>Instructions</span>
+                          <p className="mt-1 text-sm text-gray-900">{test.testInstructions}</p>
                         </div>
                       )}
                       {test.testResults && (
-                        <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded">
-                          <span className="text-xs font-medium text-green-700">Results:</span>
-                          <p className="text-sm text-green-900 mt-1 whitespace-pre-wrap">{test.testResults}</p>
+                        <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
+                          <span className={DETAIL_LABEL}>Results</span>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{test.testResults}</p>
                         </div>
                       )}
                       <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
@@ -797,10 +760,10 @@ export default function Consultations() {
               )}
             </div>
             
-            <div className="mt-6 flex justify-end gap-3">
+            <div className={MODAL_FOOTER}>
               {selectedConsultation.status === 'IN_PROGRESS' && (
                 <button
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-[#38A3A5] px-4 text-sm font-medium text-white transition-colors hover:bg-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={actionPending || savingEdit || loading}
                   onClick={async () => {
                     if (await handleComplete(selectedConsultation.id)) closeConsultationDetails();
@@ -811,7 +774,7 @@ export default function Consultations() {
               )}
               {(selectedConsultation.status === 'SCHEDULED' || selectedConsultation.status === 'IN_PROGRESS') && (
                 <button
-                  className="px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={actionPending || savingEdit || loading}
                   onClick={() => handleCancel(selectedConsultation.id, true)}
                 >
@@ -819,7 +782,7 @@ export default function Consultations() {
                 </button>
               )}
               <button
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={actionPending}
                 onClick={closeConsultationDetails}
               >
@@ -833,7 +796,7 @@ export default function Consultations() {
       {/* Edit Modal */}
       {editingConsultation && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4"
+          className={`${MODAL_OVERLAY} z-50`}
           onClick={closeEdit}
         >
           <form
@@ -841,7 +804,7 @@ export default function Consultations() {
             noValidate
             aria-busy={savingEdit}
             onSubmit={event => { event.preventDefault(); void handleSaveEdit(); }}
-            className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+            className={`${MODAL_PANEL} flex max-h-[90vh] max-w-2xl flex-col overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 flex-shrink-0">
@@ -856,7 +819,7 @@ export default function Consultations() {
                 onClick={closeEdit}
                 aria-label="Close edit consultation"
                 disabled={savingEdit}
-                className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
+                className={MODAL_CLOSE}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

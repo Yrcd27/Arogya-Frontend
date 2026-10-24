@@ -8,12 +8,12 @@ import type { Clinic, ClinicDoctor } from '../types/clinic';
 import type { DoctorProfile, TechnicianProfile } from '../types/user';
 import { isPositiveId } from './clinicalValidation';
 import { getAvailableClinics, isValidClinicDate } from './clinic';
-import { localDateString } from './profileValidation';
+import { businessDateString } from './businessDate';
 
 export interface DashboardPage<T> { items: T[]; total: number }
 export interface RememberedQueues { tokens: QueueTokenResponse[]; unverified: number }
 
-export function operationalClinics(clinics: Clinic[], today = localDateString()): Clinic[] {
+export function operationalClinics(clinics: Clinic[], today = businessDateString()): Clinic[] {
   return clinics.filter(clinic => clinic.status === 'IN_PROGRESS'
     || clinic.status === 'SCHEDULED' && isValidClinicDate(clinic.scheduledDate) && clinic.scheduledDate >= today)
     .sort((a, b) => Number(b.status === 'IN_PROGRESS') - Number(a.status === 'IN_PROGRESS')

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { EyeIcon } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { PageContent } from '../PageContent';
@@ -10,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { loadDoctorProfiles, loadTechnicianProfiles } from '../../utils/dashboard';
 import type { DoctorProfile, TechnicianProfile } from '../../types/user';
+import { ViewAction } from '../ViewAction';
 
 const COPY: Record<StaffKind, { plural: string; title: string; speciality: string; fourth: string }> = {
   doctor: { plural: 'doctors', title: 'Doctors', speciality: 'Specialization', fourth: 'Experience' },
@@ -76,13 +76,14 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const rows = visible.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const isEmpty = !loading && !error && visible.length === 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className={`flex min-h-screen flex-col transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <PageContent>
+        <PageContent fill={isEmpty}>
           <div>
             <p className="mb-1 text-sm text-gray-600">Dashboard / {copy.title}</p>
             <h1 className="text-3xl font-bold text-gray-900">{copy.title}</h1>
@@ -91,8 +92,7 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
 
           {error && <div role="alert" className="rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">{error}</div>}
 
-          <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            <div className="border-b border-gray-200 p-6">
+            <div className="rounded-xl bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 sm:flex-row">
                 <input
                   type="search"
@@ -102,16 +102,8 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
                   maxLength={100}
                   autoComplete="off"
                   onChange={event => setSearchTerm(event.target.value)}
-                  className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-[#38A3A5]"
+                  className="min-w-0 w-full flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-transparent focus:ring-2 focus:ring-[#38A3A5]"
                 />
-                <button
-                  type="button"
-                  onClick={() => void load()}
-                  disabled={loading}
-                  className="rounded-lg bg-[#38A3A5] px-6 py-2 font-medium text-white transition-colors hover:bg-[#2d8284] disabled:opacity-50"
-                >
-                  {loading ? 'Loading...' : 'Refresh'}
-                </button>
               </div>
               {!loading && !error && sorted.length > 0 && (
                 <p role="status" className="mt-3 text-sm text-gray-500">
@@ -121,20 +113,22 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
             </div>
 
             {loading ? (
-              <div className="p-12 text-center text-gray-500">
+              <div className="rounded-xl bg-white p-12 text-center text-gray-500 shadow-sm">
                 <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-[#38A3A5]" />
                 <p className="mt-4">Loading {copy.plural}...</p>
               </div>
             ) : error ? null : sorted.length === 0 ? (
-              <EmptyState title={`No ${copy.plural} yet`} description={`No ${kind} profiles have been registered.`} />
+              <EmptyState variant="page" surface title={`No ${copy.plural} yet`} description={`No ${kind} profiles have been registered.`} />
             ) : visible.length === 0 ? (
               <EmptyState
+                variant="page"
+                surface
                 title={`No ${copy.plural} match your search`}
                 description="Try a different name, email or phone number."
                 action={{ label: 'Clear search', onClick: () => setSearchTerm('') }}
               />
             ) : (
-              <>
+              <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50">
@@ -160,16 +154,7 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{value(profile.phoneNumber)}</td>
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{fourthColumn(profile, kind)}</td>
                             <td className="px-6 py-4">
-                              <button
-                                type="button"
-                                aria-haspopup="dialog"
-                                aria-label={`View details for ${name}`}
-                                onClick={() => setSelected(profile)}
-                                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#38A3A5] hover:text-[#2d8284]"
-                              >
-                                <EyeIcon aria-hidden="true" className="h-4 w-4" />
-                                View
-                              </button>
+                              <ViewAction opensDialog label={`View details for ${name}`} onClick={() => setSelected(profile)} />
                             </td>
                           </tr>
                         );
@@ -185,9 +170,8 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
                   onPageChange={setCurrentPage}
                   onPageSizeChange={size => setPageSize(size)}
                 />
-              </>
+              </div>
             )}
-          </div>
         </PageContent>
       </div>
       <StaffDetailsModal kind={kind} profile={selected} onClose={() => setSelected(null)} />

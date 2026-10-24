@@ -20,6 +20,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { Select } from '../../components/Select';
+import { ViewAction } from '../../components/ViewAction';
 
 type ResultAvailability = 'checking' | 'present' | 'absent' | 'error';
 
@@ -512,12 +513,7 @@ export function LabTests() {
                         </td>
                         <td className="px-6 py-4">
                           {displayStatus === 'COMPLETED' || resultAvailability === 'present' ? (
-                            <button
-                              onClick={() => handleViewDetails(test)}
-                              className="text-[#38A3A5] hover:text-[#2d8284] font-medium text-sm"
-                            >
-                              View Result
-                            </button>
+                            <ViewAction label={`View result for ${test.testName}`} onClick={() => handleViewDetails(test)} />
                           ) : resultAvailability === 'checking' ? (
                             <button
                               type="button"

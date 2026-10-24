@@ -4,11 +4,13 @@ import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
 import { EmptyState } from '../../components/EmptyState';
 import { PaginationFooter } from '../../components/PaginationFooter';
-import { FlaskConicalIcon, DownloadIcon, EyeIcon, FileText, Calendar } from 'lucide-react';
+import { FlaskConicalIcon, DownloadIcon, FileText, Calendar } from 'lucide-react';
 import { medicalRecordsAPI, TestResult, TestResultFile } from '../../services/medicalRecordsService';
 import { labTestAPI } from '../../services/labTestService';
 import { useAuth } from '../../hooks/useAuth';
 import { FilePreviewModal } from '../../components/FilePreviewModal';
+import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { ViewAction } from '../../components/ViewAction';
 
 const PAGE_SIZE = 10;
 
@@ -211,7 +213,7 @@ export function LabResults() {
             </h1>
           </div>
 
-          {fileError && !selectedResult && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
+          {fileError && !selectedResult && <p role="alert" className={MODAL_ALERT}>{fileError}</p>}
           {error && (
             <div className="flex items-center justify-between gap-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
               <span>{error}</span>
@@ -238,26 +240,26 @@ export function LabResults() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Test Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Result</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">File</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Test Name</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Result</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">File</th>
+                      <th className="w-px whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {testResults.map(result => (
-                        <tr key={result.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
+                        <tr key={result.id} className="align-middle hover:bg-gray-50">
+                          <td className="whitespace-nowrap px-4 py-3">
                             <div className="flex items-center gap-2 text-sm text-gray-900">
-                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <Calendar aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />
                               {formatDate(result.createdAt)}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-[#38A3A5] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                <FlaskConicalIcon className="w-5 h-5 text-[#38A3A5]" />
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#38A3A5]/10">
+                                <FlaskConicalIcon aria-hidden="true" className="h-[18px] w-[18px] text-[#38A3A5]" />
                               </div>
                               {testNameByLabTestId[result.labTestId] ? (
                                 <span className="text-sm font-medium text-gray-900">{testNameByLabTestId[result.labTestId]}</span>
@@ -266,15 +268,15 @@ export function LabResults() {
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-gray-900 line-clamp-2">{result.testResultDescription}</p>
+                          <td className="max-w-md px-4 py-3">
+                            <p className="line-clamp-2 break-words text-sm leading-5 text-gray-900" title={result.testResultDescription}>{result.testResultDescription}</p>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="whitespace-nowrap px-4 py-3">
                             {result.files.length > 0 ? (
                               <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-[#38A3A5]" />
-                                <div className="text-sm">
-                                  <p className="text-gray-900 font-medium">
+                                <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-[#38A3A5]" />
+                                <div className="min-w-0 text-sm">
+                                  <p className="max-w-[12rem] truncate font-medium text-gray-900" title={result.files.length === 1 ? result.files[0].fileName : undefined}>
                                     {result.files.length === 1 ? result.files[0].fileName : `${result.files.length} files`}
                                   </p>
                                   {result.files.length === 1 && (
@@ -283,26 +285,22 @@ export function LabResults() {
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-sm text-gray-400">No file</span>
+                              <span className="whitespace-nowrap text-sm text-gray-400">No file</span>
                             )}
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => openResult(result)}
-                                className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
-                                title="View Details"
-                              >
-                                <EyeIcon className="w-4 h-4" />
-                              </button>
+                          <td className="w-px whitespace-nowrap px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <ViewAction label="View details" onClick={() => openResult(result)} />
                               {result.files.length === 1 && (
                                 <button
+                                  type="button"
                                   onClick={() => handleDownload(result.id, result.files[0].id, result.files[0].fileName)}
                                   disabled={downloadLoadingId !== null}
-                                  className="p-2 text-[#38A3A5] hover:bg-[#38A3A5] hover:bg-opacity-10 rounded-lg transition-colors"
-                                  title="Download File"
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-[#38A3A5]/10 hover:text-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] disabled:cursor-not-allowed disabled:opacity-40"
+                                  title="Download file"
+                                  aria-label="Download file"
                                 >
-                                  <DownloadIcon className="w-4 h-4" />
+                                  <DownloadIcon aria-hidden="true" className="h-[18px] w-[18px]" />
                                 </button>
                               )}
                             </div>
@@ -327,12 +325,12 @@ export function LabResults() {
       </div>
 
       {selectedResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40" onClick={closeResult}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 m-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Test Result Details</h3>
-              <button aria-label="Close test result" onClick={closeResult} className="text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`${MODAL_OVERLAY} z-50`} onClick={closeResult}>
+          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
+            <div className={MODAL_HEADER}>
+              <h3 className={MODAL_TITLE}>Test Result Details</h3>
+              <button type="button" aria-label="Close test result" onClick={closeResult} className={MODAL_CLOSE}>
+                <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -340,28 +338,28 @@ export function LabResults() {
 
             <div className="space-y-4">
               {fileError && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Test Name</label>
-                  <p className="text-gray-900">{testNameByLabTestId[selectedResult.labTestId] || 'Loading...'}</p>
+                  <p className={DETAIL_LABEL}>Test Name</p>
+                  <p className={DETAIL_VALUE}>{testNameByLabTestId[selectedResult.labTestId] || 'Loading...'}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Date</label>
-                  <p className="text-gray-900">{formatDate(selectedResult.createdAt)}</p>
+                  <p className={DETAIL_LABEL}>Date</p>
+                  <p className={DETAIL_VALUE}>{formatDate(selectedResult.createdAt)}</p>
                 </div>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-500">Test Result</label>
-                <p className="text-gray-900 whitespace-pre-wrap bg-green-50 p-4 rounded-lg border border-green-200 mt-1">
+                <p className={DETAIL_LABEL}>Test Result</p>
+                <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                   {selectedResult.testResultDescription}
                 </p>
               </div>
 
               {selectedResult.technicianNotes && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Technician Notes</label>
-                  <p className="text-gray-900 whitespace-pre-wrap bg-blue-50 p-4 rounded-lg border border-blue-200 mt-1">
+                  <p className={DETAIL_LABEL}>Technician Notes</p>
+                  <p className={`${MODAL_TEXT_BLOCK} mt-2`}>
                     {selectedResult.technicianNotes}
                   </p>
                 </div>
@@ -369,29 +367,29 @@ export function LabResults() {
 
               {selectedResult.files.length > 0 && (
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Attached Files ({selectedResult.files.length})</label>
+                  <p className={DETAIL_LABEL}>Attached Files ({selectedResult.files.length})</p>
                   <div className="mt-2 space-y-2">
                     {selectedResult.files.map(file => (
-                      <div key={file.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div key={file.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <FileText className="w-8 h-8 text-[#38A3A5] flex-shrink-0" />
+                          <FileText aria-hidden="true" className="h-6 w-6 shrink-0 text-[#38A3A5]" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
-                            <p className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</p>
+                            <p className="text-xs text-gray-600">{formatFileSize(file.fileSize)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
                             onClick={() => handlePreview(selectedResult.id, file)}
                             disabled={previewLoadingId !== null}
-                            className="px-3 py-2 text-[#38A3A5] hover:bg-[#38A3A5]/10 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                            className={`${BUTTON_OUTLINE} h-9 px-3`}
                           >
                             {previewLoadingId === file.id ? 'Loading...' : 'Preview'}
                           </button>
                           <button
                             onClick={() => handleDownload(selectedResult.id, file.id, file.fileName)}
                             disabled={downloadLoadingId !== null}
-                            className="px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors text-sm font-medium"
+                            className={`${BUTTON_PRIMARY} h-9 px-3`}
                           >
                             {downloadLoadingId === file.id ? 'Downloading...' : 'Download'}
                           </button>
@@ -403,9 +401,10 @@ export function LabResults() {
               )}
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className={MODAL_FOOTER}>
               <button
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                type="button"
+                className={BUTTON_SECONDARY}
                 onClick={closeResult}
               >
                 Close

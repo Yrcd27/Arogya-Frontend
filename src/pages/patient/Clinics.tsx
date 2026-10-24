@@ -1,11 +1,12 @@
 import { Select } from '../../components/Select';
+import { PaginationFooter } from '../../components/PaginationFooter';
 import { PageContent } from '../../components/PageContent';
 import { EmptyState } from '../../components/EmptyState';
 import { useState, useEffect, useRef } from 'react';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Sidebar } from '../../components/patient/Sidebar';
 import { Header } from '../../components/patient/Header';
-import { SearchIcon, MapPinIcon, CalendarIcon, UsersIcon, XIcon, HospitalIcon } from 'lucide-react';
+import { SearchIcon, MapPinIcon, CalendarIcon, UsersIcon, XIcon, HospitalIcon, InfoIcon, Loader2 } from 'lucide-react';
 import { clinicAPI, clinicDoctorAPI, queueAPI, profileAPI, userAPI } from '../../services/api';
 import { ApiError } from '../../services/httpClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -13,7 +14,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import type { QueueTokenResponse } from '../../services/queueService';
 import { Clinic, ClinicDoctor, PROVINCES_DISTRICTS, type ClinicFilters } from '../../types/clinic';
-import { localDateString } from '../../utils/profileValidation';
+import { businessDateString } from '../../utils/businessDate';
 import {
   getAvailableClinics,
   filterClinics,
@@ -23,6 +24,8 @@ import {
 } from '../../utils/clinic';
 import { ClinicCard } from '../../components/clinic/ClinicCard';
 import { DatePicker } from '../../components/DatePicker';
+import { StatusBadge } from '../../components/StatusBadge';
+import { BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TITLE } from '../../components/dialogs/modalStyles';
 
 const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
 const rememberedQueueTokens = new Map<string, string>();
@@ -104,6 +107,8 @@ export function Clinics() {
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Load clinics on component mount
   useEffect(() => {
@@ -404,21 +409,27 @@ export function Clinics() {
 
   const closeQueueModal = () => {
     if (joinRequestRef.current) return;
-    queueRequestRef.current += 1;
-    setQueueStatusReady(false);
     setIsQueueModalOpen(false);
   };
 
   const closeDetailsModal = () => {
     if (joinRequestRef.current) return;
     queueRequestRef.current += 1;
+    setQueueLoading(false);
     setQueueStatusReady(false);
     setIsDetailsModalOpen(false);
+  };
+
+  const retryQueueCheck = () => {
+    if (!selectedClinic || queueLoading || joinRequestRef.current) return;
+    void loadQueueForClinic(selectedClinic);
   };
 
   const activeQueueToken = queueTokens.find(
     token => patientId && String(token.patientId) === String(patientId) && (token.status === 'PENDING' || token.status === 'SERVING')
   );
+  const queueChecking = queueLoading || !queueStatusReady;
+  const queueCheckFailed = !queueChecking && !!queueError;
   const hasCompletedPatientProfile = patientProfileStatus === 'ready'
     && isPositiveId(currentPatientProfile?.id)
     && currentPatientProfile?.user?.id === user?.id;
@@ -448,6 +459,13 @@ export function Clinics() {
   const filterErrors = validateClinicFilters(clinicFilters);
   const filtersValid = Object.keys(filterErrors).length === 0;
   const filteredAndSortedClinics = filtersValid ? sortClinics(filterClinics(clinics, clinicFilters), 'date') : [];
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedClinics.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageClinics = filteredAndSortedClinics.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedProvince, selectedDistrict, dateRange.start, dateRange.end, pageSize]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -571,9 +589,10 @@ export function Clinics() {
                   {...filterProps('start')}
                   value={dateRange.start}
                   onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  min={localDateString()}
+                  min={businessDateString()}
                   placeholder="From Date"
                   size="compact"
+                  showToday
                 />
                 {filterError('start')}
               </div>
@@ -584,9 +603,10 @@ export function Clinics() {
                   {...filterProps('end')}
                   value={dateRange.end}
                   onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  min={filterErrors.start ? localDateString() : dateRange.start || localDateString()}
+                  min={filterErrors.start ? businessDateString() : dateRange.start || businessDateString()}
                   placeholder="To Date"
                   size="compact"
+                  showToday
                 />
                 {filterError('end')}
               </div>
@@ -612,7 +632,7 @@ export function Clinics() {
           {/* Clinics Grid */}
           {!isLoading && !error && filtersValid && filteredAndSortedClinics.length > 0 && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {filteredAndSortedClinics.map(clinic => {
+              {pageClinics.map(clinic => {
                 const alreadyJoined = joinedClinicIds.has(clinic.id);
                 const membershipLoading = queueMembershipLoading.has(clinic.id);
                 const membershipUnavailable = queueMembershipUnavailable.has(clinic.id);
@@ -654,6 +674,18 @@ export function Clinics() {
               })}
             </div>
           )}
+          {!isLoading && !error && filtersValid && filteredAndSortedClinics.length > 0 && (
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <PaginationFooter
+                currentPage={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredAndSortedClinics.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
+          )}
 
           {/* Empty State */}
           {!isLoading && !error && filtersValid && filteredAndSortedClinics.length === 0 && (
@@ -667,25 +699,27 @@ export function Clinics() {
 
       {/* Clinic Details Modal */}
       {isDetailsModalOpen && selectedClinic && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+        <div className={`${MODAL_OVERLAY} z-50`}>
+          <div className={`${MODAL_PANEL_SCROLL} max-w-2xl`}>
+            <div className="p-5 sm:p-6">
               {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Clinic Details</h2>
+              <div className={MODAL_HEADER}>
+                <h2 className={MODAL_TITLE}>Clinic Details</h2>
                 <button
+                  type="button"
                   onClick={closeDetailsModal}
                   disabled={joinLoading}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  aria-label="Close clinic details"
+                  className={MODAL_CLOSE}
                 >
-                  <XIcon className="w-5 h-5" />
+                  <XIcon aria-hidden="true" className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Clinic Information */}
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     {selectedClinic.clinicName}
                   </h3>
                   
@@ -749,58 +783,66 @@ export function Clinics() {
                   )}
                 </div>
 
-                {/* Action Note */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-blue-800 text-sm">
-                    💡 <strong>Planning to visit?</strong> Note down the location and time details. 
-                    Mobile clinics provide convenient healthcare services in your community.
-                  </p>
+                <div role="note" className="flex items-start gap-2 rounded-lg border border-[#bde6e7] bg-[#e6f6f6] px-3 py-2.5 text-sm text-[#2d8284]">
+                  <InfoIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p><strong>Planning to visit?</strong> Note down the location and time details. Mobile clinics provide convenient healthcare services in your community.</p>
                 </div>
 
-                {/* Queue Actions (auto-detected patient & clinic) */}
-                <div className="mt-6 space-y-4">
+                <div className="space-y-3 border-t border-gray-100 pt-4">
                   <h4 className="font-semibold text-gray-900">Queue Actions</h4>
-                  <div className="text-sm text-gray-700">
+                  <div role="status" aria-live="polite" className="text-sm text-gray-700">
                     {!hasCompletedPatientProfile ? (
                       <span className={patientProfileStatus === 'error' ? 'text-red-700' : 'text-amber-700'}>{patientProfileJoinMessage}</span>
                     ) : patientFetchError ? (
                       <span className="text-red-700">Please complete your profile first, then try again.</span>
-                    ) : patientId ? (
-                      <span>
-                        Joining as <span className="font-medium">{patientName || `Patient #${patientId}`}</span>
-                      </span>
-                    ) : (
+                    ) : !patientId ? (
                       <span>Detecting your patient profile...</span>
+                    ) : queueChecking ? (
+                      <span className="inline-flex items-center gap-2 text-gray-600">
+                        <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-[#38A3A5] motion-reduce:animate-none" />
+                        Checking your queue status...
+                      </span>
+                    ) : queueCheckFailed ? (
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-red-700">
+                        <span>Couldn't check your queue status. {queueError}</span>
+                        <button type="button" onClick={retryQueueCheck} className="rounded font-medium text-[#2d8284] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5]">Retry</button>
+                      </span>
+                    ) : activeQueueToken ? (
+                      <span>You're in this queue. Your token is <span className="font-medium">#{activeQueueToken.tokenNumber}</span>.</span>
+                    ) : (
+                      <span>Joining as <span className="font-medium">{patientName || `Patient #${patientId}`}</span></span>
                     )}
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap items-center justify-start gap-3">
+                    {!activeQueueToken && (
+                      <button
+                        type="button"
+                        onClick={handleJoinQueue}
+                        disabled={joinLoading || queueChecking || queueCheckFailed || !!patientFetchError || !patientId || !hasCompletedPatientProfile}
+                        className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 bg-[#38A3A5] text-white hover:bg-[#2d8284]"
+                      >
+                        {(joinLoading || queueChecking) && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />}
+                        {joinLoading ? 'Joining...' : queueChecking ? 'Checking Queue...' : queueCheckFailed ? 'Queue Unavailable' : profileJoinButtonLabel}
+                      </button>
+                    )}
                     <button
-                      onClick={handleJoinQueue}
-                      disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken || !hasCompletedPatientProfile}
-                      className={`px-4 py-2 bg-[#38A3A5] text-white rounded-lg transition-colors ${patientFetchError || activeQueueToken || !queueStatusReady || !hasCompletedPatientProfile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#2d8284]'} ${joinLoading ? 'opacity-60' : ''}`}
-                    >
-                      {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : profileJoinButtonLabel}
-                    </button>
-                    <button
+                      type="button"
                       onClick={handleViewQueue}
                       disabled={joinLoading || queueLoading}
-                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                      className={`inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${activeQueueToken ? 'bg-[#38A3A5] text-white hover:bg-[#2d8284]' : 'border border-[#38A3A5] bg-white text-[#2d8284] hover:bg-[#38A3A5]/10'}`}
                     >
                       View Queue
                     </button>
                   </div>
-                  {patientFetchError && (
-                    <p className="text-xs text-red-500 mt-1">Cannot join queue — please complete your profile first, then try again.</p>
-                  )}
                 </div>
               </div>
 
-              {/* Close Button */}
-              <div className="mt-6 pt-4 border-t">
+              <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
                 <button
+                  type="button"
                   onClick={closeDetailsModal}
                   disabled={joinLoading}
-                  className="w-full px-4 py-2 bg-[#38A3A5] text-white rounded-lg hover:bg-[#2d8284] transition-colors"
+                  className={BUTTON_SECONDARY}
                 >
                   Close
                 </button>
@@ -811,31 +853,36 @@ export function Clinics() {
       )}
 
       {isQueueModalOpen && selectedClinic && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+        <div className={`${MODAL_OVERLAY} z-[60]`}>
+          <div className={`${MODAL_PANEL_SCROLL} max-w-lg`}>
+            <div className="p-5 sm:p-6">
+              <div className={MODAL_HEADER}>
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900">Clinic Queue</h2>
+                  <h2 className={MODAL_TITLE}>Clinic Queue</h2>
                   <p className="text-sm text-gray-600">{selectedClinic.clinicName}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={closeQueueModal}
                   disabled={joinLoading}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  aria-label="Close clinic queue"
+                  className={MODAL_CLOSE}
                 >
-                  <XIcon className="w-5 h-5" />
+                  <XIcon aria-hidden="true" className="h-5 w-5" />
                 </button>
               </div>
 
               {joinSuccess && (
-                <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded text-sm">{joinSuccess}</div>
+                <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">{joinSuccess}</div>
               )}
               {joinError && (
-                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">{joinError}</div>
+                <div role="alert" className={`mb-4 ${MODAL_ALERT}`}>{joinError}</div>
               )}
               {queueError && (
-                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">{queueError}</div>
+                <div role="alert" className={`mb-4 flex items-center justify-between gap-3 ${MODAL_ALERT}`}>
+                  <span>{queueError}</span>
+                  <button type="button" onClick={retryQueueCheck} disabled={queueLoading} className="shrink-0 rounded px-2 py-1 font-medium text-red-800 hover:bg-red-100 disabled:opacity-50">Retry</button>
+                </div>
               )}
 
               {queueLoading ? (
@@ -850,8 +897,8 @@ export function Clinics() {
                     return (
                       <div
                         key={token.id}
-                        className={`flex items-center justify-between p-3 rounded border ${
-                          isMine ? 'bg-[#e6f6f6] border-[#38A3A5]' : 'bg-gray-50 border-gray-200'
+                        className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${
+                          isMine ? 'border-[#38A3A5] bg-[#e6f6f6]' : 'border-gray-200 bg-gray-50'
                         }`}
                       >
                         <div className="text-sm text-gray-800">
@@ -859,15 +906,7 @@ export function Clinics() {
                           <span className="ml-2">• Position: {token.position}</span>
                           {name && <span className="ml-2 text-gray-600">• {name}</span>}
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          token.status === 'SERVING'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : token.status === 'CANCELLED'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-gray-200 text-gray-800'
-                        }`}>
-                          {token.status}
-                        </span>
+                        <StatusBadge status={token.status} className="shrink-0" />
                       </div>
                     );
                   })}
@@ -879,14 +918,14 @@ export function Clinics() {
                   <h5 className="font-semibold text-gray-900 mb-2 text-sm">Done</h5>
                   <div className="space-y-2">
                     {queueTokens.filter(t => t.status === 'COMPLETED').map(t => (
-                      <div key={t.id} className="flex items-center justify-between p-3 rounded bg-green-50 border border-green-200">
+                      <div key={t.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
                         <div className="text-sm text-gray-800">
                           <span className="font-medium">Token #{t.tokenNumber}</span>
                           {nameById[String(t.patientId)] && (
                             <span className="ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
                           )}
                         </div>
-                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">COMPLETED</span>
+                        <StatusBadge status="COMPLETED" className="shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -897,20 +936,20 @@ export function Clinics() {
                 <p className="text-xs text-gray-400 mt-3">Some patient names could not be loaded. IDs are shown instead.</p>
               )}
 
-              <div className="mt-6 pt-4 border-t flex gap-3">
+              <div className={MODAL_FOOTER}>
                 <button
+                  type="button"
                   onClick={() => joinQueueForClinic(selectedClinic)}
-                  disabled={joinLoading || queueLoading || !queueStatusReady || !!patientFetchError || !patientId || !!activeQueueToken || !hasCompletedPatientProfile}
-                  className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors ${
-                    joinLoading || !queueStatusReady || patientFetchError || activeQueueToken || !hasCompletedPatientProfile ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#38A3A5] hover:bg-[#2d8284]'
-                  }`}
+                  disabled={joinLoading || queueChecking || queueCheckFailed || !!patientFetchError || !patientId || !!activeQueueToken || !hasCompletedPatientProfile}
+                  className={BUTTON_PRIMARY}
                 >
-                  {joinLoading ? 'Joining...' : !queueStatusReady ? 'Checking Queue...' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : profileJoinButtonLabel}
+                  {joinLoading ? 'Joining...' : queueChecking ? 'Checking Queue...' : queueCheckFailed ? 'Queue Unavailable' : activeQueueToken ? `In Queue: #${activeQueueToken.tokenNumber}` : profileJoinButtonLabel}
                 </button>
                 <button
+                  type="button"
                   onClick={closeQueueModal}
                   disabled={joinLoading}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                  className={BUTTON_SECONDARY}
                 >
                   Close
                 </button>

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Activity, Briefcase, Calendar, CreditCard, FileText, Mail, Phone, User, Wrench, type LucideIcon } from 'lucide-react';
 import { BaseModal } from '../dialogs/BaseModal';
+import { BUTTON_SECONDARY, DETAIL_LABEL, DETAIL_VALUE } from '../dialogs/modalStyles';
+import { DetailText } from '../dialogs/DetailItem';
 import { getAge } from '../../utils/profileValidation';
 import type { DoctorProfile, TechnicianProfile } from '../../types/user';
 
@@ -31,30 +33,20 @@ export function value(input: string | number | null | undefined): string {
 
 function Field({ icon: Icon, label, children, missing }: { icon: LucideIcon; label: string; children: ReactNode; missing?: boolean }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg bg-gray-50 p-4">
-      <Icon aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-[#38A3A5]" />
+    <div className="flex min-w-0 items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3">
+      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#38A3A5]" />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-500">{label}</p>
-        <p className={`break-words ${missing ? 'text-gray-400' : 'text-gray-900'}`}>{children}</p>
+        <p className={DETAIL_LABEL}>{label}</p>
+        <p className={missing ? 'mt-1.5 break-words text-sm leading-5 text-gray-500' : DETAIL_VALUE}>{children}</p>
       </div>
-    </div>
-  );
-}
-
-function TextBlock({ label, text }: { label: string; text: string }) {
-  const missing = text === NOT_PROVIDED;
-  return (
-    <div>
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      <p className={`mt-1 whitespace-pre-wrap break-words rounded-lg border p-3 ${missing ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-[#bde6e7] bg-[#f3fbfb] text-gray-800'}`}>{text}</p>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border-t pt-4">
-      <h4 className="mb-3 text-lg font-semibold text-gray-900">{title}</h4>
+    <div className="border-t border-gray-100 pt-5">
+      <h4 className="mb-3 text-base font-semibold text-gray-900">{title}</h4>
       {children}
     </div>
   );
@@ -69,22 +61,23 @@ export function StaffDetailsModal({ kind, profile, onClose }: { kind: StaffKind;
   const specialityText = profile ? speciality(profile, kind) : '';
 
   return (
-    <BaseModal isOpen={profile !== null} title={kind === 'doctor' ? 'Doctor Profile' : 'Technician Profile'} size="lg" onClose={onClose}>
+    <BaseModal isOpen={profile !== null} title={kind === 'doctor' ? 'Doctor Profile' : 'Technician Profile'} size="lg" onClose={onClose}
+      footer={<div className="flex justify-end"><button type="button" onClick={onClose} className={BUTTON_SECONDARY}>Close</button></div>}>
       {profile && (
-        <div className="space-y-6">
-          <div className="rounded-lg bg-gradient-to-r from-[#38A3A5] to-[#2d8284] p-6 text-white">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white">
-                <User aria-hidden="true" className="h-8 w-8 text-[#38A3A5]" />
+        <div className="space-y-5">
+          <div className="rounded-lg bg-gradient-to-r from-[#38A3A5] to-[#2d8284] px-4 py-3 text-white">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white">
+                <User aria-hidden="true" className="h-6 w-6 text-[#38A3A5]" />
               </div>
               <div className="min-w-0">
-                <h3 className="break-words text-2xl font-bold">{displayName(profile, kind)}</h3>
+                <h3 className="break-words text-xl font-bold">{displayName(profile, kind)}</h3>
                 {specialityText && <p className="mt-1 break-words text-white/90">{specialityText}</p>}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field icon={Calendar} label="Date of Birth" missing={!dob}>
               {dob || NOT_PROVIDED}
               {dob && age !== undefined && <span className="ml-2 text-sm text-gray-600">({age} years old)</span>}
@@ -99,7 +92,7 @@ export function StaffDetailsModal({ kind, profile, onClose }: { kind: StaffKind;
           </Section>
 
           <Section title="Professional Information">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {doctor && (
                 <>
                   <Field icon={Briefcase} label="Specialization" missing={!doctor.specialization}>{value(doctor.specialization)}</Field>
@@ -116,8 +109,8 @@ export function StaffDetailsModal({ kind, profile, onClose }: { kind: StaffKind;
               )}
             </div>
             <div className="mt-4">
-              {doctor && <TextBlock label="Medical Qualifications" text={value(doctor.qualification)} />}
-              {technician && <TextBlock label="Certification" text={value(technician.certification)} />}
+              {doctor && <DetailText label="Medical Qualifications" missing={value(doctor.qualification) === NOT_PROVIDED}>{value(doctor.qualification)}</DetailText>}
+              {technician && <DetailText label="Certification" missing={value(technician.certification) === NOT_PROVIDED}>{value(technician.certification)}</DetailText>}
             </div>
           </Section>
         </div>
