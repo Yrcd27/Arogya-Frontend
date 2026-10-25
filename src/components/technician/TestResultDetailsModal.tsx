@@ -10,7 +10,8 @@ import { ConfirmModal } from '../ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { StatusBadge } from '../StatusBadge';
-import { DETAIL_LABEL, DETAIL_VALUE, MODAL_ALERT, MODAL_CLOSE, MODAL_HEADER, MODAL_INFO_PANEL, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE, BUTTON_DANGER, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../dialogs/modalStyles';
+import { DETAIL_LABEL, DETAIL_VALUE, MODAL_ALERT, MODAL_CLOSE, MODAL_INFO_PANEL, MODAL_OVERLAY, MODAL_TEXT_BLOCK, MODAL_TITLE, BUTTON_DANGER, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_PANEL_FLEX, MODAL_HEAD_FIXED, MODAL_BODY, MODAL_FOOT_FIXED } from '../dialogs/modalStyles';
+import { NoTranslate } from '../NoTranslate';
 
 interface TestResultDetailsModalProps {
   labTest: LabTest;
@@ -177,23 +178,24 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
 
   return (
     <div className={`${MODAL_OVERLAY} z-50`} onClick={closeModal}>
-      <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
-        <div className={MODAL_HEADER}>
+      <div role="dialog" aria-modal="true" aria-label="Test result details" className={`${MODAL_PANEL_FLEX} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
+        <div className={MODAL_HEAD_FIXED}>
           <h3 className={MODAL_TITLE}>Test Result Details</h3>
           <button type="button" aria-label="Close test result details" onClick={closeModal} disabled={deleting || retaking} className={MODAL_CLOSE}>
             <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
+        <div className={MODAL_BODY}>
         {loading ? (
-          <div className="text-center py-8 text-gray-600">Loading...</div>
+          <div key="loading" className="text-center py-8 text-gray-600">Loading...</div>
         ) : error ? (
-          <div role="alert" className="text-center py-8 text-red-700">{error}<button type="button" onClick={() => void loadTestResult()} className="ml-3 underline">Retry</button></div>
+          <div key="error" role="alert" className="text-center py-8 text-red-700">{error}<button type="button" onClick={() => void loadTestResult()} className="ml-3 underline">Retry</button></div>
         ) : testResult ? (
-          <div className="space-y-4">
+          <div key="result" className="space-y-4">
             {fileError && <p role="alert" className={MODAL_ALERT}>{fileError}</p>}
             <div className={MODAL_INFO_PANEL}>
-              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test:</span> {labTest.testName}</p>
+              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test:</span> <NoTranslate>{labTest.testName}</NoTranslate></p>
               <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test ID:</span> {labTest.id}</p>
               <p className="flex items-center gap-2 text-sm text-gray-900"><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={labTest.status} /></p>
             </div>
@@ -222,7 +224,7 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
                     <div key={file.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <FileText className="w-5 h-5 text-gray-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
+                        <p translate="no" className="notranslate text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
                         <p className="text-xs text-gray-600">{formatFileSize(file.fileSize)}</p>
                       </div>
                       <button
@@ -257,35 +259,9 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
                 <p className={DETAIL_VALUE}>{new Date(testResult.updatedAt).toLocaleString()}</p>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
-              <button
-                onClick={() => { if (!mutationRef.current) onEdit(testResult); }}
-                disabled={deleting || retaking}
-                className={BUTTON_PRIMARY}
-              >
-                <Edit className="w-4 h-4" />
-                Edit Result
-              </button>
-              <button
-                onClick={() => setConfirmingDelete(true)}
-                disabled={deleting || retaking}
-                className={BUTTON_DANGER}
-              >
-                <Trash2 className="w-4 h-4" />
-                Delete Result
-              </button>
-              <button
-                onClick={closeModal}
-                disabled={deleting || retaking}
-                className={`${BUTTON_SECONDARY} ml-auto`}
-              >
-                Close
-              </button>
-            </div>
           </div>
         ) : (
-          <div className="text-center">
+          <div key="empty" className="text-center">
             <EmptyState icon={<FileText />} title="No test result available" description="No test result was found for this lab test." headingLevel={4} />
             {labTest.status === 'COMPLETED' && (
               <>
@@ -308,6 +284,40 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
             )}
           </div>
         )}
+        </div>
+
+        <div className={MODAL_FOOT_FIXED}>
+          {testResult && !loading && !error && (
+            <div className="mr-auto flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { if (!mutationRef.current) onEdit(testResult); }}
+                disabled={deleting || retaking}
+                className={BUTTON_PRIMARY}
+              >
+                <Edit className="w-4 h-4" />
+                Edit Result
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={deleting || retaking}
+                className={BUTTON_DANGER}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Result
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={closeModal}
+            disabled={deleting || retaking}
+            className={BUTTON_SECONDARY}
+          >
+            Close
+          </button>
+        </div>
       </div>
 
       {previewFile && previewUrl && (

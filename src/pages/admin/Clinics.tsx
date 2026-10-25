@@ -35,6 +35,7 @@ import { TimePicker } from '../../components/TimePicker';
 import { PaginationFooter } from '../../components/PaginationFooter';
 import { statusLabel } from '../../utils/statusLabels';
 import { MODAL_ALERT, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL, MODAL_TITLE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../../components/dialogs/modalStyles';
+import { NoTranslate } from '../../components/NoTranslate';
 
 export function Clinics() {
   const { user, sessionKey } = useAuth();
@@ -83,13 +84,15 @@ export function Clinics() {
     district: '',
     location: '',
     scheduledDate: '',
-    scheduledTime: '',
+    scheduledTime: '08:00',
     status: 'SCHEDULED'
   });
 
   // Doctor search and selection state
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctors, setSelectedDoctors] = useState<SelectedDoctor[]>([]);
+  const selectedDoctorsListRef = useRef<HTMLUListElement>(null);
+  const previousDoctorCountRef = useRef(0);
   const [doctorToRemove, setDoctorToRemove] = useState<{ doctor: SelectedDoctor; session: number; clinicId: number | null } | null>(null);
   const [confirmingCancellation, setConfirmingCancellation] = useState(false);
   const [statusChangeId, setStatusChangeId] = useState<number | null>(null);
@@ -213,6 +216,12 @@ export function Clinics() {
 
   const fieldError = (field: ClinicField) => fieldErrors[field]
     ? <p id={`clinic-${field}-error`} role="alert" className="mt-1.5 text-sm text-red-600">{fieldErrors[field]}</p> : null;
+
+  useEffect(() => {
+    const list = selectedDoctorsListRef.current;
+    if (list && selectedDoctors.length > previousDoctorCountRef.current) list.scrollTop = list.scrollHeight;
+    previousDoctorCountRef.current = selectedDoctors.length;
+  }, [selectedDoctors.length]);
 
   const handleDoctorSelect = (doctor: Doctor) => {
     if (savingRef.current || assignmentsLoadingRef.current || isEditMode && !assignmentsReadyRef.current) return;
@@ -349,7 +358,7 @@ export function Clinics() {
       district: '',
       location: '',
       scheduledDate: '',
-      scheduledTime: '',
+      scheduledTime: '08:00',
       status: 'SCHEDULED'
     });
     setSelectedDoctors([]);
@@ -455,7 +464,7 @@ export function Clinics() {
         doctorIds,
       });
       if (currentSessionRef.current !== requestSession) return;
-      toast.success(`${clinic.clinicName} is now ${statusLabel(status)}`);
+      toast.success(<><NoTranslate>{clinic.clinicName}</NoTranslate> is now {statusLabel(status)}</>);
       void loadClinics();
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
@@ -500,7 +509,7 @@ export function Clinics() {
       status: statusFilter,
       sortBy: 'date'
     }),
-    'date'
+    'recent'
   );
   const totalPages = Math.max(1, Math.ceil(filteredClinics.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -662,7 +671,7 @@ export function Clinics() {
       {/* Schedule Clinic Modal */}
       {isModalOpen && (
         <div className={`${MODAL_OVERLAY} z-50`}>
-          <div role="dialog" aria-modal="true" aria-labelledby="clinic-form-title" className={`${MODAL_PANEL} flex max-h-[90vh] max-w-2xl flex-col overflow-hidden`}>
+          <div role="dialog" aria-modal="true" aria-labelledby="clinic-form-title" className={`${MODAL_PANEL} flex max-h-[90vh] max-w-3xl flex-col overflow-hidden`}>
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
               <h2 id="clinic-form-title" className={MODAL_TITLE}>
                 {isEditMode ? 'Edit Clinic' : 'Schedule New Clinic'}
@@ -868,30 +877,33 @@ export function Clinics() {
                     {/* Selected Doctors */}
                     {selectedDoctors.length > 0 && (
                       <div>
-                        <p className="text-sm font-medium text-gray-700 mb-2">Selected Doctors:</p>
-                        <div className="space-y-2">
+                        <p className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                          Selected Doctors
+                          <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-[#38A3A5]/10 px-2 py-0.5 text-xs font-semibold text-[#2d8284]">{selectedDoctors.length}</span>
+                        </p>
+                        <ul ref={selectedDoctorsListRef} aria-label="Selected doctors" className="max-h-[13.5rem] space-y-2 overflow-y-auto overscroll-contain pr-1">
                           {selectedDoctors.map(doctor => (
-                            <div key={doctor.doctorId} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <CheckIcon className="w-4 h-4 text-green-600" />
-                                <div>
-                                  <span className="font-medium">{doctor.name}</span>
-                                  <span className="text-gray-600 text-sm ml-2">- {doctor.specialization}</span>
+                            <li key={doctor.doctorId} className="flex h-12 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-1.5">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <CheckIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#38A3A5]" />
+                                <div className="min-w-0 leading-tight">
+                                  <p translate="no" className="notranslate truncate text-sm font-medium text-gray-900">{doctor.name}</p>
+                                  <p translate="no" className="notranslate truncate text-xs text-[#2d8284]">{doctor.specialization}</p>
                                 </div>
                               </div>
                               <button
                                 type="button"
                                 disabled={saving || assignmentsLoading || doctorLookupFailed}
                                 aria-label={`Remove ${doctor.name} from this clinic`}
-                                title="Remove Doctor"
+                                title="Remove doctor"
                                 onClick={() => setDoctorToRemove({ doctor, session: sessionKey, clinicId: editingClinicIdRef.current })}
-                                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                <XCircle aria-hidden="true" className="h-5 w-5" />
+                                <XCircle aria-hidden="true" className="h-[18px] w-[18px]" />
                               </button>
-                            </div>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
                     )}
                     </>
@@ -927,7 +939,7 @@ export function Clinics() {
       <ConfirmDialog
         isOpen={isModalOpen && doctorToRemove !== null && doctorToRemove.session === sessionKey}
         title="Remove Doctor?"
-        message={`Remove ${doctorToRemove?.doctor.name ?? 'this doctor'} from this clinic's selected doctors? The assignment changes when you save the clinic.`}
+        message={<>Remove <NoTranslate>{doctorToRemove?.doctor.name ?? 'this doctor'}</NoTranslate> from this clinic's selected doctors? The assignment changes when you save the clinic.</>}
         confirmLabel="Remove Doctor"
         cancelLabel="Keep Doctor"
         loading={saving || assignmentsLoading}
@@ -938,7 +950,7 @@ export function Clinics() {
       <ConfirmDialog
         isOpen={isModalOpen && confirmingCancellation}
         title="Cancel Clinic?"
-        message={`Save changes and mark "${editingClinic?.clinicName ?? formData.clinicName}" as cancelled?`}
+        message={<>Save changes and mark "<NoTranslate>{editingClinic?.clinicName ?? formData.clinicName}</NoTranslate>" as cancelled?</>}
         confirmLabel="Cancel Clinic"
         cancelLabel="Keep Editing"
         loading={saving}
@@ -952,7 +964,7 @@ export function Clinics() {
       <ConfirmDialog
         isOpen={clinicToCancel !== null}
         title="Cancel Clinic?"
-        message={`Mark "${clinicToCancel?.clinicName}" as cancelled? Patients will no longer be able to join its queue.`}
+        message={<>Mark "<NoTranslate>{clinicToCancel?.clinicName}</NoTranslate>" as cancelled? Patients will no longer be able to join its queue.</>}
         confirmLabel="Cancel Clinic"
         cancelLabel="Keep Clinic"
         loading={statusChangeId !== null}
@@ -969,7 +981,7 @@ export function Clinics() {
       <ConfirmModal
         isOpen={clinicToDelete !== null}
         title="Delete Clinic"
-        message={`Are you sure you want to delete "${clinicToDelete?.clinicName}"? This action cannot be undone.`}
+        message={<>Are you sure you want to delete "<NoTranslate>{clinicToDelete?.clinicName}</NoTranslate>"? This action cannot be undone.</>}
         confirmLabel="Delete"
         confirmClassName="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
         onConfirm={handleDeleteConfirm}

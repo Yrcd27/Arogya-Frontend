@@ -499,7 +499,7 @@ export function Profile() {
               incomplete={!hasProfile}
               onEdit={startEditing}
               sections={[
-                { title: 'Personal information', details: [{ label: 'First name', value: formData.firstName }, { label: 'Last name', value: formData.lastName }, { label: 'Date of birth', value: formData.dateOfBirth }, { label: 'NIC number', value: formData.nicNumber }, { label: 'Gender', value: hasProfile ? formData.gender : '' }] },
+                { title: 'Personal information', details: [{ label: 'First name', value: formData.firstName }, { label: 'Last name', value: formData.lastName }, { label: 'Date of birth', value: formData.dateOfBirth }, { label: 'NIC number', value: formData.nicNumber }, { label: 'Gender', value: hasProfile ? formData.gender : '', translatable: true }] },
                 { title: 'Medical information', details: [{ label: 'Blood group', value: hasProfile ? formData.bloodGroup : '' }, { label: 'Allergies', value: formData.allergies }, { label: 'Chronic diseases', value: formData.chronicDiseases }] },
                 { title: 'Contact information', details: [{ label: 'Phone number', value: formData.phoneNumber }, { label: 'Address', value: formData.address }, { label: 'Emergency contact', value: formData.emergencyContact }] },
               ]}

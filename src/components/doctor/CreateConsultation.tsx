@@ -14,6 +14,7 @@ import type { QueueTokenResponse } from '../../services/queueService';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, LAB_TEST_NAME_MAX_LENGTH, MAX_SESSION_NUMBER, getLabTestNameError, getSessionNumberError, isPositiveId, normalizeConsultation, validateConsultation, validateLabOrders, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
 import { BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL } from '../../components/dialogs/modalStyles';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 interface CreateConsultationProps {
   token: QueueTokenResponse;
@@ -358,7 +359,7 @@ export function CreateConsultation({ token, patientName, clinicId, onClose, onSa
                 <User className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-lg lg:text-xl font-bold text-gray-900">
+                <h1 {...noTranslateProps('text-lg lg:text-xl font-bold text-gray-900', !!patientName)}>
                   {patientName || `Patient #${token.patientId}`}
                 </h1>
                 <p className="text-sm text-gray-500">

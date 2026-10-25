@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 import { Sidebar } from '../../components/doctor/Sidebar';
 import { Header } from '../../components/doctor/Header';
 import { PatientProfileModal } from '../../components/doctor/PatientProfileModal';
-import { CreateConsultation } from './CreateConsultation';
+import { CreateConsultation } from '../../components/doctor/CreateConsultation';
 import { StatusBadge } from '../../components/StatusBadge';
 import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
 import { ClipboardCheck, ClipboardList, SearchIcon, PhoneCallIcon, XCircle, Loader2, RefreshCw, UsersRound } from 'lucide-react';
@@ -22,6 +22,8 @@ import { clearStoredClinicId, getStoredClinicId, storeClinicId } from '../../uti
 import { clearStoredServingTokenId, getStoredServingTokenId, setStoredServingTokenId } from '../../utils/servingTokenStorage';
 import type { Clinic } from '../../types/clinic';
 import { ViewAction } from '../../components/ViewAction';
+import { NoTranslate } from '../../components/NoTranslate';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 export function Queue() {
   const { profile, status: profileStatus } = useUserProfile();
@@ -414,6 +416,7 @@ export function Queue() {
               <div className="min-w-0">
                 <label htmlFor="doctor-queue-clinic" className="mb-2 block text-sm font-medium text-gray-700">Select Clinic</label>
                 <Select
+                  protectLabels
                   id="doctor-queue-clinic"
                   value={selectedClinicId ?? ''}
                   onChange={(e) => selectClinic(e.target.value ? Number(e.target.value) : null)}
@@ -515,7 +518,7 @@ export function Queue() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-[#2d8284]">Now serving</p>
-                  <p className="break-words font-semibold text-gray-900">{nameById[String(verifiedServingToken.patientId)] || 'Patient #' + verifiedServingToken.patientId}</p>
+                  <p {...noTranslateProps('break-words font-semibold text-gray-900', !!nameById[String(verifiedServingToken.patientId)])}>{nameById[String(verifiedServingToken.patientId)] || 'Patient #' + verifiedServingToken.patientId}</p>
                 </div>
               </div>
               <button
@@ -553,12 +556,12 @@ export function Queue() {
               </div>
 
               {queueIsLoading ? (
-                <div role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-gray-600">
+                <div key="loading" role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-gray-600">
                   <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[#38A3A5] motion-reduce:animate-none" />
                   Loading patient queue...
                 </div>
               ) : error ? (
-                <div role="alert" className="p-6 text-center">
+                <div key="error" role="alert" className="p-6 text-center">
                   <p className="font-medium text-gray-900">Unable to load the patient queue</p>
                   <p className="mt-1 break-words text-sm text-red-700">{error}</p>
                   <button type="button" onClick={() => void loadQueue(selectedClinicId)} disabled={actionLoadingId !== null} className={primaryActionClass + ' mt-4'}>Try again</button>
@@ -568,9 +571,9 @@ export function Queue() {
                   description={queueTokens.length === 0 ? 'New waiting patients will appear here. Refresh to check for updates.' : 'Try another patient name or token number.'}
                   action={queueTokens.length > 0 ? { label: 'Clear search', onClick: () => setSearchTerm('') } : undefined} />
               ) : (
-                <div role="region" aria-label="Patient queue table" tabIndex={0} className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#38A3A5]">
+                <div key="table" role="region" aria-label="Patient queue table" tabIndex={0} className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#38A3A5]">
                   <table className="w-full min-w-[680px] text-left text-sm">
-                    <caption className="sr-only">Waiting patient queue for {clinics.find(clinic => clinic.id === selectedClinicId)?.clinicName}</caption>
+                    <caption className="sr-only">Waiting patient queue for <NoTranslate>{clinics.find(clinic => clinic.id === selectedClinicId)?.clinicName}</NoTranslate></caption>
                     <thead className="bg-gray-50 text-gray-600">
                       <tr>
                         <th scope="col" className="w-20 whitespace-nowrap px-4 py-3 font-medium sm:px-5">Token</th>
@@ -586,7 +589,7 @@ export function Queue() {
                           <td className="px-4 py-3 sm:px-5">
                             <span aria-label={'Token ' + token.tokenNumber} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#e6f6f6] text-sm font-semibold text-[#2d8284]">{token.tokenNumber}</span>
                           </td>
-                          <td className="max-w-52 break-words px-4 py-3 font-medium text-gray-900">{nameById[String(token.patientId)] || 'Patient #' + token.patientId}</td>
+                          <td {...noTranslateProps('max-w-52 break-words px-4 py-3 font-medium text-gray-900', !!nameById[String(token.patientId)])}>{nameById[String(token.patientId)] || 'Patient #' + token.patientId}</td>
                           <td className="whitespace-nowrap px-4 py-3"><StatusBadge status={token.status} /></td>
                           <td className="px-4 py-3 text-gray-600">
                             <time dateTime={token.issuedAt} className="whitespace-nowrap">{new Date(token.issuedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
@@ -607,7 +610,7 @@ export function Queue() {
                                 title={servingState === 'error' || servingState === 'checking' ? 'Verify the current patient before calling another patient' : servingToken ? 'Finish the current consultation first' : 'Call this patient'}
                               >
                                 {actionLoadingId === token.id && !tokenToCancel ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <PhoneCallIcon aria-hidden="true" className="h-4 w-4" />}
-                                {actionLoadingId === token.id && !tokenToCancel ? 'Calling...' : 'Call Patient'}
+                                <span>{actionLoadingId === token.id && !tokenToCancel ? 'Calling...' : 'Call Patient'}</span>
                               </button>
                               <button
                                 type="button"

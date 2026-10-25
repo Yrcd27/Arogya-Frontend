@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 
 interface ConfirmModalProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   confirmClassName?: string;
   onConfirm: () => void | Promise<void>;

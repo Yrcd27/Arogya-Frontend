@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MenuIcon, XIcon } from 'lucide-react';
-import arogyaLogo from '../../assests/logo/arogya_logo.png';
+import arogyaLogo from '../../assets/logo/arogya_logo.png';
 
 const NAV_LINKS = [
   { href: '#home', label: 'Home' },

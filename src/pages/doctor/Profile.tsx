@@ -485,7 +485,7 @@ const Profile: React.FC = () => {
             onEdit={startEditing}
             sections={[
               { title: 'Personal information', details: [{ label: 'First name', value: profile.firstName }, { label: 'Last name', value: profile.lastName }, { label: 'Date of birth', value: profile.dateOfBirth }, { label: 'NIC number', value: profile.nicNumber }] },
-              { title: 'Professional information', details: [{ label: 'License number', value: profile.licenseNumber }, { label: 'Specialization', value: profile.specialization }, { label: 'Experience', value: profile.experienceYears !== '' ? `${profile.experienceYears} years` : '' }, { label: 'Qualifications', value: profile.qualification }] },
+              { title: 'Professional information', details: [{ label: 'License number', value: profile.licenseNumber }, { label: 'Specialization', value: profile.specialization }, { label: 'Experience', value: profile.experienceYears, unit: 'years' }, { label: 'Qualifications', value: profile.qualification }] },
               { title: 'Contact information', details: [{ label: 'Phone number', value: profile.phoneNumber }] },
             ]}
           />}

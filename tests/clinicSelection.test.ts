@@ -4,6 +4,7 @@ import { installBrowserGlobals } from './helpers';
 import { clearStoredClinicId, clearStoredClinicSelections, getStoredClinicId, storeClinicId } from '../src/utils/doctorClinicSelection';
 import { operationalClinics } from '../src/utils/dashboard';
 import { businessDateString } from '../src/utils/businessDate';
+import { getAvailableClinics, sortClinics } from '../src/utils/clinic';
 import type { Clinic } from '../src/types/clinic';
 
 const env = installBrowserGlobals();
@@ -90,4 +91,29 @@ test('restored selections are only eligible when the clinic is operational on th
   assert.deepEqual(ids('2026-10-24'), [1, 2, 6]);
   assert.deepEqual(ids('2026-10-25'), [1, 6]);
   assert.deepEqual(ids('2026-10-26'), [1]);
+});
+
+test('patients can join in-progress and upcoming clinics, but not completed, cancelled or past ones', () => {
+  const clinics = [
+    clinic(1, 'IN_PROGRESS', '2026-10-24'),
+    clinic(2, 'SCHEDULED', '2026-10-24'),
+    clinic(3, 'SCHEDULED', '2026-10-30'),
+    clinic(4, 'COMPLETED', '2026-10-24'),
+    clinic(5, 'CANCELLED', '2026-10-30'),
+    clinic(6, 'SCHEDULED', '2020-01-01'),
+  ];
+  const original = Date;
+  const fixed = new original('2026-10-24T05:00:00Z');
+  globalThis.Date = class extends original { constructor(...args: ConstructorParameters<typeof Date>) { super(...(args.length ? args : [fixed.getTime()] as unknown as ConstructorParameters<typeof Date>)); } } as DateConstructor;
+  try {
+    assert.deepEqual(getAvailableClinics(clinics).map(item => item.id), [1, 2, 3]);
+  } finally {
+    globalThis.Date = original;
+  }
+});
+
+test('recent sort lists the most recently added clinic (highest id) first without mutating the input', () => {
+  const clinics = [clinic(3, 'SCHEDULED', '2026-11-01'), clinic(12, 'SCHEDULED', '2026-12-01'), clinic(7, 'IN_PROGRESS', '2026-10-24')];
+  assert.deepEqual(sortClinics(clinics, 'recent').map(item => item.id), [12, 7, 3]);
+  assert.deepEqual(clinics.map(item => item.id), [3, 12, 7]);
 });

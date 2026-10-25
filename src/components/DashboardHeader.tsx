@@ -15,6 +15,7 @@ import {
   type SearchData,
   type SearchResult,
 } from '../utils/headerSearch';
+import { NoTranslate } from './NoTranslate';
 
 type DashboardRole = 'patient' | 'doctor' | 'technician' | 'admin';
 
@@ -194,8 +195,8 @@ export function DashboardHeader({ role, onToggleSidebar }: DashboardHeaderProps)
                   <ul>
                     {group.items.map(result => <li key={result.key}><Link to={result.to} data-search-result="" onClick={closeSearch} className={resultLinkClass}>
                       <span className="min-w-0">
-                        <span className="block truncate font-medium">{result.label}</span>
-                        <span className="block truncate text-xs text-gray-500">{result.detail}</span>
+                        <span translate="no" className="notranslate block truncate font-medium">{result.label}</span>
+                        <span className="block truncate text-xs text-gray-500">{result.detail.map((part, index) => typeof part === 'string' ? part : <NoTranslate key={index}>{part.protect}</NoTranslate>)}</span>
                       </span>
                       <ArrowRightIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[#2d8284]" />
                     </Link></li>)}

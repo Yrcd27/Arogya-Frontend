@@ -4,7 +4,10 @@ import { Header } from './Header';
 import { PageContent } from '../PageContent';
 import { EmptyState } from '../EmptyState';
 import { PaginationFooter } from '../PaginationFooter';
-import { StaffDetailsModal, displayName, initials, speciality, value, type StaffKind, type StaffProfile } from './StaffDetailsModal';
+import { StaffDetailsModal } from './StaffDetailsModal';
+import { StaffName } from './StaffName';
+import { noTranslateClass, noTranslateProps } from '../../utils/noTranslate';
+import { displayName, initials, speciality, value, type StaffKind, type StaffProfile } from '../../utils/staffProfile';
 import { useAuth } from '../../hooks/useAuth';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { loadDoctorProfiles, loadTechnicianProfiles } from '../../utils/dashboard';
@@ -145,13 +148,13 @@ export function StaffListPage({ kind }: { kind: StaffKind }) {
                           <tr key={profile.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#38A3A5]/10 text-sm font-semibold text-[#2d8284]">{initials(name)}</span>
-                                <span className="text-sm font-medium text-gray-900">{name}</span>
+                                <span aria-hidden="true" {...noTranslateProps('flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#38A3A5]/10 text-sm font-semibold text-[#2d8284]')}>{initials(name)}</span>
+                                <span className="text-sm font-medium text-gray-900"><StaffName profile={profile} kind={kind} /></span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-700">{value(speciality(profile, kind))}</td>
-                            <td className="px-6 py-4 text-sm text-gray-700">{value(profile.user?.email)}</td>
-                            <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{value(profile.phoneNumber)}</td>
+                            <td translate="no" className={noTranslateClass('px-6 py-4 text-sm text-gray-700')}>{value(speciality(profile, kind))}</td>
+                            <td translate="no" className={noTranslateClass('px-6 py-4 text-sm text-gray-700')}>{value(profile.user?.email)}</td>
+                            <td translate="no" className={noTranslateClass('whitespace-nowrap px-6 py-4 text-sm text-gray-700')}>{value(profile.phoneNumber)}</td>
                             <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">{fourthColumn(profile, kind)}</td>
                             <td className="px-6 py-4">
                               <ViewAction opensDialog label={`View details for ${name}`} onClick={() => setSelected(profile)} />

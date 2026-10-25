@@ -148,6 +148,8 @@ export const filterClinics = (clinics: Clinic[], filters: ClinicFilters): Clinic
 export const sortClinics = (clinics: Clinic[], sortBy: string): Clinic[] => {
   return [...clinics].sort((a, b) => {
     switch (sortBy) {
+      case 'recent':
+        return b.id - a.id;
       case 'date':
         return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
       case 'name':
@@ -161,32 +163,15 @@ export const sortClinics = (clinics: Clinic[], sortBy: string): Clinic[] => {
 };
 
 /**
- * Get available clinics (scheduled and future dates only)
+ * Get clinics a patient can join: in-progress clinics, plus scheduled clinics today or later
  */
 export const getAvailableClinics = (clinics: Clinic[]): Clinic[] => {
   const today = businessDateString();
   
   return clinics.filter((clinic: Clinic) => {
+    if (clinic.status === 'IN_PROGRESS') return true;
     return clinic.status === 'SCHEDULED' && isValidClinicDate(clinic.scheduledDate) && clinic.scheduledDate >= today;
   });
-};
-
-/**
- * Get status color class for UI display
- */
-export const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'SCHEDULED':
-      return 'bg-blue-100 text-blue-600';
-    case 'IN_PROGRESS':
-      return 'bg-[#38A3A5] bg-opacity-20 text-[#38A3A5]';
-    case 'COMPLETED':
-      return 'bg-green-100 text-green-600';
-    case 'CANCELLED':
-      return 'bg-red-100 text-red-600';
-    default:
-      return 'bg-gray-200 text-gray-600';
-  }
 };
 
 /**

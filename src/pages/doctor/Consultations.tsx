@@ -19,8 +19,9 @@ import { ApiError } from '../../services/httpClient';
 import { FileText, FlaskConical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { focusFirstInvalidField, getApiFieldErrors } from '../../utils/formValidation';
 import { CONSULTATION_FIELDS, isPositiveId, normalizeConsultation, validateConsultation, type ConsultationErrors, type ConsultationField } from '../../utils/clinicalValidation';
-import { DETAIL_LABEL, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL, MODAL_PANEL_SCROLL, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { DETAIL_LABEL, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL, MODAL_TITLE, MODAL_PANEL_FLEX, MODAL_HEAD_FIXED, MODAL_BODY, MODAL_FOOT_FIXED } from '../../components/dialogs/modalStyles';
 import { DetailGrid, DetailItem, DetailText } from '../../components/dialogs/DetailItem';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 type PatientInfo = {
   id: number;
@@ -589,18 +590,18 @@ export default function Consultations() {
                           </td>
                           <td className="px-4 py-3">
                             {patients[c.patientId]?.name ? (
-                              <span className="text-sm text-gray-900">{patients[c.patientId]?.name}</span>
+                              <span translate="no" className="notranslate text-sm text-gray-900">{patients[c.patientId]?.name}</span>
                             ) : (
                               <span className="inline-block h-4 w-24 bg-gray-200 rounded animate-pulse" />
                             )}
                             {clinics[c.clinicId]?.clinicName ? (
-                              <p className="text-xs text-gray-500">{clinics[c.clinicId]?.clinicName}</p>
+                              <p translate="no" className="notranslate text-xs text-gray-500">{clinics[c.clinicId]?.clinicName}</p>
                             ) : (
                               <span className="block mt-1 h-3 w-16 bg-gray-100 rounded animate-pulse" />
                             )}
                           </td>
                           <td className="max-w-xs px-4 py-3">
-                            <span className="line-clamp-2 break-words text-sm text-gray-700">{c.chiefComplaint || '-'}</span>
+                            <span translate="no" className="notranslate line-clamp-2 break-words text-sm text-gray-700">{c.chiefComplaint || '-'}</span>
                           </td>
                           <td className="px-4 py-3">
                             <span className="whitespace-nowrap text-sm text-gray-600">{formatDateTime(c.bookedAt)}</span>
@@ -670,8 +671,8 @@ export default function Consultations() {
       {/* Detail Modal */}
       {selectedConsultation && (
         <div className={`${MODAL_OVERLAY} z-50`} onClick={closeConsultationDetails}>
-          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
-            <div className={MODAL_HEADER}>
+          <div role="dialog" aria-modal="true" aria-label="Consultation details" className={`${MODAL_PANEL_FLEX} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
+            <div className={MODAL_HEAD_FIXED}>
               <h3 className={MODAL_TITLE}>Consultation Details</h3>
               <button type="button" onClick={closeConsultationDetails} disabled={actionPending} className={MODAL_CLOSE} aria-label="Close consultation details">
                 <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -679,14 +680,15 @@ export default function Consultations() {
                 </svg>
               </button>
             </div>
-            
+
+            <div className={MODAL_BODY}>
             <DetailGrid>
               <DetailItem label="ID">{selectedConsultation.id}</DetailItem>
-              <DetailItem label="Status"><StatusBadge status={selectedConsultation.status} /></DetailItem>
+              <DetailItem label="Status" translatable><StatusBadge status={selectedConsultation.status} /></DetailItem>
               <DetailItem label="Patient">{patients[selectedConsultation.patientId]?.name || `Patient #${selectedConsultation.patientId}`}</DetailItem>
               <DetailItem label="Clinic">{clinics[selectedConsultation.clinicId]?.clinicName || `Clinic #${selectedConsultation.clinicId}`}</DetailItem>
               <DetailItem label="Session Number">{selectedConsultation.sessionNumber || '-'}</DetailItem>
-              <DetailItem label="Booked At">{formatDateTime(selectedConsultation.bookedAt)}</DetailItem>
+              <DetailItem label="Booked At" translatable>{formatDateTime(selectedConsultation.bookedAt)}</DetailItem>
             </DetailGrid>
 
             <div className="mt-5 space-y-4">
@@ -697,8 +699,8 @@ export default function Consultations() {
             </div>
 
             <DetailGrid className="mt-5">
-              <DetailItem label="Completed At">{formatDateTime(selectedConsultation.completedAt)}</DetailItem>
-              <DetailItem label="Last Updated">{formatDateTime(selectedConsultation.updatedAt)}</DetailItem>
+              <DetailItem label="Completed At" translatable>{formatDateTime(selectedConsultation.completedAt)}</DetailItem>
+              <DetailItem label="Last Updated" translatable>{formatDateTime(selectedConsultation.updatedAt)}</DetailItem>
             </DetailGrid>
 
             {/* Lab Tests Section */}
@@ -731,23 +733,23 @@ export default function Consultations() {
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                           <FlaskConical className="w-4 h-4 text-[#38A3A5]" />
-                          <h5 className="font-semibold text-gray-900">{test.testName}</h5>
+                          <h5 translate="no" className="notranslate font-semibold text-gray-900">{test.testName}</h5>
                         </div>
                         <StatusBadge status={test.status} />
                       </div>
                       {test.testDescription && (
-                        <p className="mb-2 text-sm text-gray-900">{test.testDescription}</p>
+                        <p translate="no" className="notranslate mb-2 text-sm text-gray-900">{test.testDescription}</p>
                       )}
                       {test.testInstructions && (
                         <div className="mb-2">
                           <span className={DETAIL_LABEL}>Instructions</span>
-                          <p className="mt-1 text-sm text-gray-900">{test.testInstructions}</p>
+                          <p translate="no" className="notranslate mt-1 text-sm text-gray-900">{test.testInstructions}</p>
                         </div>
                       )}
                       {test.testResults && (
                         <div className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
                           <span className={DETAIL_LABEL}>Results</span>
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{test.testResults}</p>
+                          <p translate="no" className="notranslate mt-1 whitespace-pre-wrap text-sm text-gray-900">{test.testResults}</p>
                         </div>
                       )}
                       <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
@@ -759,8 +761,9 @@ export default function Consultations() {
                 </div>
               )}
             </div>
-            
-            <div className={MODAL_FOOTER}>
+            </div>
+
+            <div className={MODAL_FOOT_FIXED}>
               {selectedConsultation.status === 'IN_PROGRESS' && (
                 <button
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-[#38A3A5] px-4 text-sm font-medium text-white transition-colors hover:bg-[#2d8284] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -810,7 +813,7 @@ export default function Consultations() {
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 flex-shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Edit Consultation #{editingConsultation.id}</h3>
-                <p className="text-sm text-gray-500">
+                <p {...noTranslateProps('text-sm text-gray-500', !!patients[editingConsultation.patientId]?.name)}>
                   {patients[editingConsultation.patientId]?.name || `Patient #${editingConsultation.patientId}`}
                 </p>
               </div>

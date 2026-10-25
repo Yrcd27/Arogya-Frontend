@@ -490,10 +490,10 @@ export function LabTests() {
                         ?? (displayStatus === 'PENDING' || displayStatus === 'IN_PROGRESS' ? 'checking' : 'present');
                       return (
                       <tr key={test.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4"><span className="text-sm font-medium text-gray-900">{test.testName}</span></td>
+                        <td className="px-6 py-4"><span translate="no" className="notranslate text-sm font-medium text-gray-900">{test.testName}</span></td>
                         <td className="px-6 py-4">
                           {patientByConsultation[test.consultationId]?.name ? (
-                            <span className="text-sm text-gray-700">{patientByConsultation[test.consultationId]?.name}</span>
+                            <span translate="no" className="notranslate text-sm text-gray-700">{patientByConsultation[test.consultationId]?.name}</span>
                           ) : (
                             <span className="inline-block bg-gray-200 animate-pulse rounded h-4 w-24" />
                           )}
@@ -516,6 +516,7 @@ export function LabTests() {
                             <ViewAction label={`View result for ${test.testName}`} onClick={() => handleViewDetails(test)} />
                           ) : resultAvailability === 'checking' ? (
                             <button
+                              key="checking"
                               type="button"
                               disabled
                               className="px-4 py-2 rounded-lg bg-gray-200 text-sm font-medium text-gray-600"
@@ -524,6 +525,7 @@ export function LabTests() {
                             </button>
                           ) : resultAvailability === 'error' ? (
                             <button
+                              key="retry"
                               type="button"
                               onClick={() => void hydrateResultPresence([test], true)}
                               className="px-4 py-2 rounded-lg border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50"
@@ -532,6 +534,7 @@ export function LabTests() {
                             </button>
                           ) : displayStatus === 'IN_PROGRESS' || displayStatus === 'PENDING' ? (
                             <button
+                              key="take"
                               onClick={() => handleTakeTest(test)}
                               disabled={actionLoadingId !== null || !!(showSubmitModal && testToSubmit && testToSubmit.id === test.id)}
                               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${actionLoadingId !== null || showSubmitModal && testToSubmit && testToSubmit.id === test.id ? 'bg-gray-300 text-gray-700 cursor-not-allowed' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284]'}`}

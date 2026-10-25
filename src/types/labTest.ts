@@ -21,13 +21,6 @@ export interface CreateLabTestRequest {
   testInstructions?: string;
 }
 
-export interface UpdateLabTestRequest {
-  status?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-  assignedTechnicianId?: number;
-  testResults?: string;
-  technicianNotes?: string;
-}
-
 // Form data for creating a lab test (before consultation is created)
 export interface LabTestFormData {
   testName: string;

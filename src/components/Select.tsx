@@ -7,6 +7,7 @@ import { DropdownMenu } from './DropdownMenu';
 import { revealDropdownOption } from '../utils/dropdown';
 
 interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'multiple' | 'size'> {
+  protectLabels?: boolean;
   searchable?: boolean;
   searchPlaceholder?: string;
 }
@@ -34,7 +35,7 @@ function readOptions(children: ReactNode): Option[] {
 
 export function Select({
   children, className = '', value, defaultValue, id, disabled, required, name, form,
-  onChange, onBlur, searchable = false, searchPlaceholder = 'Search options...', ...props
+  onChange, onBlur, searchable = false, searchPlaceholder = 'Search options...', protectLabels = false, ...props
 }: SelectProps) {
   const generatedId = useId();
   const controlId = id ?? generatedId;
@@ -158,7 +159,7 @@ export function Select({
         className={`arogya-select-trigger ${className}`}
         onClick={() => open ? close() : openMenu()} onKeyDown={handleKeyDown}
         onBlur={() => { if (!open) nativeRef.current?.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); }}>
-        <span className="min-w-0 flex-1 truncate text-left">{selected?.label ?? 'Select an option'}</span>
+        <span translate={protectLabels && selected && selected.value !== '' ? 'no' : undefined} className={`min-w-0 flex-1 truncate text-left${protectLabels && selected && selected.value !== '' ? ' notranslate' : ''}`}>{selected?.label ?? 'Select an option'}</span>
         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && !disabled && (
@@ -179,7 +180,7 @@ export function Select({
                 className={`arogya-dropdown-option ${selected?.value === option.value ? 'bg-[#38A3A5] text-white' : index === active ? 'bg-[#e6f6f6] text-gray-900' : 'text-gray-700'}`}
                 onPointerMove={() => { if (!option.disabled) setActive(index); }}
                 onPointerDown={event => { if (event.pointerType === 'mouse') event.preventDefault(); }} onClick={() => select(option)}>
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                <span translate={protectLabels && option.value !== '' ? 'no' : undefined} className={`min-w-0 flex-1 truncate${protectLabels && option.value !== '' ? ' notranslate' : ''}`}>{option.label}</span>
                 {selected?.value === option.value && <Check aria-hidden="true" className="h-4 w-4 shrink-0" />}
               </div>
             ))}

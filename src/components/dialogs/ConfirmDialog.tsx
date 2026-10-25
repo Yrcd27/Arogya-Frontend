@@ -5,7 +5,7 @@ import { BaseModal } from './BaseModal';
 interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
   confirmLabel?: string;
@@ -93,7 +93,7 @@ export function ConfirmDialog({
             className={`${BUTTON} ${tone === 'danger' ? 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600' : 'bg-[#38A3A5] text-white hover:bg-[#2d8284] focus-visible:ring-[#38A3A5]'} ${confirmClassName || ''}`}
           >
             {busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />}
-            {confirmLabel}
+            <span>{confirmLabel}</span>
             {busy && <span className="sr-only"> in progress</span>}
           </button>
         </div>

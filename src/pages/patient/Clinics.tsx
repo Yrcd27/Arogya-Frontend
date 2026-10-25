@@ -25,7 +25,9 @@ import {
 import { ClinicCard } from '../../components/clinic/ClinicCard';
 import { DatePicker } from '../../components/DatePicker';
 import { StatusBadge } from '../../components/StatusBadge';
-import { BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { ConfirmDialog } from '../../components/dialogs/ConfirmDialog';
+import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 const patientQueueKey = (patientId: string, clinicId: number) => `patientQueue:token:${patientId}:${clinicId}`;
 const rememberedQueueTokens = new Map<string, string>();
@@ -95,6 +97,7 @@ export function Clinics() {
   const [queueMembershipLoading, setQueueMembershipLoading] = useState<Set<number>>(new Set());
   const [queueMembershipUnavailable, setQueueMembershipUnavailable] = useState<Set<number>>(new Set());
   const joinRequestRef = useRef(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const selectedClinicRef = useRef<number | null>(null);
   const queueRequestRef = useRef(0);
   const queueMembershipRequestRef = useRef(0);
@@ -346,7 +349,7 @@ export function Clinics() {
       return;
     }
 
-    if (!isPositiveId(clinic.id) || !clinics.some(item => item.id === clinic.id) || clinic.status !== 'SCHEDULED'
+    if (!isPositiveId(clinic.id) || !clinics.some(item => item.id === clinic.id) || clinic.status !== 'SCHEDULED' && clinic.status !== 'IN_PROGRESS'
       || !isPositiveId(user?.id) || patientId !== String(user?.id) || patientFetchError) {
       setJoinError('Patient ID not found. Please ensure you are logged in with a patient profile.');
       setIsQueueModalOpen(true);
@@ -407,6 +410,31 @@ export function Clinics() {
     await joinQueueForClinic(selectedClinic);
   };
 
+  const cancelMyToken = async () => {
+    if (!selectedClinic || !activeQueueToken || !patientId || joinRequestRef.current) return;
+    const clinic = selectedClinic;
+    const target = activeQueueToken;
+    joinRequestRef.current = true;
+    try {
+      const latest = await queueAPI.getToken(target.id);
+      if (latest.id !== target.id || Number(latest.clinicId) !== clinic.id || String(latest.patientId) !== patientId) {
+        throw new Error('This token does not belong to you for this clinic.');
+      }
+      if (latest.status !== 'PENDING') {
+        await loadQueueForClinic(clinic);
+        throw new Error(latest.status === 'SERVING' ? 'You are already being served, so this token can no longer be cancelled here.' : 'This token is no longer active.');
+      }
+      await queueAPI.updateStatus(target.id, 'CANCELLED');
+      rememberQueueToken(patientQueueKey(patientId, clinic.id), null);
+      setJoinError(null);
+      setJoinSuccess(`Token #${target.tokenNumber} was cancelled.`);
+      setConfirmingCancel(false);
+    } finally {
+      joinRequestRef.current = false;
+    }
+    await loadQueueForClinic(clinic);
+  };
+
   const closeQueueModal = () => {
     if (joinRequestRef.current) return;
     setIsQueueModalOpen(false);
@@ -453,12 +481,12 @@ export function Clinics() {
     province: selectedProvince,
     district: selectedDistrict,
     dateRange,
-    status: 'SCHEDULED', // Patients only see scheduled clinics
+    status: 'All Status',
     sortBy: 'date'
   };
   const filterErrors = validateClinicFilters(clinicFilters);
   const filtersValid = Object.keys(filterErrors).length === 0;
-  const filteredAndSortedClinics = filtersValid ? sortClinics(filterClinics(clinics, clinicFilters), 'date') : [];
+  const filteredAndSortedClinics = filtersValid ? sortClinics(filterClinics(clinics, clinicFilters), 'recent') : [];
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedClinics.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
   const pageClinics = filteredAndSortedClinics.slice((safePage - 1) * pageSize, safePage * pageSize);
@@ -700,26 +728,25 @@ export function Clinics() {
       {/* Clinic Details Modal */}
       {isDetailsModalOpen && selectedClinic && (
         <div className={`${MODAL_OVERLAY} z-50`}>
-          <div className={`${MODAL_PANEL_SCROLL} max-w-2xl`}>
-            <div className="p-5 sm:p-6">
-              {/* Header */}
-              <div className={MODAL_HEADER}>
-                <h2 className={MODAL_TITLE}>Clinic Details</h2>
-                <button
-                  type="button"
-                  onClick={closeDetailsModal}
-                  disabled={joinLoading}
-                  aria-label="Close clinic details"
-                  className={MODAL_CLOSE}
-                >
-                  <XIcon aria-hidden="true" className="h-5 w-5" />
-                </button>
-              </div>
+          <div role="dialog" aria-modal="true" aria-labelledby="clinic-details-title" className={`${MODAL_PANEL} flex max-h-[90vh] max-w-2xl flex-col overflow-hidden`}>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+              <h2 id="clinic-details-title" className={MODAL_TITLE}>Clinic Details</h2>
+              <button
+                type="button"
+                onClick={closeDetailsModal}
+                disabled={joinLoading}
+                aria-label="Close clinic details"
+                className={MODAL_CLOSE}
+              >
+                <XIcon aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
               {/* Clinic Information */}
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  <h3 translate="no" className="notranslate text-lg font-semibold text-gray-900 mb-3">
                     {selectedClinic.clinicName}
                   </h3>
                   
@@ -728,10 +755,10 @@ export function Clinics() {
                       <MapPinIcon className="w-5 h-5 text-[#38A3A5] mt-0.5" />
                       <div>
                         <p className="font-medium text-gray-900">Location</p>
-                        <p className="text-gray-600">{selectedClinic.province}</p>
-                        <p className="text-gray-600">{selectedClinic.district}</p>
+                        <p translate="no" className="notranslate text-gray-600">{selectedClinic.province}</p>
+                        <p translate="no" className="notranslate text-gray-600">{selectedClinic.district}</p>
                         {selectedClinic.location && (
-                          <p className="text-gray-600">{selectedClinic.location}</p>
+                          <p translate="no" className="notranslate text-gray-600">{selectedClinic.location}</p>
                         )}
                       </div>
                     </div>
@@ -757,25 +784,21 @@ export function Clinics() {
                   <div className="flex items-center gap-2 mb-4">
                     <UsersIcon className="w-5 h-5 text-[#38A3A5]" />
                     <h4 className="font-semibold text-gray-900">
-                      Available Doctors{!clinicDoctorsLoading && !clinicDoctorsError && ` (${clinicDoctors.length})`}
+                      {`Available Doctors${!clinicDoctorsLoading && !clinicDoctorsError ? ` (${clinicDoctors.length})` : ''}`}
                     </h4>
                   </div>
 
                   {clinicDoctorsLoading ? (
                     <p role="status" className="py-4 text-center text-sm text-gray-600">Loading assigned doctors...</p>
                   ) : clinicDoctors.length > 0 ? (
-                    <div className="space-y-3">
+                    <ul aria-label="Available doctors" className="max-h-[15.5rem] space-y-2 overflow-y-auto overscroll-contain pr-1">
                       {clinicDoctors.map(doctor => (
-                        <div key={doctor.id} className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="font-medium text-gray-900">{doctor.doctorName}</p>
-                              <p className="text-[#38A3A5] font-medium">{doctor.specialization}</p>
-                            </div>
-                          </div>
-                        </div>
+                        <li key={doctor.id} className="flex h-14 flex-col justify-center rounded-lg border border-gray-200 bg-gray-50 px-3.5">
+                          <p translate="no" className="notranslate truncate text-sm font-medium leading-5 text-gray-900">{doctor.doctorName}</p>
+                          <p translate="no" className="notranslate truncate text-xs font-medium leading-4 text-[#2d8284]">{doctor.specialization}</p>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   ) : clinicDoctorsError ? (
                     <p className="text-red-500 italic">Couldn't load doctor information for this clinic. Please try again.</p>
                   ) : (
@@ -792,25 +815,25 @@ export function Clinics() {
                   <h4 className="font-semibold text-gray-900">Queue Actions</h4>
                   <div role="status" aria-live="polite" className="text-sm text-gray-700">
                     {!hasCompletedPatientProfile ? (
-                      <span className={patientProfileStatus === 'error' ? 'text-red-700' : 'text-amber-700'}>{patientProfileJoinMessage}</span>
+                      <span key="profile" className={patientProfileStatus === 'error' ? 'text-red-700' : 'text-amber-700'}>{patientProfileJoinMessage}</span>
                     ) : patientFetchError ? (
-                      <span className="text-red-700">Please complete your profile first, then try again.</span>
+                      <span key="fetch-error" className="text-red-700">Please complete your profile first, then try again.</span>
                     ) : !patientId ? (
-                      <span>Detecting your patient profile...</span>
+                      <span key="detecting">Detecting your patient profile...</span>
                     ) : queueChecking ? (
-                      <span className="inline-flex items-center gap-2 text-gray-600">
+                      <span key="checking" className="inline-flex items-center gap-2 text-gray-600">
                         <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin text-[#38A3A5] motion-reduce:animate-none" />
                         Checking your queue status...
                       </span>
                     ) : queueCheckFailed ? (
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-red-700">
+                      <span key="check-failed" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-red-700">
                         <span>Couldn't check your queue status. {queueError}</span>
                         <button type="button" onClick={retryQueueCheck} className="rounded font-medium text-[#2d8284] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5]">Retry</button>
                       </span>
                     ) : activeQueueToken ? (
-                      <span>You're in this queue. Your token is <span className="font-medium">#{activeQueueToken.tokenNumber}</span>.</span>
+                      <span key="in-queue">You're in this queue. Your token is <span className="font-medium">#{activeQueueToken.tokenNumber}</span>.</span>
                     ) : (
-                      <span>Joining as <span className="font-medium">{patientName || `Patient #${patientId}`}</span></span>
+                      <span key="joining">Joining as <span {...noTranslateProps('font-medium', !!patientName)}>{patientName || `Patient #${patientId}`}</span></span>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-start gap-3">
@@ -822,8 +845,11 @@ export function Clinics() {
                         className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38A3A5] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 bg-[#38A3A5] text-white hover:bg-[#2d8284]"
                       >
                         {(joinLoading || queueChecking) && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />}
-                        {joinLoading ? 'Joining...' : queueChecking ? 'Checking Queue...' : queueCheckFailed ? 'Queue Unavailable' : profileJoinButtonLabel}
+                        <span>{joinLoading ? 'Joining...' : queueChecking ? 'Checking Queue...' : queueCheckFailed ? 'Queue Unavailable' : profileJoinButtonLabel}</span>
                       </button>
+                    )}
+                    {activeQueueToken?.status === 'PENDING' && (
+                      <button type="button" onClick={() => setConfirmingCancel(true)} disabled={joinLoading || queueLoading} className={`${BUTTON_DANGER} h-10`}>Cancel My Token</button>
                     )}
                     <button
                       type="button"
@@ -837,16 +863,17 @@ export function Clinics() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
-                <button
-                  type="button"
-                  onClick={closeDetailsModal}
-                  disabled={joinLoading}
-                  className={BUTTON_SECONDARY}
-                >
-                  Close
-                </button>
-              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:px-6">
+              <button
+                type="button"
+                onClick={closeDetailsModal}
+                disabled={joinLoading}
+                className={BUTTON_SECONDARY}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -854,24 +881,24 @@ export function Clinics() {
 
       {isQueueModalOpen && selectedClinic && (
         <div className={`${MODAL_OVERLAY} z-[60]`}>
-          <div className={`${MODAL_PANEL_SCROLL} max-w-lg`}>
-            <div className="p-5 sm:p-6">
-              <div className={MODAL_HEADER}>
-                <div>
-                  <h2 className={MODAL_TITLE}>Clinic Queue</h2>
-                  <p className="text-sm text-gray-600">{selectedClinic.clinicName}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeQueueModal}
-                  disabled={joinLoading}
-                  aria-label="Close clinic queue"
-                  className={MODAL_CLOSE}
-                >
-                  <XIcon aria-hidden="true" className="h-5 w-5" />
-                </button>
+          <div role="dialog" aria-modal="true" aria-labelledby="clinic-queue-title" className={`${MODAL_PANEL} flex max-h-[85vh] max-w-lg flex-col overflow-hidden`}>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <h2 id="clinic-queue-title" className={MODAL_TITLE}>Clinic Queue</h2>
+                <p translate="no" className="notranslate truncate text-sm text-gray-600">{selectedClinic.clinicName}</p>
               </div>
+              <button
+                type="button"
+                onClick={closeQueueModal}
+                disabled={joinLoading}
+                aria-label="Close clinic queue"
+                className={MODAL_CLOSE}
+              >
+                <XIcon aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
               {joinSuccess && (
                 <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">{joinSuccess}</div>
               )}
@@ -904,7 +931,7 @@ export function Clinics() {
                         <div className="text-sm text-gray-800">
                           <span className="font-medium">Token #{token.tokenNumber}</span>
                           <span className="ml-2">• Position: {token.position}</span>
-                          {name && <span className="ml-2 text-gray-600">• {name}</span>}
+                          {name && <span translate="no" className="notranslate ml-2 text-gray-600">• {name}</span>}
                         </div>
                         <StatusBadge status={token.status} className="shrink-0" />
                       </div>
@@ -922,7 +949,7 @@ export function Clinics() {
                         <div className="text-sm text-gray-800">
                           <span className="font-medium">Token #{t.tokenNumber}</span>
                           {nameById[String(t.patientId)] && (
-                            <span className="ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
+                            <span translate="no" className="notranslate ml-2 text-gray-700">• {nameById[String(t.patientId)]}</span>
                           )}
                         </div>
                         <StatusBadge status="COMPLETED" className="shrink-0" />
@@ -936,7 +963,12 @@ export function Clinics() {
                 <p className="text-xs text-gray-400 mt-3">Some patient names could not be loaded. IDs are shown instead.</p>
               )}
 
-              <div className={MODAL_FOOTER}>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:px-6">
+                {activeQueueToken?.status === 'PENDING' && (
+                  <button type="button" onClick={() => setConfirmingCancel(true)} disabled={joinLoading || queueLoading} className={BUTTON_DANGER}>Cancel My Token</button>
+                )}
                 <button
                   type="button"
                   onClick={() => joinQueueForClinic(selectedClinic)}
@@ -953,11 +985,20 @@ export function Clinics() {
                 >
                   Close
                 </button>
-              </div>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmingCancel && !!activeQueueToken}
+        title="Cancel Your Queue Token?"
+        message={`Your token #${activeQueueToken?.tokenNumber ?? ''} will be cancelled and you will lose your place in this queue. You can join the queue again later.`}
+        cancelLabel="Keep Token"
+        confirmLabel="Cancel Token"
+        onCancel={() => setConfirmingCancel(false)}
+        onConfirm={cancelMyToken}
+      />
     </div>
   );
 }

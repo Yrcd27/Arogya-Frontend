@@ -9,11 +9,21 @@ import { statusLabel } from './statusLabels';
 
 export type SearchRole = 'patient' | 'doctor' | 'technician' | 'admin';
 
+export type SearchDetailPart = string | { protect: string };
+export type SearchDetail = SearchDetailPart[];
+
+const protect = (text: string | null | undefined): SearchDetailPart | null => (text ? { protect: text } : null);
+
+function joinDetail(parts: (SearchDetailPart | null)[]): SearchDetail {
+  const kept = parts.filter((part): part is SearchDetailPart => part !== null && (typeof part === 'string' ? part !== '' : part.protect !== ''));
+  return kept.flatMap((part, index) => (index === 0 ? [part] : [' · ', part]));
+}
+
 export interface SearchResult {
   key: string;
   group: string;
   label: string;
-  detail: string;
+  detail: SearchDetail;
   to: string;
 }
 
@@ -140,8 +150,8 @@ function clinicText(clinic: Clinic): string {
   return [clinic.clinicName, clinic.location, clinic.district, clinic.province, clinic.status, dashboardDate(clinic.scheduledDate)].filter(Boolean).join(' ');
 }
 
-function clinicDetail(clinic: Clinic): string {
-  return [clinic.district, dashboardDate(clinic.scheduledDate), statusLabel(clinic.status)].filter(Boolean).join(' · ');
+function clinicDetail(clinic: Clinic): SearchDetail {
+  return joinDetail([protect(clinic.district), dashboardDate(clinic.scheduledDate), statusLabel(clinic.status)]);
 }
 
 function staffName(profile: DoctorProfile | TechnicianProfile, prefix = ''): string {
@@ -166,19 +176,19 @@ export function searchRoleData(role: SearchRole, data: SearchData, terms: readon
       `${item.id} ${item.chiefComplaint ?? ''} ${item.recommendations ?? ''} ${item.status} ${dashboardDate(item.bookedAt)}`, terms,
     )).map(item => ({
       key: `consultation-${item.id}`, group: 'Prescriptions', label: item.chiefComplaint || `Consultation #${item.id}`,
-      detail: `Consultation #${item.id} · ${dashboardDate(item.bookedAt || item.completedAt)} · ${statusLabel(item.status)}`,
+      detail: joinDetail([`Consultation #${item.id}`, dashboardDate(item.bookedAt || item.completedAt), statusLabel(item.status)]),
       to: item.chiefComplaint ? linkedSearchPath('/patient/records', item.chiefComplaint) : '/patient/records',
     })), terms));
   } else if (role === 'doctor') {
     results.push(...limit(data.clinics.filter(clinic => matchesTerms(clinicText(clinic), terms)).map(clinic => ({
-      key: `clinic-${clinic.id}`, group: 'My clinics', label: clinic.clinicName, detail: `${clinicDetail(clinic)} · open queue`,
+      key: `clinic-${clinic.id}`, group: 'My clinics', label: clinic.clinicName, detail: [...clinicDetail(clinic), ' · ', 'open queue'],
       to: `/doctor/queue?clinicId=${clinic.id}`,
     })), terms));
     results.push(...limit(data.consultations.filter(item => matchesTerms(
       `${item.id} ${item.chiefComplaint ?? ''} ${item.recommendations ?? ''} ${item.status} patient ${item.patientId} ${dashboardDate(item.bookedAt)}`, terms,
     )).map(item => ({
       key: `consultation-${item.id}`, group: 'Consultations', label: item.chiefComplaint || `Consultation #${item.id}`,
-      detail: `Consultation #${item.id} · Patient #${item.patientId} · ${dashboardDate(item.bookedAt || item.completedAt)}`,
+      detail: joinDetail([`Consultation #${item.id}`, `Patient #${item.patientId}`, dashboardDate(item.bookedAt || item.completedAt)]),
       to: `/doctor/consultations?open=${item.id}`,
     })), terms));
   } else if (role === 'technician') {
@@ -186,7 +196,7 @@ export function searchRoleData(role: SearchRole, data: SearchData, terms: readon
       `${test.testName} ${test.id} ${test.consultationId} ${test.status} ${statusLabel(test.status)}`, terms,
     )).map(test => ({
       key: `lab-test-${test.id}`, group: 'Lab tests', label: test.testName,
-      detail: `Test #${test.id} · Consultation #${test.consultationId} · ${statusLabel(test.status)}`,
+      detail: joinDetail([`Test #${test.id}`, `Consultation #${test.consultationId}`, statusLabel(test.status)]),
       to: linkedSearchPath('/technician/lab-tests', test.testName),
     })), terms));
   } else {
@@ -196,12 +206,12 @@ export function searchRoleData(role: SearchRole, data: SearchData, terms: readon
     })), terms));
     results.push(...limit(data.doctors.filter(doctor => matchesTerms(staffText(doctor, doctor.specialization), terms)).map(doctor => ({
       key: `doctor-${doctor.id}`, group: 'Doctors', label: staffName(doctor, 'Dr. '),
-      detail: [doctor.specialization, doctor.user?.email].filter(Boolean).join(' · ') || 'Doctor',
+      detail: joinDetail([protect(doctor.specialization), protect(doctor.user?.email)]).length ? joinDetail([protect(doctor.specialization), protect(doctor.user?.email)]) : ['Doctor'],
       to: linkedSearchPath('/admin/doctors', staffName(doctor)),
     })), terms));
     results.push(...limit(data.technicians.filter(tech => matchesTerms(staffText(tech, tech.technicianField), terms)).map(tech => ({
       key: `technician-${tech.id}`, group: 'Technicians', label: staffName(tech),
-      detail: [tech.technicianField, tech.user?.email].filter(Boolean).join(' · ') || 'Technician',
+      detail: joinDetail([protect(tech.technicianField), protect(tech.user?.email)]).length ? joinDetail([protect(tech.technicianField), protect(tech.user?.email)]) : ['Technician'],
       to: linkedSearchPath('/admin/technicians', staffName(tech)),
     })), terms));
   }
