@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 interface BaseModalProps {
   isOpen: boolean;
   title: ReactNode;
-  description?: string;
+  description?: ReactNode;
   icon?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;

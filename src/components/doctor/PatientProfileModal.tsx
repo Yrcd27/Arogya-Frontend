@@ -9,14 +9,16 @@ import { getAge } from '../../utils/profileValidation';
 import { EmptyState } from '../EmptyState';
 import { BUTTON_SECONDARY, DETAIL_LABEL, DETAIL_VALUE, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL, MODAL_TITLE } from '../dialogs/modalStyles';
 import { DetailText } from '../dialogs/DetailItem';
+import { NoTranslate } from '../NoTranslate';
+import { noTranslateClass } from '../../utils/noTranslate';
 
-function InfoCard({ icon: Icon, label, children, missing = false }: { icon: LucideIcon; label: string; children: React.ReactNode; missing?: boolean }) {
+function InfoCard({ icon: Icon, label, children, missing = false, translatable = false }: { icon: LucideIcon; label: string; children: React.ReactNode; missing?: boolean; translatable?: boolean }) {
   return (
     <div className="flex min-w-0 items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-3">
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#38A3A5]" />
       <div className="min-w-0">
         <p className={DETAIL_LABEL}>{label}</p>
-        <p className={missing ? 'mt-1.5 break-words text-sm leading-5 text-gray-500' : DETAIL_VALUE}>{children}</p>
+        <p translate={missing || translatable ? undefined : 'no'} className={missing ? 'mt-1.5 break-words text-sm leading-5 text-gray-500' : translatable ? DETAIL_VALUE : noTranslateClass(DETAIL_VALUE)}>{children}</p>
       </div>
     </div>
   );
@@ -93,29 +95,29 @@ export function PatientProfileModal({ patientId, onClose }: PatientProfileModalP
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6">
           {loading ? (
-            <div role="status" className="flex flex-col items-center justify-center py-10">
+            <div key="loading" role="status" className="flex flex-col items-center justify-center py-10">
               <div className="mb-3 h-10 w-10 animate-spin rounded-full border-b-2 border-[#38A3A5]"></div>
               <p className="text-sm text-gray-600">Loading patient profile...</p>
             </div>
           ) : error ? (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <div key="error" role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-sm text-red-700">{error}</p>
               <button type="button" onClick={() => void loadPatientProfile()} className="mt-2 text-sm font-medium text-red-800 underline">Try again</button>
             </div>
           ) : profile ? (
-            <div className="space-y-5">
+            <div key="profile" className="space-y-5">
               <div className="rounded-lg bg-gradient-to-r from-[#38A3A5] to-[#2d8284] px-4 py-3 text-white">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white">
                     <User aria-hidden="true" className="h-6 w-6 text-[#38A3A5]" />
                   </div>
-                  <h4 className="min-w-0 break-words text-xl font-bold">{profile.firstName} {profile.lastName}</h4>
+                  <h4 translate="no" className="notranslate min-w-0 break-words text-xl font-bold">{profile.firstName} {profile.lastName}</h4>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <InfoCard icon={Calendar} label="Date of Birth" missing={age === undefined}>
-                  {age === undefined ? 'Not provided' : profile.dateOfBirth.trim()}
+                <InfoCard icon={Calendar} label="Date of Birth" missing={age === undefined} translatable>
+                  {age === undefined ? <span>Not provided</span> : <NoTranslate>{profile.dateOfBirth.trim()}</NoTranslate>}
                   {age !== undefined && <span className="ml-2 text-xs font-normal text-gray-600">({age} years old)</span>}
                 </InfoCard>
                 <InfoCard icon={User} label="Gender" missing={!profile.gender}>{text(profile.gender)}</InfoCard>

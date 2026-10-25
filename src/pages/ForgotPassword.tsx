@@ -330,10 +330,10 @@ export function ForgotPassword() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Recovery</h1>
           <p className="text-gray-600 text-sm">
-            {step === 1 && 'Enter your email to receive a verification code'}
-            {step === 2 && 'Enter the 6-digit code sent to your inbox'}
-            {step === 3 && 'Choose a strong new password for your account'}
-            {step === 4 && 'Your password has been successfully updated'}
+            {step === 1 ? 'Enter your email to receive a verification code'
+              : step === 2 ? 'Enter the 6-digit code sent to your inbox'
+                : step === 3 ? 'Choose a strong new password for your account'
+                  : step === 4 ? 'Your password has been successfully updated' : ''}
           </p>
         </div>
 

@@ -50,7 +50,7 @@ export function Dashboard() {
             </DashboardPanel>
             <DashboardPanel title="Waiting queue" description="Pending patients at one of your assigned clinics." loading={clinicLoading || waitingQueue.loading} refreshing={waitingQueue.refreshing} error={clinicReady ? null : clinicError} onRetry={refreshWaitingQueue}>
               <label htmlFor="dashboard-doctor-clinic" className="mb-2 block text-sm font-medium text-gray-700">Clinic</label>
-              <Select id="dashboard-doctor-clinic" value={selectedClinic ? clinicId ?? '' : ''} onChange={event => { const nextId = Number(event.target.value) || null; setClinicId(nextId); if (nextId) storeClinicId(user?.id, nextId); }} disabled={!clinicReady || !myClinics.length} className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60">
+              <Select protectLabels id="dashboard-doctor-clinic" value={selectedClinic ? clinicId ?? '' : ''} onChange={event => { const nextId = Number(event.target.value) || null; setClinicId(nextId); if (nextId) storeClinicId(user?.id, nextId); }} disabled={!clinicReady || !myClinics.length} className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:opacity-60">
                 <option value="" disabled>{!clinicReady ? 'Clinic assignments unavailable' : !myClinics.length ? 'No assigned clinics' : 'Select a clinic'}</option>
                 {myClinics.map(clinic => <option key={clinic.id} value={clinic.id}>{clinic.clinicName}</option>)}
               </Select>

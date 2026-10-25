@@ -18,9 +18,9 @@ export function DoctorSearch({ doctors, selectedDoctorIds, onSelect, disabled, o
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [active, setActive] = useState(0);
   const term = query.trim().toLocaleLowerCase();
-  const matches = term ? doctors.filter(doctor => !selectedDoctorIds.includes(doctor.doctorId)
-    && (doctor.name.toLocaleLowerCase().includes(term) || doctor.specialization.toLocaleLowerCase().includes(term))) : [];
-  const open = showSuggestions && !!term && !disabled;
+  const available = doctors.filter(doctor => !selectedDoctorIds.includes(doctor.doctorId));
+  const matches = term ? available.filter(doctor => doctor.name.toLocaleLowerCase().includes(term) || doctor.specialization.toLocaleLowerCase().includes(term)) : available;
+  const open = showSuggestions && !disabled;
   const activeIndex = Math.min(active, matches.length - 1);
   const dismiss = useCallback(() => setShowSuggestions(false), []);
 
@@ -45,7 +45,8 @@ export function DoctorSearch({ doctors, selectedDoctorIds, onSelect, disabled, o
     if (disabled) return;
     onSelect(doctor);
     setQuery('');
-    dismiss();
+    setActive(0);
+    setShowSuggestions(true);
     inputRef.current?.focus({ preventScroll: true });
   };
 
@@ -58,6 +59,7 @@ export function DoctorSearch({ doctors, selectedDoctorIds, onSelect, disabled, o
         className={`h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
         onChange={event => { setQuery(event.target.value); setActive(0); setShowSuggestions(true); }}
         onFocus={event => { setShowSuggestions(true); onFocus?.(event); }}
+        onClick={() => setShowSuggestions(true)}
         onBlur={event => {
           if (listRef.current?.contains(event.relatedTarget)) return;
           dismiss();
@@ -68,7 +70,7 @@ export function DoctorSearch({ doctors, selectedDoctorIds, onSelect, disabled, o
             event.preventDefault(); event.stopPropagation(); dismiss();
           } else if (event.key === 'Tab') {
             dismiss();
-          } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && term) {
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
             setShowSuggestions(true);
             setActive(index => !open ? 0 : Math.max(0, Math.min(matches.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1))));
@@ -88,14 +90,14 @@ export function DoctorSearch({ doctors, selectedDoctorIds, onSelect, disabled, o
                 onPointerMove={() => setActive(index)}
                 onMouseDown={event => event.preventDefault()} onClick={() => choose(doctor)}>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-gray-900">{doctor.name}</span>
-                  <span className="block truncate text-xs text-gray-500">{doctor.specialization}</span>
+                  <span translate="no" className="notranslate block truncate font-medium text-gray-900">{doctor.name}</span>
+                  <span translate="no" className="notranslate block truncate text-xs text-gray-500">{doctor.specialization}</span>
                 </span>
               </button>
             ))}
           </div>
           <p role="status" aria-live="polite" className={matches.length ? 'sr-only' : 'px-3 py-3 text-sm text-gray-500'}>
-            {matches.length ? `${matches.length} matching doctors` : 'No matching available doctors'}
+            {matches.length ? `${matches.length} available doctors` : term ? 'No matching available doctors' : 'All available doctors are already selected'}
           </p>
         </DropdownMenu>
       )}

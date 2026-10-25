@@ -36,7 +36,7 @@ export function Dashboard() {
               {!schedule.length ? <EmptyState icon={<Stethoscope />} title="No upcoming assignments" description="There are no upcoming clinic assignments to display." />
                 : <ul className="divide-y divide-gray-100">{schedule.slice(0, 5).map(clinic => {
                   const doctors = Array.from(new Map((assignments.data ?? []).filter(row => row.clinic?.id === clinic.id).map(row => [row.doctorRefId, row])).values());
-                  return <li key={clinic.id} className="py-3 first:pt-1 last:pb-0"><p className="break-words font-medium text-gray-900">{clinic.clinicName}</p><p className={'mt-1 text-sm ' + (doctors.length ? 'text-gray-600' : 'text-amber-700')}>{doctors.length ? doctors.length + (doctors.length === 1 ? ' doctor assigned' : ' doctors assigned') : 'No doctors assigned'}</p>{doctors.length > 0 && <p className="mt-1 break-words text-xs leading-5 text-gray-500">{doctors.map(doctor => doctor.doctorName || 'Doctor #' + doctor.doctorRefId).join(', ')}</p>}</li>;
+                  return <li key={clinic.id} className="py-3 first:pt-1 last:pb-0"><p translate="no" className="notranslate break-words font-medium text-gray-900">{clinic.clinicName}</p><p className={'mt-1 text-sm ' + (doctors.length ? 'text-gray-600' : 'text-amber-700')}>{doctors.length ? doctors.length + (doctors.length === 1 ? ' doctor assigned' : ' doctors assigned') : 'No doctors assigned'}</p>{doctors.length > 0 && <p translate="no" className="notranslate mt-1 break-words text-xs leading-5 text-gray-500">{doctors.map(doctor => doctor.doctorName || 'Doctor #' + doctor.doctorRefId).join(', ')}</p>}</li>;
                 })}</ul>}
             </DashboardPanel>
           </div>

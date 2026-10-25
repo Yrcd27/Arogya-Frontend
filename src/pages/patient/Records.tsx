@@ -11,8 +11,9 @@ import { profileAPI, clinicAPI, userAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { StatusBadge } from '../../components/StatusBadge';
-import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_SECONDARY, MODAL_CLOSE, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_SECONDARY, MODAL_CLOSE, MODAL_OVERLAY, MODAL_TEXT_BLOCK, MODAL_TITLE, MODAL_PANEL_FLEX, MODAL_HEAD_FIXED, MODAL_BODY, MODAL_FOOT_FIXED } from '../../components/dialogs/modalStyles';
 import { ViewAction } from '../../components/ViewAction';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 interface MedicalRecord extends Consultation {
   doctorName?: string;
@@ -240,13 +241,13 @@ export function Records() {
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {formatDate(record.bookedAt)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
+                        <td {...noTranslateProps('px-6 py-4 text-sm text-gray-900', !!record.chiefComplaint)}>
                           {record.chiefComplaint || 'General Checkup'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
+                        <td {...noTranslateProps('px-6 py-4 text-sm text-gray-900')}>
                           {record.doctorName}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td {...noTranslateProps('px-6 py-4 text-sm text-gray-600')}>
                           {record.clinicName}
                         </td>
                         <td className="px-6 py-4">
@@ -279,8 +280,8 @@ export function Records() {
       {/* View Record Modal */}
       {selectedRecord && (
         <div className={`${MODAL_OVERLAY} z-50`}>
-          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl`}>
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-5 py-4 sm:px-6">
+          <div role="dialog" aria-modal="true" aria-label="Prescription details" className={`${MODAL_PANEL_FLEX} max-w-3xl`}>
+            <div className={MODAL_HEAD_FIXED}>
               <h2 className={MODAL_TITLE}>Prescription Details</h2>
               <button
                 onClick={() => setSelectedRecord(null)}
@@ -290,7 +291,7 @@ export function Records() {
               </button>
             </div>
             
-            <div className="space-y-5 px-5 py-4 sm:px-6">
+            <div className={`${MODAL_BODY} space-y-5`}>
               {/* Basic Information */}
               <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
@@ -303,11 +304,11 @@ export function Records() {
                 </div>
                 <div>
                   <p className={DETAIL_LABEL}>Doctor</p>
-                  <p className={DETAIL_VALUE}>{selectedRecord.doctorName}</p>
+                  <p {...noTranslateProps(DETAIL_VALUE)}>{selectedRecord.doctorName}</p>
                 </div>
                 <div>
                   <p className={DETAIL_LABEL}>Clinic</p>
-                  <p className={DETAIL_VALUE}>{selectedRecord.clinicName}</p>
+                  <p {...noTranslateProps(DETAIL_VALUE)}>{selectedRecord.clinicName}</p>
                 </div>
               </div>
 
@@ -380,7 +381,7 @@ export function Records() {
               )}
             </div>
 
-            <div className="flex justify-end border-t border-gray-100 px-5 py-3 sm:px-6">
+            <div className={MODAL_FOOT_FIXED}>
               <button
                 type="button"
                 onClick={() => setSelectedRecord(null)}

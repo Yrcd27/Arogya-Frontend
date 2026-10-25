@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LogOutIcon, XIcon, type LucideIcon } from 'lucide-react';
-import arogyaLogo from '../assests/logo/arogya_logo.png';
+import arogyaLogo from '../assets/logo/arogya_logo.png';
 
 export interface SidebarProps {
   isOpen?: boolean;

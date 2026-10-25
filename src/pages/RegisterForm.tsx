@@ -5,6 +5,7 @@ import { HomeIcon, Eye, EyeOff } from 'lucide-react';
 import { userAPI } from '../services/api';
 import { ApiError } from '../services/httpClient';
 import { EMAIL_MAX_LENGTH, PASSWORD_REQUIREMENTS, USERNAME_MAX_LENGTH, focusFirstInvalidField, getApiFieldErrors, getConfirmationError, getEmailError, getPasswordPolicyError, getUsernameError, normalizeEmail, type FieldErrors } from '../utils/formValidation';
+import { NoTranslate } from '../components/NoTranslate';
 
 type RegisterField = 'username' | 'email' | 'password' | 'confirmPassword' | 'secretKey';
 
@@ -147,7 +148,7 @@ export function RegisterForm() {
       await userAPI.register(userRegistrationData);
 
       // Success - redirect to login (no profile creation during registration)
-      toast.success(`Registration successful! Welcome, ${username}!`, {
+      toast.success(<>Registration successful! Welcome, <NoTranslate>{username}</NoTranslate>!</>, {
         position: "top-right",
         autoClose: 3000,
       });
@@ -240,7 +241,7 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
       <button
         type="button"
         onClick={() => navigate('/')}
@@ -254,7 +255,7 @@ export function RegisterForm() {
           Home
         </span>
       </button>
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full max-w-4xl mx-auto">
         <button
           type="button"
           onClick={() => navigate('/')}

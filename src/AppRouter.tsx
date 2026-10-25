@@ -4,7 +4,7 @@ import { LandingPage } from './pages/LandingPage';
 import { Login } from './pages/Login';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { RoleSelection } from './pages/RoleSelection';
-import { RegisterForm } from './pages/RegisterFormNew';
+import { RegisterForm } from './pages/RegisterForm';
 import { Dashboard as PatientDashboard } from './pages/patient/Dashboard';
 import { Profile as PatientProfile } from './pages/patient/Profile';
 import { Records as PatientRecords } from './pages/patient/Records';

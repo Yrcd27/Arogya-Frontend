@@ -51,13 +51,6 @@ export interface UpdateClinicRequest extends CreateClinicRequest {
   id: number;
 }
 
-export interface CreateClinicDoctorRequest {
-  clinicId: number;
-  doctorRefId: number;
-  doctorName: string;
-  specialization: string;
-}
-
 export interface ClinicFilters {
   searchTerm: string;
   province: string;

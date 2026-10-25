@@ -1,7 +1,7 @@
-import hero1 from '../../assests/hero1.png';
-import hero2 from '../../assests/hero2.png';
-import hero3 from '../../assests/hero3.png';
-import hero4 from '../../assests/hero4.png';
+import hero1 from '../../assets/hero1.png';
+import hero2 from '../../assets/hero2.png';
+import hero3 from '../../assets/hero3.png';
+import hero4 from '../../assets/hero4.png';
 
 export interface HeroSlide {
   id: string;

@@ -9,7 +9,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { isPositiveId } from '../../utils/clinicalValidation';
 import { focusFirstInvalidField, getApiFieldErrors, type FieldErrors } from '../../utils/formValidation';
 import { getTestResultFileError, getTestResultTextError, MAX_TEST_RESULT_TEXT_LENGTH, normalizeTestResultFile, TEST_RESULT_FIELDS, TEST_RESULT_FILE_ACCEPT, validateTestResult, type TestResultField } from '../../utils/testResultValidation';
-import { MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_INFO_PANEL, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TITLE, BUTTON_PRIMARY, BUTTON_SECONDARY } from '../dialogs/modalStyles';
+import { MODAL_ALERT, MODAL_CLOSE, MODAL_INFO_PANEL, MODAL_OVERLAY, MODAL_TITLE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_PANEL_FLEX, MODAL_HEAD_FIXED, MODAL_BODY, MODAL_FOOT_FIXED } from '../dialogs/modalStyles';
+import { NoTranslate } from '../NoTranslate';
 
 interface SubmitTestResultModalProps {
   labTest: LabTest;
@@ -152,16 +153,18 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
 
   return (
     <div className={`${MODAL_OVERLAY} z-50`} onClick={closeModal}>
-      <div className={`${MODAL_PANEL_SCROLL} max-w-2xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
-        <div className={MODAL_HEADER}>
+      <div role="dialog" aria-modal="true" aria-label="Submit test result" className={`${MODAL_PANEL_FLEX} max-w-2xl`} onClick={(e) => e.stopPropagation()}>
+        <div className={MODAL_HEAD_FIXED}>
           <h3 className={MODAL_TITLE}>Submit Test Result</h3>
           <button type="button" aria-label="Close submit result" onClick={closeModal} disabled={loading} className={MODAL_CLOSE}>
             <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
+        <div className={MODAL_BODY}>
+
         <div className={`mb-4 ${MODAL_INFO_PANEL}`}>
-          <p className="text-sm text-gray-700"><span className="font-medium">Test:</span> {labTest.testName}</p>
+          <p className="text-sm text-gray-700"><span className="font-medium">Test:</span> <NoTranslate>{labTest.testName}</NoTranslate></p>
           <p className="text-sm text-gray-700"><span className="font-medium">Test ID:</span> {labTest.id}</p>
         </div>
 
@@ -171,7 +174,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
           </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-4">
+        <form id="submit-result-form" onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-4">
           <div>
             <label htmlFor="submit-result-testResultDescription" className="block text-sm font-medium text-gray-700 mb-2">
               Test Result Description <span className="text-red-500">*</span>
@@ -238,7 +241,7 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
                 {files.map((file, index) => (
                   <div key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg">
                     <FileText className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate flex-1">{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
+                    <span className="truncate flex-1"><NoTranslate>{file.name}</NoTranslate> ({(file.size / 1024).toFixed(2)} KB)</span>
                     <button
                       type="button"
                       disabled={loading || outcomeUnknown}
@@ -253,24 +256,27 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
             )}
           </div>
 
-          <div className={MODAL_FOOTER}>
-            <button
-              type="button"
-              onClick={closeModal}
-              className={BUTTON_SECONDARY}
-              disabled={loading}
-            >
-              {outcomeUnknown ? 'Close and review worklist' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              className={BUTTON_PRIMARY}
-              disabled={loading || outcomeUnknown}
-            >
-              {loading ? 'Submitting...' : 'Submit Result'}
-            </button>
-          </div>
         </form>
+        </div>
+
+        <div className={MODAL_FOOT_FIXED}>
+          <button
+            type="button"
+            onClick={closeModal}
+            className={BUTTON_SECONDARY}
+            disabled={loading}
+          >
+            {outcomeUnknown ? 'Close and review worklist' : 'Cancel'}
+          </button>
+          <button
+            type="submit"
+            form="submit-result-form"
+            className={BUTTON_PRIMARY}
+            disabled={loading || outcomeUnknown}
+          >
+            {loading ? 'Submitting...' : 'Submit Result'}
+          </button>
+        </div>
       </div>
     </div>
   );

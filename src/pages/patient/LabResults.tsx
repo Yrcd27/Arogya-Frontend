@@ -9,8 +9,9 @@ import { medicalRecordsAPI, TestResult, TestResultFile } from '../../services/me
 import { labTestAPI } from '../../services/labTestService';
 import { useAuth } from '../../hooks/useAuth';
 import { FilePreviewModal } from '../../components/FilePreviewModal';
-import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_FOOTER, MODAL_HEADER, MODAL_OVERLAY, MODAL_PANEL_SCROLL, MODAL_TEXT_BLOCK, MODAL_TITLE } from '../../components/dialogs/modalStyles';
+import { DETAIL_LABEL, DETAIL_VALUE, BUTTON_OUTLINE, BUTTON_PRIMARY, BUTTON_SECONDARY, MODAL_ALERT, MODAL_CLOSE, MODAL_OVERLAY, MODAL_TEXT_BLOCK, MODAL_TITLE, MODAL_PANEL_FLEX, MODAL_HEAD_FIXED, MODAL_BODY, MODAL_FOOT_FIXED } from '../../components/dialogs/modalStyles';
 import { ViewAction } from '../../components/ViewAction';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 const PAGE_SIZE = 10;
 
@@ -262,21 +263,21 @@ export function LabResults() {
                                 <FlaskConicalIcon aria-hidden="true" className="h-[18px] w-[18px] text-[#38A3A5]" />
                               </div>
                               {testNameByLabTestId[result.labTestId] ? (
-                                <span className="text-sm font-medium text-gray-900">{testNameByLabTestId[result.labTestId]}</span>
+                                <span {...noTranslateProps('text-sm font-medium text-gray-900')}>{testNameByLabTestId[result.labTestId]}</span>
                               ) : (
                                 <span className="inline-block bg-gray-200 animate-pulse rounded h-4 w-24" />
                               )}
                             </div>
                           </td>
                           <td className="max-w-md px-4 py-3">
-                            <p className="line-clamp-2 break-words text-sm leading-5 text-gray-900" title={result.testResultDescription}>{result.testResultDescription}</p>
+                            <p {...noTranslateProps('line-clamp-2 break-words text-sm leading-5 text-gray-900')} title={result.testResultDescription}>{result.testResultDescription}</p>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             {result.files.length > 0 ? (
                               <div className="flex items-center gap-2">
                                 <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-[#38A3A5]" />
                                 <div className="min-w-0 text-sm">
-                                  <p className="max-w-[12rem] truncate font-medium text-gray-900" title={result.files.length === 1 ? result.files[0].fileName : undefined}>
+                                  <p {...noTranslateProps('max-w-[12rem] truncate font-medium text-gray-900', result.files.length === 1)} title={result.files.length === 1 ? result.files[0].fileName : undefined}>
                                     {result.files.length === 1 ? result.files[0].fileName : `${result.files.length} files`}
                                   </p>
                                   {result.files.length === 1 && (
@@ -326,8 +327,8 @@ export function LabResults() {
 
       {selectedResult && (
         <div className={`${MODAL_OVERLAY} z-50`} onClick={closeResult}>
-          <div className={`${MODAL_PANEL_SCROLL} max-w-3xl p-5 sm:p-6`} onClick={(e) => e.stopPropagation()}>
-            <div className={MODAL_HEADER}>
+          <div role="dialog" aria-modal="true" aria-label="Test result details" className={`${MODAL_PANEL_FLEX} max-w-3xl`} onClick={(e) => e.stopPropagation()}>
+            <div className={MODAL_HEAD_FIXED}>
               <h3 className={MODAL_TITLE}>Test Result Details</h3>
               <button type="button" aria-label="Close test result" onClick={closeResult} className={MODAL_CLOSE}>
                 <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -336,12 +337,12 @@ export function LabResults() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className={`${MODAL_BODY} space-y-4`}>
               {fileError && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{fileError}</p>}
               <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                 <div>
                   <p className={DETAIL_LABEL}>Test Name</p>
-                  <p className={DETAIL_VALUE}>{testNameByLabTestId[selectedResult.labTestId] || 'Loading...'}</p>
+                  <p {...noTranslateProps(DETAIL_VALUE, !!testNameByLabTestId[selectedResult.labTestId])}>{testNameByLabTestId[selectedResult.labTestId] || 'Loading...'}</p>
                 </div>
                 <div>
                   <p className={DETAIL_LABEL}>Date</p>
@@ -374,7 +375,7 @@ export function LabResults() {
                         <div className="flex items-center gap-3 min-w-0">
                           <FileText aria-hidden="true" className="h-6 w-6 shrink-0 text-[#38A3A5]" />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
+                            <p {...noTranslateProps('text-sm font-medium text-gray-900 truncate')}>{file.fileName}</p>
                             <p className="text-xs text-gray-600">{formatFileSize(file.fileSize)}</p>
                           </div>
                         </div>
@@ -401,7 +402,7 @@ export function LabResults() {
               )}
             </div>
 
-            <div className={MODAL_FOOTER}>
+            <div className={MODAL_FOOT_FIXED}>
               <button
                 type="button"
                 className={BUTTON_SECONDARY}

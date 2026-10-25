@@ -1,8 +1,11 @@
 import { PencilIcon, UserRoundIcon } from 'lucide-react';
+import { noTranslateProps } from '../../utils/noTranslate';
 
 export interface ProfileDetail {
   label: string;
   value?: string | number | null;
+  translatable?: boolean;
+  unit?: string;
 }
 
 export interface ProfileSection {
@@ -29,11 +32,11 @@ export function ProfileView({ role, name, sections, incomplete = false, onEdit }
       <div className="flex flex-col gap-4 border-b border-gray-100 bg-[#f7fbfb] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#38A3A5] text-lg font-bold text-white" aria-hidden="true">
-            {name ? name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() : <UserRoundIcon className="h-6 w-6" />}
+            {name ? <span key="initials" {...noTranslateProps()}>{name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()}</span> : <UserRoundIcon key="icon" className="h-6 w-6" />}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-[#2d8284]">{role}</p>
-            <h2 className="break-words text-xl font-bold leading-tight text-gray-900 sm:text-2xl">{name || 'Profile details'}</h2>
+            <h2 {...noTranslateProps('break-words text-xl font-bold leading-tight text-gray-900 sm:text-2xl', !!name)}>{name || 'Profile details'}</h2>
             {incomplete && <p className="mt-1 text-sm text-amber-700">Complete your profile to keep your information up to date.</p>}
           </div>
         </div>
@@ -55,8 +58,10 @@ export function ProfileView({ role, name, sections, incomplete = false, onEdit }
               {section.details.map(detail => (
                 <div key={detail.label} className="min-w-0">
                   <dt className="text-sm text-gray-500">{detail.label}</dt>
-                  <dd className={`mt-1 break-words text-sm font-medium leading-6 ${displayValue(detail.value) === 'Not provided' ? 'text-gray-400' : 'text-gray-900'}`}>
-                    {displayValue(detail.value)}
+                  <dd {...noTranslateProps(`mt-1 break-words text-sm font-medium leading-6 ${displayValue(detail.value) === 'Not provided' ? 'text-gray-400' : 'text-gray-900'}`, displayValue(detail.value) !== 'Not provided' && !detail.translatable && !detail.unit)}>
+                    {detail.unit && displayValue(detail.value) !== 'Not provided'
+                      ? <><span {...noTranslateProps()}>{displayValue(detail.value)}</span> <span>{detail.unit}</span></>
+                      : displayValue(detail.value)}
                   </dd>
                 </div>
               ))}
