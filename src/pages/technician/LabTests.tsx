@@ -1,4 +1,4 @@
-import { PageContent } from '../../components/PageContent';
+﻿import { PageContent } from '../../components/PageContent';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLinkedSearch } from '../../hooks/useLinkedSearch';
 import { Header } from '../../components/technician/Header';
@@ -489,7 +489,7 @@ export function LabTests() {
                       const resultAvailability = resultAvailabilityByLabTest[test.id]
                         ?? (displayStatus === 'PENDING' || displayStatus === 'IN_PROGRESS' ? 'checking' : 'present');
                       return (
-                      <tr key={test.id} className="hover:bg-gray-50">
+                      <tr key={test.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleViewDetails(test)}>
                         <td className="px-6 py-4"><span translate="no" className="notranslate text-sm font-medium text-gray-900">{test.testName}</span></td>
                         <td className="px-6 py-4">
                           {patientByConsultation[test.consultationId]?.name ? (
@@ -511,7 +511,7 @@ export function LabTests() {
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-600">{formatDateTime(test.createdAt)}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                           {displayStatus === 'COMPLETED' || resultAvailability === 'present' ? (
                             <ViewAction label={`View result for ${test.testName}`} onClick={() => handleViewDetails(test)} />
                           ) : resultAvailability === 'checking' ? (

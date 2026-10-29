@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Download, Edit, Trash2, FileText, Eye } from 'lucide-react';
 import { LabTest } from '../../types/labTest';
 import { ApiError } from '../../services/httpClient';
@@ -198,6 +198,18 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
               <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test:</span> <NoTranslate>{labTest.testName}</NoTranslate></p>
               <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test ID:</span> {labTest.id}</p>
               <p className="flex items-center gap-2 text-sm text-gray-900"><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={labTest.status} /></p>
+              {labTest.testDescription && (
+                <div className="mt-2">
+                  <p className="text-sm font-semibold text-gray-600">Description:</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{labTest.testDescription}</p>
+                </div>
+              )}
+              {labTest.testInstructions && (
+                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-900">Doctor's Instructions:</p>
+                  <p className="text-sm text-amber-800 whitespace-pre-wrap">{labTest.testInstructions}</p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -261,27 +273,47 @@ export function TestResultDetailsModal({ labTest, onClose, onEdit, onDelete, onR
             </div>
           </div>
         ) : (
-          <div key="empty" className="text-center">
-            <EmptyState icon={<FileText />} title="No test result available" description="No test result was found for this lab test." headingLevel={4} />
-            {labTest.status === 'COMPLETED' && (
-              <>
-                <p className="text-sm text-gray-500 mb-4">This test is marked completed but its result is missing — you can reopen it to submit a new result.</p>
-                {retakeError && (
-                  <div className={`mb-4 inline-block ${MODAL_ALERT}`}>
-                    {retakeError}
-                  </div>
-                )}
-                <div>
-                  <button
-                    onClick={handleRetake}
-                    disabled={retaking}
-                    className={BUTTON_PRIMARY}
-                  >
-                    {retaking ? 'Reopening...' : 'Retake Test'}
-                  </button>
+          <div key="empty" className="space-y-4">
+            <div className={MODAL_INFO_PANEL}>
+              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test:</span> <NoTranslate>{labTest.testName}</NoTranslate></p>
+              <p className="text-sm text-gray-900"><span className="font-semibold text-gray-600">Test ID:</span> {labTest.id}</p>
+              <p className="flex items-center gap-2 text-sm text-gray-900"><span className="font-semibold text-gray-600">Status:</span> <StatusBadge status={labTest.status} /></p>
+              {labTest.testDescription && (
+                <div className="mt-2">
+                  <p className="text-sm font-semibold text-gray-600">Description:</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{labTest.testDescription}</p>
                 </div>
-              </>
-            )}
+              )}
+              {labTest.testInstructions && (
+                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-900">Doctor's Instructions:</p>
+                  <p className="text-sm text-amber-800 whitespace-pre-wrap">{labTest.testInstructions}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="text-center">
+              <EmptyState icon={<FileText />} title="No test result available" description="No test result was found for this lab test." headingLevel={4} />
+              {labTest.status === 'COMPLETED' && (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">This test is marked completed but its result is missing — you can reopen it to submit a new result.</p>
+                  {retakeError && (
+                    <div className={`mb-4 inline-block ${MODAL_ALERT}`}>
+                      {retakeError}
+                    </div>
+                  )}
+                  <div>
+                    <button
+                      onClick={handleRetake}
+                      disabled={retaking}
+                      className={BUTTON_PRIMARY}
+                    >
+                      {retaking ? 'Reopening...' : 'Retake Test'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
         </div>

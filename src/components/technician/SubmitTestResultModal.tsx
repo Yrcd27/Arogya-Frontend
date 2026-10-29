@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { X, Upload, FileText } from 'lucide-react';
 import { medicalRecordsAPI, MAX_TEST_RESULT_FILES, validateTestResultUpload } from '../../services/medicalRecordsService';
 import { consultationAPI } from '../../services/consultationService';
@@ -163,9 +163,21 @@ export function SubmitTestResultModal({ labTest, technicianId, onClose, onSucces
 
         <div className={MODAL_BODY}>
 
-        <div className={`mb-4 ${MODAL_INFO_PANEL}`}>
+        <div className={`mb-4 ${MODAL_INFO_PANEL} space-y-1`}>
           <p className="text-sm text-gray-700"><span className="font-medium">Test:</span> <NoTranslate>{labTest.testName}</NoTranslate></p>
           <p className="text-sm text-gray-700"><span className="font-medium">Test ID:</span> {labTest.id}</p>
+          {labTest.testDescription && (
+            <div className="mt-2">
+              <p className="text-sm font-medium text-gray-700">Description:</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{labTest.testDescription}</p>
+            </div>
+          )}
+          {labTest.testInstructions && (
+            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+              <p className="text-sm font-medium text-amber-800">Doctor's Instructions:</p>
+              <p className="text-sm text-amber-700 whitespace-pre-wrap">{labTest.testInstructions}</p>
+            </div>
+          )}
         </div>
 
         {error && (
